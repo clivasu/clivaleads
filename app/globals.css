@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --primary: 222 47% 11%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 222 47% 11%;
+    --radius: 0.75rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Luzes da roleta "ligadas" — efeito letreiro (chase) */
+@keyframes bulb-run {
+  0%, 12% {
+    background: #fff6c2;
+    box-shadow: 0 0 12px 5px rgba(255, 225, 130, 1), 0 0 3px 1px rgba(255, 255, 255, 0.9);
+    opacity: 1;
+  }
+  40%, 100% {
+    background: #b9891f;
+    box-shadow: 0 0 4px 1px rgba(255, 200, 80, 0.45);
+    opacity: 0.7;
+  }
+}
+.wheel-bulb {
+  animation: bulb-run 1.3s linear infinite;
+}
+
+/* Vitória da roleta: salto, brilho da fatia e confete */
+@keyframes win-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.07); }
+  70% { transform: scale(0.98); }
+  100% { transform: scale(1); }
+}
+.wheel-win-pop { animation: win-pop 0.6s ease-out 1; }
+
+@keyframes wedge-pulse {
+  0%, 100% { opacity: 0.12; }
+  50% { opacity: 0.7; }
+}
+.wheel-wedge { animation: wedge-pulse 0.5s ease-in-out infinite; }
+
+@keyframes confetti-fall {
+  0% { transform: translateY(-24px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(560px) rotate(720deg); opacity: 0; }
+}
+.confetti-piece { animation-name: confetti-fall; animation-timing-function: linear; animation-iteration-count: infinite; }
+
+/* Public flow accent, overridable per clinic via inline style --brand */
+.brand-btn {
+  background: var(--btn-bg, var(--brand, hsl(var(--primary))));
+  color: var(--btn-fg, #fff);
+  border-radius: var(--btn-radius, 0.75rem);
+}

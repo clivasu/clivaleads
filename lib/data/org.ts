@@ -1,0 +1,26 @@
+import "server-only";
+import { createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/env";
+import { demoOrg } from "@/lib/demo-data";
+import type { Organization } from "@/lib/types";
+
+// Org "ativa" do usuário logado. Na V1, a primeira org da qual ele é membro.
+// Sem Supabase conectado, retorna a Clínica Demo.
+export async function getCurrentOrg(): Promise<Organization | null> {
+  if (!isSupabaseConfigured) return demoOrg;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data } = await supabase
+    .from("organization_members")
+    .select("organization:organizations(*)")
+    .eq("user_id", user.id)
+    .limit(1)
+    .single();
+
+  return (data?.organization as unknown as Organization) ?? null;
+}

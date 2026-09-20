@@ -1,0 +1,37 @@
+import { SearchNormal1, Notification, Calendar } from "iconsax-reactjs";
+
+export function Topbar() {
+  return (
+    <header className="flex items-center gap-4 border-b bg-white px-6 py-3">
+      <div className="relative flex-1 max-w-2xl">
+        <SearchNormal1
+          size={18}
+          color="#94a3b8"
+          className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2"
+        />
+        <input
+          type="search"
+          placeholder="Buscar pacientes, profissionais, agendamentos..."
+          className="h-11 w-full rounded-full border-0 bg-slate-100 pl-11 pr-4 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+        />
+      </div>
+
+      <div className="ml-auto flex items-center gap-3">
+        <button
+          aria-label="Notificações"
+          className="relative flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition-colors hover:bg-slate-200"
+        >
+          <Notification size={20} variant="Bulk" color="#475569" />
+          <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white" />
+        </button>
+        <button
+          aria-label="Agenda"
+          className="relative flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition-colors hover:bg-slate-200"
+        >
+          <Calendar size={20} variant="Bulk" color="#475569" />
+          <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white" />
+        </button>
+      </div>
+    </header>
+  );
+}

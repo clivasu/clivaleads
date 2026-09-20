@@ -1,0 +1,228 @@
+"use client";
+
+import { useState, type FC } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  Category,
+  Calendar,
+  Filter,
+  Profile2User,
+  Chart2,
+  Setting2,
+  MessageQuestion,
+  Buildings2,
+  ArrowLeft2,
+  ArrowDown2,
+  LogoutCurve,
+  type IconProps,
+} from "iconsax-reactjs";
+import { cn } from "@/lib/utils";
+
+type NavIcon = FC<IconProps>;
+
+interface NavItem {
+  href: string;
+  label: string;
+  Icon: NavIcon;
+}
+
+interface NavGroup {
+  label?: string;
+  items: NavItem[];
+}
+
+const GROUPS: NavGroup[] = [
+  { items: [{ href: "/dashboard", label: "Dashboard", Icon: Category }] },
+  {
+    label: "Gestão",
+    items: [
+      { href: "/schedule", label: "Agenda", Icon: Calendar },
+      { href: "/flows", label: "Funis", Icon: Filter },
+      { href: "/leads", label: "Leads", Icon: Profile2User },
+    ],
+  },
+  {
+    label: "Análise",
+    items: [{ href: "/analytics", label: "Analytics", Icon: Chart2 }],
+  },
+];
+
+const BOTTOM: NavItem[] = [
+  { href: "/settings", label: "Configurações", Icon: Setting2 },
+];
+
+const ACTIVE_COLOR = "#15803d"; // green-700
+const IDLE_COLOR = "#64748b"; // slate-500
+
+export function Sidebar() {
+  const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+
+  const isActive = (href: string) =>
+    href === "/dashboard" ? pathname === href : pathname.startsWith(href);
+
+  const NavLink = ({ href, label, Icon }: NavItem) => {
+    const active = isActive(href);
+    return (
+      <Link
+        href={href}
+        title={collapsed ? label : undefined}
+        className={cn(
+          "group flex items-center rounded-lg text-sm font-medium transition-colors",
+          collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5",
+          active
+            ? "bg-emerald-50 text-emerald-700"
+            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+        )}
+      >
+        <Icon
+          size={22}
+          variant="Bulk"
+          color={active ? ACTIVE_COLOR : IDLE_COLOR}
+        />
+        {!collapsed && <span className="truncate">{label}</span>}
+      </Link>
+    );
+  };
+
+  return (
+    <aside
+      className={cn(
+        "hidden shrink-0 flex-col border-r bg-white transition-[width] duration-300 md:flex",
+        collapsed ? "w-[76px]" : "w-64",
+      )}
+    >
+      {/* Logo + collapse */}
+      <div
+        className={cn(
+          "flex border-b px-4 py-4",
+          collapsed
+            ? "flex-col items-center gap-3"
+            : "items-center justify-between",
+        )}
+      >
+        <Link href="/dashboard" className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500 text-sm font-bold text-white">
+            P
+          </div>
+          {!collapsed && (
+            <span className="text-lg font-bold tracking-tight text-slate-900">
+              Prelead
+            </span>
+          )}
+        </Link>
+        <button
+          onClick={() => setCollapsed((v) => !v)}
+          aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+          className="flex h-7 w-7 items-center justify-center rounded-full border bg-white text-slate-500 transition-colors hover:bg-slate-50"
+        >
+          <ArrowLeft2
+            size={16}
+            color="currentColor"
+            className={cn("transition-transform", collapsed && "rotate-180")}
+          />
+        </button>
+      </div>
+
+      {/* Clinic selector */}
+      <div className="px-3 pt-4">
+        <button
+          className={cn(
+            "flex w-full items-center rounded-xl border bg-white transition-colors hover:bg-slate-50",
+            collapsed ? "justify-center p-2" : "gap-3 p-3",
+          )}
+          title="Trocar de clínica"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50">
+            <Buildings2 size={20} variant="Bulk" color={ACTIVE_COLOR} />
+          </span>
+          {!collapsed && (
+            <>
+              <span className="min-w-0 flex-1 text-left">
+                <span className="block truncate text-sm font-semibold text-slate-900">
+                  Clínica Demo
+                </span>
+                <span className="block truncate text-xs text-slate-400">
+                  Pré-atendimento
+                </span>
+              </span>
+              <ArrowDown2 size={16} color={IDLE_COLOR} />
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Nav groups */}
+      <nav className="flex-1 overflow-y-auto px-3 py-4">
+        {GROUPS.map((group, gi) => (
+          <div key={gi} className={cn(gi > 0 && "mt-5")}>
+            {group.label && !collapsed && (
+              <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                {group.label}
+              </p>
+            )}
+            {group.label && collapsed && gi > 0 && (
+              <div className="mx-auto mb-2 h-px w-6 bg-slate-100" />
+            )}
+            <div className="flex flex-col gap-1">
+              {group.items.map((item) => (
+                <NavLink key={item.href} {...item} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </nav>
+
+      {/* Bottom: settings + support + profile */}
+      <div className="border-t px-3 py-3">
+        <div className="flex flex-col gap-1">
+          {BOTTOM.map((item) => (
+            <NavLink key={item.href} {...item} />
+          ))}
+          <a
+            href="mailto:suporte@prelead.app"
+            title={collapsed ? "Suporte" : undefined}
+            className={cn(
+              "group flex items-center rounded-lg text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900",
+              collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5",
+            )}
+          >
+            <MessageQuestion size={22} variant="Bulk" color={IDLE_COLOR} />
+            {!collapsed && <span>Suporte</span>}
+          </a>
+        </div>
+
+        <div
+          className={cn(
+            "mt-3 flex items-center border-t pt-3",
+            collapsed ? "justify-center" : "gap-3 px-1",
+          )}
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-semibold text-emerald-700">
+            SK
+          </span>
+          {!collapsed && (
+            <>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-slate-900">
+                  Dr. Sarah Khan
+                </span>
+                <span className="block truncate text-xs text-slate-400">
+                  Administradora
+                </span>
+              </span>
+              <Link
+                href="/login"
+                aria-label="Sair"
+                className="text-slate-400 transition-colors hover:text-red-500"
+              >
+                <LogoutCurve size={20} color="currentColor" />
+              </Link>
+            </>
+          )}
+        </div>
+      </div>
+    </aside>
+  );
+}
