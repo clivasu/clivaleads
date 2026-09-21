@@ -29,7 +29,10 @@ const ICONS: Record<StepType, React.ElementType> = {
   buttons: SquareStack, audio: Volume2, container: LayoutGrid, hero: LayoutTemplate,
 };
 const ACCEPTS_CHILDREN = (t: StepType) => t === "container" || t === "hero";
-const LABELS = Object.fromEntries(BLOCK_CATALOG.map((b) => [b.type, b.label])) as Record<StepType, string>;
+// Rótulo canônico por type (ignora presets, que compartilham o mesmo type).
+const LABELS = Object.fromEntries(
+  BLOCK_CATALOG.filter((b) => !b.id).map((b) => [b.type, b.label]),
+) as Record<StepType, string>;
 
 function uid() {
   return "s-" + Math.random().toString(36).slice(2, 9);
@@ -187,8 +190,9 @@ export function BuilderClient({ flow }: { flow: PublicFlow }) {
     update(updateNode(steps, stepId, { config: { ...node.config, options: (node.config.options ?? []).map((o, i) => (i === optIndex ? { ...o, next } : o)) } }));
   };
 
-  const addBlock = (type: StepType) => {
-    const block: FlowStep = { id: uid(), flow_id: flow.id, position: 0, type, config: defaultConfig(type), ...(ACCEPTS_CHILDREN(type) ? { children: [] } : {}) };
+  const addBlock = (type: StepType, preset?: Partial<FlowStep["config"]>) => {
+    const config = preset ? { ...defaultConfig(type), ...preset } : defaultConfig(type);
+    const block: FlowStep = { id: uid(), flow_id: flow.id, position: 0, type, config, ...(ACCEPTS_CHILDREN(type) ? { children: [] } : {}) };
     const sel = findNode(steps, selectedId);
     const next = sel && ACCEPTS_CHILDREN(sel.type) ? insertIntoId(steps, selectedId, block) : sel ? insertAfterId(steps, selectedId, block) : [...steps, block];
     update(next);
@@ -334,8 +338,8 @@ export function BuilderClient({ flow }: { flow: PublicFlow }) {
                   const Icon = ICONS[b.type];
                   return (
                     <button
-                      key={b.type}
-                      onClick={() => addBlock(b.type)}
+                      key={b.id ?? b.type}
+                      onClick={() => addBlock(b.type, b.preset)}
                       className="flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-sm text-slate-700 transition-colors hover:border-emerald-300 hover:bg-emerald-50"
                     >
                       <Icon className="h-4 w-4 text-slate-500" />
@@ -734,14 +738,42 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
       {t === "news" && (
         <>
           <Field label="Modelo">
-            <select className={inputCls} value={c.layout ?? "metropoles"} onChange={(e) => onChange({ layout: e.target.value as "metropoles" | "g1" })}>
+            <select className={inputCls} value={c.layout ?? "metropoles"} onChange={(e) => onChange({ layout: e.target.value as "metropoles" | "g1" | "buzz" | "portalg11" | "saude" | "atarde" })}>
               <option value="metropoles">Metrópoles (colunista)</option>
               <option value="g1">g1 (notícia)</option>
+              <option value="buzz">BuzzNews (negócios/copy)</option>
+              <option value="portalg11">Portal G11 (advertorial)</option>
+              <option value="saude">Ciência e Saúde (antes/depois)</option>
+              <option value="atarde">A Tarde (jornal serifado)</option>
             </select>
           </Field>
-          <Field label="Fonte (marca)"><input className={inputCls} value={c.source ?? ""} onChange={(e) => onChange({ source: e.target.value })} /></Field>
+          <Field label="Fonte / marca (topo)"><input className={inputCls} value={c.source ?? ""} onChange={(e) => onChange({ source: e.target.value })} placeholder="BUZZ, PORTALG11, A TARDE..." /></Field>
+          {(c.layout === "saude" || c.layout === "atarde") && (
+            <Field label="Seção do jornal"><input className={inputCls} value={c.section ?? ""} onChange={(e) => onChange({ section: e.target.value })} placeholder="CIÊNCIA E SAÚDE / CREMAÇÃO" /></Field>
+          )}
+          <Field label="Autor / assinatura"><input className={inputCls} value={c.byline ?? ""} onChange={(e) => onChange({ byline: e.target.value })} placeholder="Por Sandro Pedroso, G11" /></Field>
+          <Field label="Data"><input className={inputCls} value={c.date ?? ""} onChange={(e) => onChange({ date: e.target.value })} placeholder="17/01/2023 – Atualizado há duas horas" /></Field>
+          {(c.layout === "saude" || c.layout === "metropoles") && (
+            <Field label="Palavra em destaque (vermelho)"><input className={inputCls} value={c.highlight_word ?? ""} onChange={(e) => onChange({ highlight_word: e.target.value })} placeholder="VARIZES" /></Field>
+          )}
+          <Field label="Imagem principal (URL)"><input className={inputCls} value={c.image_url ?? ""} onChange={(e) => onChange({ image_url: e.target.value })} placeholder="https://..." /></Field>
+          {c.layout === "saude" && (
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Imagem antes"><input className={inputCls} value={c.before_url ?? ""} onChange={(e) => onChange({ before_url: e.target.value })} placeholder="https://..." /></Field>
+              <Field label="Imagem depois"><input className={inputCls} value={c.after_url ?? ""} onChange={(e) => onChange({ after_url: e.target.value })} placeholder="https://..." /></Field>
+            </div>
+          )}
+          {c.layout === "buzz" && (
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Visualizações"><input className={inputCls} value={c.views ?? ""} onChange={(e) => onChange({ views: e.target.value })} placeholder="647" /></Field>
+              <Field label="Comentários"><input className={inputCls} value={c.comments ?? ""} onChange={(e) => onChange({ comments: e.target.value })} placeholder="0" /></Field>
+            </div>
+          )}
+          {(c.layout === "buzz" || c.layout === "metropoles") && (
+            <Field label="Foto do autor (URL)"><input className={inputCls} value={c.columnist?.avatar_url ?? ""} onChange={(e) => onChange({ columnist: { ...(c.columnist ?? { name: c.byline ?? "" }), avatar_url: e.target.value } })} placeholder="https://..." /></Field>
+          )}
           <Field label="Vídeo (YouTube embed)"><input className={inputCls} value={c.video_url ?? ""} onChange={(e) => onChange({ video_url: e.target.value })} /></Field>
-          <Field label="Parágrafos (um por linha)">
+          <Field label={c.layout === "atarde" ? "Parágrafos (um por linha; use \"- \" para lista)" : "Parágrafos (um por linha)"}>
             <textarea className={inputCls} rows={4} value={(c.paragraphs ?? []).join("\n")} onChange={(e) => onChange({ paragraphs: e.target.value.split("\n") })} />
           </Field>
         </>

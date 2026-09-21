@@ -45,7 +45,13 @@ export type StepType =
 
 export type RatingMode = "stars" | "scale" | "nps";
 export type AlertVariant = "info" | "warning" | "success";
-export type NewsLayout = "metropoles" | "g1";
+export type NewsLayout =
+  | "metropoles"
+  | "g1"
+  | "buzz" // BuzzNews (advertorial de negócios/copy)
+  | "portalg11" // Portal G11 (advertorial estilo g1, com selo ADVERTORIAL)
+  | "saude" // Ciência e Saúde (advertorial de saúde, antes/depois, palavra em destaque)
+  | "atarde"; // A Tarde (jornal serifado clássico)
 
 export interface Columnist {
   name: string;
@@ -214,6 +220,10 @@ export interface StepConfig {
   columnist?: Columnist;
   byline?: string; // "Matéria por Lívia Mendes"
   date?: string; // "03/09/2026 10:14"
+  section?: string; // seção do jornal ("CIÊNCIA E SAÚDE", "CREMAÇÃO")
+  views?: string; // contador de visualizações (ex.: "647")
+  comments?: string; // contador de comentários (ex.: "0")
+  advertorial?: boolean; // mostra o selo "ADVERTORIAL"
   highlight_word?: string; // palavra em destaque no título (ex.: "Vídeo")
   paragraphs?: string[];
   news_images?: string[];

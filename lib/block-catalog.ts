@@ -5,6 +5,8 @@ export interface BlockDef {
   label: string;
   group: "Layout" | "Conteúdo" | "Perguntas" | "Prova" | "Conversão";
   isNew?: boolean;
+  id?: string; // chave única quando vários blocos usam o mesmo type (ex.: presets de notícia)
+  preset?: Partial<StepConfig>; // config inicial pré-montada (modelo pronto)
 }
 
 // Paleta de blocos disponível no Construtor.
@@ -20,6 +22,48 @@ export const BLOCK_CATALOG: BlockDef[] = [
   { type: "audio", label: "Áudio", group: "Conteúdo", isNew: true },
   { type: "alert", label: "Alerta", group: "Conteúdo" },
   { type: "news", label: "Notícia / Advertorial", group: "Conteúdo", isNew: true },
+  { type: "news", id: "news_buzz", label: "Modelo BuzzNews", group: "Conteúdo", isNew: true, preset: {
+    layout: "buzz", source: "BUZZ",
+    title: "Especialista Em Copy Cria Comunidade De Negócios Digitais Que Está Revolucionando A Internet",
+    subtitle: "Após gerar 16 milhões de reais para seus clientes, veja como ele decidiu compartilhar tudo o que sabe",
+    byline: "Kissila Chapinel", date: "28 maio, 2021", views: "647", comments: "0",
+    image_url: "https://placehold.co/900x520/111827/ffffff/png?text=Imagem+da+materia",
+    columnist: { name: "Kissila Chapinel", avatar_url: "https://placehold.co/48x48/e2e8f0/475569/png?text=K" },
+    paragraphs: ["Escreva aqui o corpo da matéria, contando a história e criando conexão."],
+    button_label: "Continuar",
+  } },
+  { type: "news", id: "news_portalg11", label: "Modelo Portal G11", group: "Conteúdo", isNew: true, preset: {
+    layout: "portalg11", source: "PORTALG11",
+    title: "Por que os cirurgiões de joelho estão tão entusiasmados com essa joelheira inovadora?",
+    subtitle: "Esse avanço tecnológico pode ajudar as pessoas a se manterem em movimento sem dores no joelho. Confira nossa análise.",
+    byline: "Por Sandro Pedroso, G11", date: "17/01/2023 – Atualizado há duas horas",
+    image_url: "https://placehold.co/900x520/e5e7eb/475569/png?text=Imagem+da+materia",
+    paragraphs: ["Escreva aqui o corpo da matéria."],
+    button_label: "Continuar",
+  } },
+  { type: "news", id: "news_saude", label: "Modelo Ciência e Saúde", group: "Conteúdo", isNew: true, preset: {
+    layout: "saude", section: "Ciência e Saúde",
+    title: 'O "Segredo" de Oxford? Vazamento revela extrato de raízes capaz de eliminar 97% das',
+    highlight_word: "VARIZES em casa!",
+    subtitle: "Todos ficaram surpresos com sua eficiência e custo benefício!",
+    date: "Segunda-feira, 10 de Fevereiro de 2025", byline: "Tecnologia em casa Por Leonardo Magalhães",
+    before_url: "https://placehold.co/300x300/64748b/ffffff/png?text=Antes",
+    after_url: "https://placehold.co/300x300/14b8a6/ffffff/png?text=Depois",
+    paragraphs: ["Escreva aqui o corpo da matéria."],
+    button_label: "Continuar",
+  } },
+  { type: "news", id: "news_atarde", label: "Modelo A Tarde", group: "Conteúdo", isNew: true, preset: {
+    layout: "atarde", section: "Cremação", source: "A TARDE",
+    title: "Sufotur e MP-BA firmam parceria para monitorar gastos do São João",
+    subtitle: "Painel público revela quanto cada cidade gasta",
+    date: "10/04/2026", byline: "Notícias Boas por Brendadesal",
+    image_url: "https://placehold.co/300x300/1f2937/ffffff/png?text=Imagem",
+    paragraphs: [
+      "Para garantir mais transparência sobre gastos, a Superintendência de Fomento ao Turismo e o Ministério Público da Bahia firmaram uma parceria para a população acessar as informações sobre os festejos juninos.",
+      "- valores pagos a artistas\n- gastos na estrutura dos eventos\n- investimentos de cada município",
+    ],
+    button_label: "Continuar",
+  } },
 
   { type: "question", label: "Escolha única", group: "Perguntas" },
   { type: "buttons", label: "Botões (personalizado)", group: "Perguntas", isNew: true },
