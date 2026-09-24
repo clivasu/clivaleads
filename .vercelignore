@@ -1,0 +1,7 @@
+node_modules
+.next
+.git_bak
+.env
+.env.local
+.vercel
+tsconfig.tsbuildinfo
