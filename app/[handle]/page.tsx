@@ -65,7 +65,7 @@ export default async function HandleIndexPage({
             ))}
           </div>
         )}
-        <p className="mt-10 text-center text-xs text-slate-300">Feito com Prelead</p>
+        <p className="mt-10 text-center text-xs text-slate-300">Feito com Cliva</p>
       </div>
     </div>
   );

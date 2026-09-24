@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { ArrowRight, MessageCircle, Zap, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ClivaLogo } from "@/components/brand/logo";
 import { demoFlows } from "@/lib/demo-data";
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-white">
       <header className="mx-auto flex max-w-5xl items-center justify-between px-6 py-6">
-        <span className="text-lg font-bold tracking-tight">Prelead</span>
+        <ClivaLogo size={30} />
         <nav className="flex items-center gap-3">
           <Link href="/login">
             <Button variant="ghost" size="sm">Entrar</Button>
@@ -69,7 +70,7 @@ export default function HomePage() {
 function Feature({ icon, title, desc }: { icon: React.ReactNode; title: string; desc: string }) {
   return (
     <div className="rounded-xl border p-5">
-      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-slate-900 text-white">
+      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-400 to-teal-600 text-white">
         {icon}
       </div>
       <h3 className="font-semibold text-slate-900">{title}</h3>

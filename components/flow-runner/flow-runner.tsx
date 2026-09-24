@@ -279,7 +279,7 @@ export function FlowRunner({
         </footer>
       )}
 
-      <p className="pt-6 text-center text-[11px] text-slate-300">Feito com Prelead</p>
+      <p className="pt-6 text-center text-[11px] text-slate-300">Feito com Cliva</p>
     </div>
   );
 }

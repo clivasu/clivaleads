@@ -13,7 +13,7 @@ const ptSerif = PT_Serif({ subsets: ["latin"], weight: ["400", "700"], variable:
 const fontVars = `${inter.variable} ${poppins.variable} ${franklin.variable} ${roboto.variable} ${ptSerif.variable}`;
 
 export const metadata: Metadata = {
-  title: "Prelead — Funis de pré-atendimento para clínicas",
+  title: "Cliva — Funis de pré-atendimento para clínicas",
   description:
     "Transforme leads frios de anúncios em contatos qualificados antes do WhatsApp.",
 };

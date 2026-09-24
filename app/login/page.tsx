@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/env";
+import { ClivaLogo } from "@/components/brand/logo";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -44,9 +45,8 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
       <div className="w-full max-w-sm">
-        <Link href="/" className="mb-6 flex items-center justify-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-900 font-bold text-white">P</div>
-          <span className="text-xl font-bold tracking-tight">Prelead</span>
+        <Link href="/" className="mb-6 flex items-center justify-center">
+          <ClivaLogo size={36} wordmarkClassName="text-xl" />
         </Link>
         <Card>
           <CardHeader>

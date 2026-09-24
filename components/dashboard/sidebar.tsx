@@ -18,6 +18,7 @@ import {
   ShieldTick,
   type IconProps,
 } from "iconsax-reactjs";
+import { ClivaLogo } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
 
 type NavIcon = FC<IconProps>;
@@ -116,14 +117,7 @@ export function Sidebar({ orgName, userName, userRole, isAdmin }: SidebarProps =
         )}
       >
         <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500 text-sm font-bold text-white">
-            P
-          </div>
-          {!collapsed && (
-            <span className="text-lg font-bold tracking-tight text-slate-900">
-              Prelead
-            </span>
-          )}
+          <ClivaLogo size={32} showWordmark={!collapsed} />
         </Link>
         <button
           onClick={() => setCollapsed((v) => !v)}
@@ -205,7 +199,7 @@ export function Sidebar({ orgName, userName, userRole, isAdmin }: SidebarProps =
             <NavLink key={item.href} {...item} />
           ))}
           <a
-            href="mailto:suporte@prelead.app"
+            href="mailto:suporte@cliva.app"
             title={collapsed ? "Suporte" : undefined}
             className={cn(
               "group flex items-center rounded-lg text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900",
