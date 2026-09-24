@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { getCurrentOrg } from "@/lib/data/org";
 import { isSupabaseConfigured } from "@/lib/env";
 import { OrgSettingsForm } from "@/components/settings/org-settings-form";
+import { ChangePasswordForm } from "@/components/settings/change-password-form";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,10 @@ export default async function SettingsPage() {
           Conecte o Supabase para editar e salvar os dados da clínica.
         </p>
       ) : (
-        <OrgSettingsForm org={org} baseUrl={baseUrl} />
+        <>
+          <OrgSettingsForm org={org} baseUrl={baseUrl} />
+          <ChangePasswordForm />
+        </>
       )}
     </div>
   );
