@@ -202,6 +202,7 @@ export function FlowRunner({
 
   const showFooterContinue =
     step &&
+    !step.config.hide_continue &&
     [
       "text",
       "image",
@@ -222,12 +223,17 @@ export function FlowRunner({
       "cta",
     ].includes(step.type);
 
+  // "Colar no topo": quando o bloco do topo é uma imagem com flush_top,
+  // encostamos o conteúdo na linha do cabeçalho (sem centralizar).
+  const topHead = step?.type === "container" ? step.children?.[0] : step;
+  const flushTop = Boolean(topHead && topHead.type === "image" && topHead.config.flush_top);
+
   return (
     <div
       className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col px-5 py-6"
       style={themeVars(theme, flow.organization.primary_color)}
     >
-      <header className="mb-6">
+      <header className={flushTop ? "mb-2" : "mb-6"}>
         <div className="mb-4 flex items-center justify-between">
           {logo ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -254,7 +260,7 @@ export function FlowRunner({
         )}
       </header>
 
-      <main className="flex flex-1 flex-col justify-center">
+      <main className={cn("flex flex-1 flex-col", flushTop ? "justify-start" : "justify-center")}>
         <AnimatePresence mode="wait">
           <motion.div
             key={step?.id ?? index}
@@ -563,12 +569,19 @@ function TextStep({ step }: { step: FlowStep }) {
 
 function ImageStep({ step }: { step: FlowStep }) {
   const c = step.config;
+  const bleed = Boolean(c.full_bleed);
+  const flush = Boolean(c.flush_top);
+  const src = c.url ?? c.image_url;
   return (
-    <div>
-      <StepTitle title={c.title} />
-      {(c.url || c.image_url) && (
+    <div className={cn(bleed && "-mx-5", flush && "-mt-2")}>
+      {c.title && !flush && <StepTitle title={c.title} />}
+      {src && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={c.url ?? c.image_url} alt={c.alt ?? ""} className="w-full rounded-xl" />
+        <img
+          src={src}
+          alt={c.alt ?? ""}
+          className={cn("w-full object-cover", bleed ? "rounded-none" : "rounded-xl")}
+        />
       )}
     </div>
   );

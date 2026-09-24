@@ -437,6 +437,25 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
   );
 }
 
+// Linha com rótulo/descrição + interruptor (usada no Inspector).
+function ToggleRow({ label, desc, on, onChange }: { label: string; desc?: string; on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border p-3">
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-slate-700">{label}</span>
+        {desc && <span className="block text-xs text-slate-400">{desc}</span>}
+      </span>
+      <span className="shrink-0"><Toggle on={on} onChange={onChange} /></span>
+    </div>
+  );
+}
+
+// Blocos que exibem o botão automático "Continuar" (podem ocultá-lo).
+const HAS_CONTINUE = new Set<StepType>([
+  "text", "image", "before_after", "carousel", "testimonial", "video", "stats",
+  "alert", "timer", "level", "faq", "chart_growth", "chart_gauge", "audio", "container", "result", "cta",
+]);
+
 function DesignPanel({ theme, setT }: { theme: FlowTheme; setT: (p: Partial<FlowTheme>) => void }) {
   const fonts: { key: FontChoice; label: string }[] = [
     { key: "sans", label: "Padrão" },
@@ -857,7 +876,11 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
 
       {/* Image */}
       {t === "image" && (
-        <Field label="URL da imagem"><input className={inputCls} value={c.image_url ?? ""} onChange={(e) => onChange({ image_url: e.target.value })} /></Field>
+        <>
+          <Field label="URL da imagem"><input className={inputCls} value={c.image_url ?? ""} onChange={(e) => onChange({ image_url: e.target.value })} /></Field>
+          <ToggleRow label="Colar no topo" desc="Encosta a imagem na linha do cabeçalho (ideal quando não há logo)." on={!!c.flush_top} onChange={(v) => onChange({ flush_top: v })} />
+          <ToggleRow label="Largura total" desc="Ocupa toda a largura, sem margens laterais." on={!!c.full_bleed} onChange={(v) => onChange({ full_bleed: v })} />
+        </>
       )}
       {t === "video" && (
         <Field label="URL do vídeo (embed)"><input className={inputCls} value={c.url ?? ""} onChange={(e) => onChange({ url: e.target.value })} /></Field>
@@ -870,6 +893,18 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
           <Field label="Autor"><input className={inputCls} value={c.author ?? ""} onChange={(e) => onChange({ author: e.target.value })} /></Field>
           <Field label="Foto do paciente (URL)"><input className={inputCls} value={c.avatar_url ?? ""} onChange={(e) => onChange({ avatar_url: e.target.value })} placeholder="https://..." /></Field>
         </>
+      )}
+
+      {/* Botão automático "Continuar" (evita 2 botões na mesma tela) */}
+      {HAS_CONTINUE.has(t) && (
+        <div className="mt-4 border-t pt-4">
+          <ToggleRow
+            label="Mostrar botão “Continuar”"
+            desc="Desligue quando o bloco já tem o próprio botão, pra não ficar dois."
+            on={!c.hide_continue}
+            onChange={(v) => onChange({ hide_continue: !v })}
+          />
+        </div>
       )}
     </div>
   );

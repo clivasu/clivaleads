@@ -181,6 +181,10 @@ export interface StepConfig {
   // image
   url?: string;
   alt?: string;
+  flush_top?: boolean; // cola a imagem na linha do cabeçalho (sem espaço)
+  full_bleed?: boolean; // imagem ocupa a largura total (sem margens laterais)
+  // controle do botão automático "Continuar" (evita 2 botões na mesma tela)
+  hide_continue?: boolean;
   // before_after
   before_url?: string;
   after_url?: string;
