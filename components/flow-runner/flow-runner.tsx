@@ -177,12 +177,25 @@ export function FlowRunner({
             pushAnswer({ question_title: blk.config.title || "", answer_value: b.label, answer_label: b.label, score: 0 }, b.next);
           }} />
         );
-      case "spin_wheel":
+      case "spin_wheel": {
+        const isLast = index >= total - 1;
         return (
-          <SpinWheelBlock step={blk} onFinish={(prize) =>
-            pushAnswer({ question_title: blk.config.title || "Roleta", answer_value: "wheel", answer_label: prize, score: 0, phrase: `Girei a roleta e ganhei: ${prize}` })
-          } />
+          <SpinWheelBlock step={blk} onFinish={(prize) => {
+            const a: LeadAnswer = { question_title: blk.config.title || "Roleta", answer_value: "wheel", answer_label: prize, score: 0, phrase: `Girei a roleta e ganhei: ${prize}` };
+            if (isLast) {
+              // Roleta como etapa final: o CTA leva direto ao WhatsApp.
+              const all = [...answers, a];
+              setAnswers(all);
+              persistSession(all, contact);
+              track("whatsapp_clicked", { flow_id: flow.id, organization_id: flow.organization_id });
+              const url = buildWhatsappUrl(whatsappNumber, buildLeadMessage(flow.procedure, all, flow.final_message, contact));
+              try { window.open(url, "_blank", "noopener"); } catch { /* noop */ }
+            } else {
+              pushAnswer(a);
+            }
+          }} />
         );
+      }
       case "form": return <FormStep step={blk} onSubmit={(cc) => { setContact((prev) => ({ ...prev, ...cc })); advance(); }} />;
       case "whatsapp": return <WhatsappStep step={blk} message={message} href={waUrl} onClick={onWhatsappClick} />;
       default: return null;
