@@ -24,3 +24,51 @@ export async function getCurrentOrg(): Promise<Organization | null> {
 
   return (data?.organization as unknown as Organization) ?? null;
 }
+
+export interface NavInfo {
+  orgName: string;
+  userName: string;
+  userRole: string;
+  isAdmin: boolean;
+}
+
+// Dados para a sidebar (nome da clínica, usuário, se é admin geral).
+export async function getNavInfo(): Promise<NavInfo> {
+  if (!isSupabaseConfigured) {
+    return { orgName: demoOrg.name, userName: "Modo demo", userRole: "Administradora", isAdmin: false };
+  }
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { orgName: "", userName: "", userRole: "", isAdmin: false };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name, is_super_admin")
+    .eq("id", user.id)
+    .single();
+  const org = await getCurrentOrg();
+  return {
+    orgName: org?.name ?? "Minha Clínica",
+    userName: profile?.full_name ?? user.email ?? "",
+    userRole: profile?.is_super_admin ? "Admin geral" : "Proprietário",
+    isAdmin: Boolean(profile?.is_super_admin),
+  };
+}
+
+// Verdadeiro se o usuário logado é o admin geral (mmarquessbsb@gmail.com).
+export async function isSuperAdmin(): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { data } = await supabase
+    .from("profiles")
+    .select("is_super_admin")
+    .eq("id", user.id)
+    .single();
+  return Boolean(data?.is_super_admin);
+}

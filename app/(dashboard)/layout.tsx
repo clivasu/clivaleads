@@ -2,15 +2,19 @@ import Link from "next/link";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { Topbar } from "@/components/dashboard/topbar";
 import { isSupabaseConfigured } from "@/lib/env";
+import { getNavInfo } from "@/lib/data/org";
 
-export default function DashboardLayout({
+export const dynamic = "force-dynamic";
+
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const nav = await getNavInfo();
   return (
     <div className="flex min-h-screen bg-slate-50">
-      <Sidebar />
+      <Sidebar orgName={nav.orgName} userName={nav.userName} userRole={nav.userRole} isAdmin={nav.isAdmin} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />
         {!isSupabaseConfigured && (

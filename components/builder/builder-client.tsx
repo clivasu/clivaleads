@@ -287,7 +287,7 @@ export function BuilderClient({ flow }: { flow: PublicFlow }) {
             );
           })}
         </nav>
-        <Link href={`/f/${flow.slug}`} target="_blank" className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
+        <Link href={`/${flow.organization.slug}/${flow.slug}`} target="_blank" className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
           <ExternalLink className="h-3.5 w-3.5" /> Ver
         </Link>
         <button

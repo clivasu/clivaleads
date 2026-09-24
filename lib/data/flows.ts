@@ -49,6 +49,57 @@ export async function getFlowById(id: string): Promise<PublicFlow | null> {
   return { ...(flow as PublicFlow), steps: hydrateSteps(flow.steps as unknown[]) };
 }
 
+// Busca um funil PUBLICADO por identificador da conta + slug do funil.
+// URL nova: /<handle>/<slug>  (ex.: /marco/estetica)
+export async function getPublicFlowByHandle(
+  handle: string,
+  slug: string,
+): Promise<PublicFlow | null> {
+  if (!isSupabaseConfigured) {
+    return getDemoFlowBySlug(slug);
+  }
+  const supabase = await createClient();
+  const { data: org } = await supabase
+    .from("organizations")
+    .select("id")
+    .eq("slug", handle)
+    .single();
+  if (!org) return null;
+
+  const { data: flow, error } = await supabase
+    .from("flows")
+    .select(
+      "*, organization:organizations(*), steps:flow_steps(id, flow_id, position, type, config)",
+    )
+    .eq("organization_id", org.id)
+    .eq("slug", slug)
+    .eq("status", "published")
+    .single();
+  if (error || !flow) return null;
+  return { ...(flow as PublicFlow), steps: hydrateSteps(flow.steps as unknown[]) };
+}
+
+// Lista os funis publicados de uma conta (para a página /<handle>).
+export async function getPublicOrgFunnels(
+  handle: string,
+): Promise<{ org: PublicFlow["organization"]; flows: Flow[] } | null> {
+  if (!isSupabaseConfigured) return null;
+  const supabase = await createClient();
+  const { data: org } = await supabase
+    .from("organizations")
+    .select("*")
+    .eq("slug", handle)
+    .single();
+  if (!org) return null;
+  const { data: flows } = await supabase
+    .from("flows")
+    .select("*")
+    .eq("organization_id", org.id)
+    .eq("status", "published")
+    .order("updated_at", { ascending: false });
+  return { org: org as PublicFlow["organization"], flows: (flows as Flow[]) ?? [] };
+}
+
 // Busca um funil PUBLICADO por slug, com org e steps ordenados.
 // Sem Supabase conectado, cai para os dados de demonstração (seed em memória).
 export async function getPublicFlow(slug: string): Promise<PublicFlow | null> {

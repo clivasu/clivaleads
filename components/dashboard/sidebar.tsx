@@ -15,6 +15,7 @@ import {
   ArrowLeft2,
   ArrowDown2,
   LogoutCurve,
+  ShieldTick,
   type IconProps,
 } from "iconsax-reactjs";
 import { cn } from "@/lib/utils";
@@ -55,9 +56,21 @@ const BOTTOM: NavItem[] = [
 const ACTIVE_COLOR = "#15803d"; // green-700
 const IDLE_COLOR = "#64748b"; // slate-500
 
-export function Sidebar() {
+export interface SidebarProps {
+  orgName?: string;
+  userName?: string;
+  userRole?: string;
+  isAdmin?: boolean;
+}
+
+export function Sidebar({ orgName, userName, userRole, isAdmin }: SidebarProps = {}) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const initials = (userName || orgName || "P")
+    .split(" ")
+    .slice(0, 2)
+    .map((s) => s.charAt(0).toUpperCase())
+    .join("");
 
   const isActive = (href: string) =>
     href === "/dashboard" ? pathname === href : pathname.startsWith(href);
@@ -141,7 +154,7 @@ export function Sidebar() {
             <>
               <span className="min-w-0 flex-1 text-left">
                 <span className="block truncate text-sm font-semibold text-slate-900">
-                  Clínica Demo
+                  {orgName || "Minha Clínica"}
                 </span>
                 <span className="block truncate text-xs text-slate-400">
                   Pré-atendimento
@@ -172,6 +185,17 @@ export function Sidebar() {
             </div>
           </div>
         ))}
+
+        {isAdmin && (
+          <div className="mt-5">
+            {!collapsed && (
+              <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                Plataforma
+              </p>
+            )}
+            <NavLink href="/admin" label="Admin geral" Icon={ShieldTick} />
+          </div>
+        )}
       </nav>
 
       {/* Bottom: settings + support + profile */}
@@ -200,16 +224,16 @@ export function Sidebar() {
           )}
         >
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-semibold text-emerald-700">
-            SK
+            {initials || "P"}
           </span>
           {!collapsed && (
             <>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold text-slate-900">
-                  Dr. Sarah Khan
+                  {userName || "Minha conta"}
                 </span>
                 <span className="block truncate text-xs text-slate-400">
-                  Administradora
+                  {userRole || "Proprietário"}
                 </span>
               </span>
               <Link
