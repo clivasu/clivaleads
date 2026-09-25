@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { getPublicOrgFunnels } from "@/lib/data/flows";
+import { getPublicBioByHandle } from "@/lib/data/bio";
+import { BioRenderer } from "@/components/bio/bio-renderer";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +13,8 @@ export async function generateMetadata({
   params: Promise<{ handle: string }>;
 }): Promise<Metadata> {
   const { handle } = await params;
+  const bio = await getPublicBioByHandle(handle);
+  if (bio) return { title: bio.config.name, description: bio.config.tagline };
   const data = await getPublicOrgFunnels(handle);
   return { title: data ? data.org.name : "Página não encontrada" };
 }
@@ -21,6 +25,11 @@ export default async function HandleIndexPage({
   params: Promise<{ handle: string }>;
 }) {
   const { handle } = await params;
+
+  // Se a conta publicou um Link na Bio, ele é a página principal do /<handle>.
+  const bio = await getPublicBioByHandle(handle);
+  if (bio) return <BioRenderer config={bio.config} pageId={bio.id} />;
+
   const data = await getPublicOrgFunnels(handle);
   if (!data) notFound();
   const { org, flows } = data;

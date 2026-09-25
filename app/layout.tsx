@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Poppins, Libre_Franklin, Roboto, PT_Serif } from "next/font/google";
+import { Inter, Poppins, Libre_Franklin, Roboto, PT_Serif, Playfair_Display, Dancing_Script } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
@@ -9,8 +9,11 @@ const poppins = Poppins({ subsets: ["latin"], weight: ["400", "600", "700", "800
 const franklin = Libre_Franklin({ subsets: ["latin"], weight: ["400", "600", "700", "800", "900"], variable: "--font-franklin" });
 const roboto = Roboto({ subsets: ["latin"], weight: ["400", "500", "700", "900"], variable: "--font-roboto" });
 const ptSerif = PT_Serif({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-ptserif" });
+// Fontes elegantes dos templates de Link na Bio.
+const playfair = Playfair_Display({ subsets: ["latin"], weight: ["400", "500", "600", "700"], style: ["normal", "italic"], variable: "--font-playfair" });
+const dancing = Dancing_Script({ subsets: ["latin"], weight: ["400", "600", "700"], variable: "--font-script" });
 
-const fontVars = `${inter.variable} ${poppins.variable} ${franklin.variable} ${roboto.variable} ${ptSerif.variable}`;
+const fontVars = `${inter.variable} ${poppins.variable} ${franklin.variable} ${roboto.variable} ${ptSerif.variable} ${playfair.variable} ${dancing.variable}`;
 
 export const metadata: Metadata = {
   title: "Cliva — Funis de pré-atendimento para clínicas",

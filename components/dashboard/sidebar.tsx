@@ -7,6 +7,7 @@ import {
   Category,
   Calendar,
   Filter,
+  Link21,
   Profile2User,
   Chart2,
   Setting2,
@@ -41,6 +42,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { href: "/schedule", label: "Agenda", Icon: Calendar },
       { href: "/flows", label: "Funis", Icon: Filter },
+      { href: "/bio", label: "Link na Bio", Icon: Link21 },
       { href: "/leads", label: "Leads", Icon: Profile2User },
     ],
   },

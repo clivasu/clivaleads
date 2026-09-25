@@ -324,6 +324,74 @@ export interface LeadAnswer {
   phrase?: string;
 }
 
+/* ============================ LINK NA BIO ============================ */
+
+export type BioTemplateId = "wellness" | "luxe" | "warm" | "soft";
+export type BioSocialType =
+  | "instagram" | "whatsapp" | "facebook" | "youtube" | "tiktok" | "linkedin" | "map" | "site" | "email";
+
+export interface BioTheme {
+  bg: string;
+  text: string;
+  muted: string;
+  primary: string; // cor de destaque / botões
+  card: string; // fundo dos botões/cards
+  cardText: string; // texto dos botões
+  accent: string; // detalhes
+  heading: "serif" | "sans" | "script";
+  buttonRadius: number;
+  buttonStyle: "solid" | "glass" | "gradient" | "outline";
+}
+
+export interface BioSocial {
+  type: BioSocialType;
+  url: string;
+}
+
+export type BioLinkIcon =
+  | "calendar" | "sparkles" | "heart" | "chat" | "map" | "instagram" | "facebook"
+  | "whatsapp" | "target" | "building" | "bulb" | "star" | "gift" | "leaf" | "phone" | "link";
+
+export interface BioLinkBlock {
+  type: "link";
+  label: string;
+  sublabel?: string;
+  url: string;
+  icon?: BioLinkIcon;
+  image_url?: string; // miniatura opcional (estilo card com imagem)
+  highlight?: boolean;
+}
+export interface BioAboutBlock { type: "about"; title?: string; body?: string; image_url?: string; }
+export interface BioFaqBlock { type: "faq"; title?: string; items: FaqItem[]; }
+export interface BioStatsBlock { type: "stats"; items: StatItem[]; }
+export interface BioHeadingBlock { type: "heading"; text: string; }
+
+export type BioBlock = BioLinkBlock | BioAboutBlock | BioFaqBlock | BioStatsBlock | BioHeadingBlock;
+
+export interface BioConfig {
+  theme: BioTheme;
+  cover_url?: string; // imagem de capa (topo)
+  avatar_url?: string;
+  name: string;
+  tagline?: string; // frase curta
+  headline?: string; // chamada em destaque
+  socials: BioSocial[];
+  blocks: BioBlock[];
+  footer?: string;
+}
+
+export interface BioPage {
+  id: string;
+  organization_id: string;
+  title: string | null;
+  template: BioTemplateId;
+  config: BioConfig;
+  status: FlowStatus;
+  views: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface LeadSession {
   id: string;
   session_id: string;

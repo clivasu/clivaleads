@@ -35,6 +35,8 @@ export async function updateSession(request: NextRequest) {
   const isPrivate =
     path.startsWith("/dashboard") ||
     path.startsWith("/flows") ||
+    path.startsWith("/bio") ||
+    path.startsWith("/admin") ||
     path.startsWith("/leads") ||
     path.startsWith("/analytics") ||
     path.startsWith("/settings");
