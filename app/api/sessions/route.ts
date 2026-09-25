@@ -3,13 +3,14 @@ import { cookies, headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/env";
 import { totalScore } from "@/lib/scoring";
-import type { LeadAnswer } from "@/lib/types";
+import type { LeadAnswer, ContactInfo } from "@/lib/types";
 
 interface Body {
   flow_id: string;
   organization_id: string;
   procedure?: string | null;
   answers: LeadAnswer[];
+  contact?: ContactInfo;
   device?: string;
   browser?: string;
   entry_page?: string;
@@ -47,6 +48,9 @@ export async function POST(request: NextRequest) {
       session_id,
       flow_id,
       organization_id,
+      name: body.contact?.name ?? null,
+      phone: body.contact?.phone ?? null,
+      email: body.contact?.email ?? null,
       procedure: procedure ?? null,
       score,
       status: "new",

@@ -819,6 +819,20 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
           </div>
           <Field label="Texto do botão central"><input className={inputCls} value={c.button_label ?? ""} onChange={(e) => onChange({ button_label: e.target.value })} placeholder="GIRE!" /></Field>
           <Field label="Texto do CTA (após ganhar)"><input className={inputCls} value={c.cta_label ?? ""} onChange={(e) => onChange({ cta_label: e.target.value })} placeholder="Resgatar no WhatsApp" /></Field>
+          <Field label="Ação do botão">
+            <select className={inputCls} value={c.cta_action ?? "whatsapp"} onChange={(e) => onChange({ cta_action: e.target.value as "whatsapp" | "link" })}>
+              <option value="whatsapp">WhatsApp (mensagem automática)</option>
+              <option value="link">Meu próprio link</option>
+            </select>
+          </Field>
+          {(c.cta_action ?? "whatsapp") === "link" ? (
+            <Field label="Link de destino (URL)"><input className={inputCls} value={c.cta_href ?? ""} onChange={(e) => onChange({ cta_href: e.target.value })} placeholder="https://..." /></Field>
+          ) : (
+            <Field label="Mensagem personalizada (opcional)">
+              <textarea className={inputCls} rows={3} value={c.cta_message ?? ""} onChange={(e) => onChange({ cta_message: e.target.value })} placeholder="Ex.: Olá! Ganhei {premio} e quero agendar. — deixe vazio para usar a mensagem automática com as respostas." />
+              <p className="mt-1 text-[11px] text-slate-400">Vai para o número cadastrado. Use <b>{"{nome}"}</b> e <b>{"{premio}"}</b> — são substituídos automaticamente.</p>
+            </Field>
+          )}
           <p className="mb-1 mt-1 text-xs font-medium text-slate-500">Prêmios (fatias)</p>
           <div className="flex flex-col gap-2">
             {(c.wheel_segments ?? []).map((s, i) => (

@@ -248,6 +248,10 @@ export interface StepConfig {
   spin_enabled?: boolean;
   result_prefix?: string;
   cta_label?: string;
+  // destino do botão final: WhatsApp automático ou link próprio
+  cta_action?: "whatsapp" | "link";
+  cta_href?: string; // link próprio (quando cta_action = "link")
+  cta_message?: string; // mensagem personalizada do WhatsApp ({nome} e {premio} são substituídos); vazio = mensagem automática
   // roleta — lógica de ganhos
   max_attempts?: number; // nº de tentativas (giros)
   attempt_outcomes?: number[]; // índice da fatia que cai em cada tentativa (-1 = aleatório)
@@ -325,6 +329,9 @@ export interface LeadSession {
   session_id: string;
   flow_id: string;
   organization_id: string;
+  name?: string | null;
+  phone?: string | null;
+  email?: string | null;
   procedure: string | null;
   score: number;
   status: LeadStatus;

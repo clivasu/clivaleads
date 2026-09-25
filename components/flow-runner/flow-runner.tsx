@@ -183,13 +183,21 @@ export function FlowRunner({
           <SpinWheelBlock step={blk} onCapture={(cc) => setContact((prev) => ({ ...prev, ...cc }))} onFinish={(prize) => {
             const a: LeadAnswer = { question_title: blk.config.title || "Roleta", answer_value: "wheel", answer_label: prize, score: 0, phrase: `Girei a roleta e ganhei: ${prize}` };
             if (isLast) {
-              // Roleta como etapa final: o CTA leva direto ao WhatsApp.
+              // Roleta como etapa final: o CTA leva ao destino configurado.
               const all = [...answers, a];
               setAnswers(all);
               persistSession(all, contact);
-              track("whatsapp_clicked", { flow_id: flow.id, organization_id: flow.organization_id });
-              const url = buildWhatsappUrl(whatsappNumber, buildLeadMessage(flow.procedure, all, flow.final_message, contact));
-              try { window.open(url, "_blank", "noopener"); } catch { /* noop */ }
+              const cfg = blk.config;
+              if (cfg.cta_action === "link" && cfg.cta_href) {
+                try { window.open(cfg.cta_href, "_blank", "noopener"); } catch { /* noop */ }
+              } else {
+                track("whatsapp_clicked", { flow_id: flow.id, organization_id: flow.organization_id });
+                const custom = cfg.cta_message?.trim();
+                const msg = custom
+                  ? custom.replace(/\{nome\}/gi, contact.name ?? "").replace(/\{premio\}/gi, prize)
+                  : buildLeadMessage(flow.procedure, all, flow.final_message, contact);
+                try { window.open(buildWhatsappUrl(whatsappNumber, msg), "_blank", "noopener"); } catch { /* noop */ }
+              }
             } else {
               pushAnswer(a);
             }
