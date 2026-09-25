@@ -20,6 +20,7 @@ export const BIO_TEMPLATES: Record<BioTemplateId, BioTemplateDef> = {
     config: {
       theme: { bg: "#F4F0E7", text: "#33372C", muted: "#7C7F6E", primary: "#6B7150", card: "#FFFFFF", cardText: "#33372C", accent: "#8C8F6E", heading: "serif", buttonRadius: 18, buttonStyle: "solid" },
       cover_url: AVATAR("E7E3D6", "9a9a80"),
+      cover_shape: "cover", cover_fade: 22,
       name: "Sofia Blake",
       tagline: "Vamos deixar o saudável simples.",
       socials: [{ type: "instagram", url: "" }, { type: "whatsapp", url: "" }],
@@ -41,6 +42,7 @@ export const BIO_TEMPLATES: Record<BioTemplateId, BioTemplateDef> = {
     config: {
       theme: { bg: "#0D0B09", text: "#EFE7DA", muted: "#A9A090", primary: "#C7A86A", card: "#EBDFC9", cardText: "#3A2E1E", accent: "#C7A86A", heading: "serif", buttonRadius: 16, buttonStyle: "glass" },
       cover_url: AVATAR("1c1712", "8a7a5a"),
+      cover_shape: "cover", cover_fade: 45,
       name: "Larissa Almeida",
       tagline: "Unhas que realçam sua beleza e elevam a sua autoestima.",
       headline: "Sua melhor versão, até nas unhas.",
@@ -62,6 +64,7 @@ export const BIO_TEMPLATES: Record<BioTemplateId, BioTemplateDef> = {
     config: {
       theme: { bg: "#EFE7DB", text: "#3A2C22", muted: "#6E5B4B", primary: "#8A5A3B", card: "#8A5A3B", cardText: "#FBF3E9", accent: "#A9754F", heading: "serif", buttonRadius: 16, buttonStyle: "gradient" },
       cover_url: AVATAR("E3D6C4", "9a7a5a"),
+      cover_shape: "cover", cover_fade: 30,
       name: "Marina Costa",
       tagline: "Especialista em desenvolvimento pessoal e estratégico.",
       socials: [{ type: "instagram", url: "" }, { type: "facebook", url: "" }, { type: "youtube", url: "" }, { type: "linkedin", url: "" }],
@@ -85,6 +88,7 @@ export const BIO_TEMPLATES: Record<BioTemplateId, BioTemplateDef> = {
     config: {
       theme: { bg: "#FBF6F7", text: "#3B2B31", muted: "#9A8790", primary: "#C97D97", card: "#FFFFFF", cardText: "#3B2B31", accent: "#D98FA8", heading: "script", buttonRadius: 999, buttonStyle: "solid" },
       cover_url: AVATAR("F3E7EC", "c98fa8"),
+      cover_shape: "circle", cover_size: 150,
       name: "Camila Oliveira",
       tagline: "Bem-vinda! Toque para interagir.",
       socials: [{ type: "instagram", url: "" }, { type: "whatsapp", url: "" }, { type: "facebook", url: "" }],

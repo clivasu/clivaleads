@@ -58,19 +58,44 @@ export function BioRenderer({
     <div className="min-h-[100dvh] w-full" style={{ background: t.bg, color: t.text }}>
       <div className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col">
         {/* Capa / foto */}
-        {config.cover_url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={config.cover_url} alt={config.name} className="h-64 w-full object-cover" />
-        )}
+        {config.cover_url && (config.cover_shape ?? "cover") === "circle" ? (
+          <div className="flex justify-center px-5 pt-8">
+            <span
+              className="block overflow-hidden rounded-full"
+              style={{
+                width: config.cover_size ?? 140,
+                height: config.cover_size ?? 140,
+                boxShadow: `0 8px 30px rgba(0,0,0,.12), 0 0 0 4px ${t.card}`,
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={config.cover_url} alt={config.name} className="h-full w-full object-cover" />
+            </span>
+          </div>
+        ) : config.cover_url ? (
+          <div className="relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={config.cover_url} alt={config.name} className="h-64 w-full object-cover" />
+            {(config.cover_fade ?? 0) > 0 && (
+              <div
+                className="pointer-events-none absolute inset-x-0 bottom-0"
+                style={{
+                  height: `${Math.min(100, config.cover_fade ?? 0)}%`,
+                  background: `linear-gradient(to bottom, transparent, ${t.bg})`,
+                }}
+              />
+            )}
+          </div>
+        ) : null}
 
-        <div className="flex-1 px-5 pb-10 pt-6">
+        <div className={cn("flex-1 px-5 pb-10", (config.cover_shape ?? "cover") === "circle" ? "pt-4 text-center" : "pt-6")}>
           {/* Nome + tagline */}
           <h1 className="text-3xl font-semibold leading-tight" style={{ fontFamily: hFont }}>{config.name}</h1>
           {config.tagline && <p className="mt-1.5 text-sm" style={{ color: t.muted }}>{config.tagline}</p>}
 
           {/* Sociais */}
           {config.socials.filter((s) => s.url || preview).length > 0 && (
-            <div className="mt-4 flex flex-wrap items-center gap-2.5">
+            <div className={cn("mt-4 flex flex-wrap items-center gap-2.5", (config.cover_shape ?? "cover") === "circle" && "justify-center")}>
               {config.socials.map((s, i) => {
                 const Icon = SOCIAL_ICONS[s.type];
                 return (

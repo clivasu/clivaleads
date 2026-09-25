@@ -371,6 +371,9 @@ export type BioBlock = BioLinkBlock | BioAboutBlock | BioFaqBlock | BioStatsBloc
 export interface BioConfig {
   theme: BioTheme;
   cover_url?: string; // imagem de capa (topo)
+  cover_shape?: "cover" | "circle"; // capa cheia ou avatar circular
+  cover_fade?: number; // 0-100: degradê da capa fundindo no fundo do site
+  cover_size?: number; // diâmetro do círculo (px) quando cover_shape = "circle"
   avatar_url?: string;
   name: string;
   tagline?: string; // frase curta

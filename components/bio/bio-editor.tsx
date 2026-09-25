@@ -6,6 +6,7 @@ import { ExternalLink, Check, Plus, Trash2, ArrowUp, ArrowDown, Copy, BarChart3 
 import type { BioConfig, BioPage, BioTemplateId, BioBlock, BioLinkIcon, BioSocialType } from "@/lib/types";
 import { BIO_TEMPLATES, defaultBioConfig } from "@/lib/bio-templates";
 import { BioRenderer } from "@/components/bio/bio-renderer";
+import { UploadButton } from "@/components/bio/upload-button";
 import { saveBio } from "@/lib/actions/bio";
 import { cn } from "@/lib/utils";
 
@@ -140,7 +141,33 @@ export function BioEditor({
 
           {/* Perfil */}
           <Section title="Perfil">
-            <Field label="Foto de capa (URL)"><input className={input} value={config.cover_url ?? ""} onChange={(e) => set({ cover_url: e.target.value })} placeholder="https://..." /></Field>
+            <Field label="Foto de capa">
+              <div className="flex gap-2">
+                <input className={input} value={config.cover_url ?? ""} onChange={(e) => set({ cover_url: e.target.value })} placeholder="Cole uma URL ou envie um arquivo" />
+                <UploadButton onUploaded={(url) => set({ cover_url: url })} />
+              </div>
+              {config.cover_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={config.cover_url} alt="" className={cn("mt-2 border object-cover", (config.cover_shape ?? "cover") === "circle" ? "h-16 w-16 rounded-full" : "h-16 w-full rounded-lg")} />
+              )}
+            </Field>
+            <div className="mb-2.5 grid grid-cols-2 gap-2">
+              <Field label="Formato da foto">
+                <select className={input} value={config.cover_shape ?? "cover"} onChange={(e) => set({ cover_shape: e.target.value as "cover" | "circle" })}>
+                  <option value="cover">Capa (largura total)</option>
+                  <option value="circle">Círculo (avatar)</option>
+                </select>
+              </Field>
+              {(config.cover_shape ?? "cover") === "circle" ? (
+                <Field label={`Tamanho do círculo: ${config.cover_size ?? 140}px`}>
+                  <input type="range" min={80} max={220} value={config.cover_size ?? 140} onChange={(e) => set({ cover_size: Number(e.target.value) })} className="w-full accent-emerald-500" />
+                </Field>
+              ) : (
+                <Field label={`Degradê (funde no site): ${config.cover_fade ?? 0}%`}>
+                  <input type="range" min={0} max={100} value={config.cover_fade ?? 0} onChange={(e) => set({ cover_fade: Number(e.target.value) })} className="w-full accent-emerald-500" />
+                </Field>
+              )}
+            </div>
             <Field label="Nome"><input className={input} value={config.name} onChange={(e) => set({ name: e.target.value })} /></Field>
             <Field label="Frase (tagline)"><input className={input} value={config.tagline ?? ""} onChange={(e) => set({ tagline: e.target.value })} /></Field>
             <Field label="Chamada em destaque (opcional)"><input className={input} value={config.headline ?? ""} onChange={(e) => set({ headline: e.target.value })} /></Field>
