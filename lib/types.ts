@@ -74,7 +74,7 @@ export type EventType =
   | "flow_completed"
   | "whatsapp_clicked";
 
-export type ImageStyle = "cover" | "circle";
+export type ImageStyle = "cover" | "circle" | "float";
 export type ElementSize = "sm" | "md" | "lg";
 
 export interface QuestionOption {

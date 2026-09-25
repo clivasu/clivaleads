@@ -17,7 +17,11 @@ import { FlowRunner } from "@/components/flow-runner/flow-runner";
 import { FlowCanvas } from "@/components/builder/flow-canvas";
 import { DEFAULT_THEME, type FlowTheme, type FontChoice } from "@/lib/theme";
 import { saveFlow } from "@/lib/actions/flows";
+import { UploadButton } from "@/components/bio/upload-button";
 import { cn } from "@/lib/utils";
+
+// Emojis rápidos para as opções de pergunta.
+const QUICK_EMOJIS = ["😊", "😍", "🔥", "✨", "💚", "👍", "❤️", "📸", "💔", "🔁", "🗓️", "🎁", "💉", "👃", "🌟", "🙌", "💪", "🦷", "👀", "😮‍💨"];
 
 const ICONS: Record<StepType, React.ElementType> = {
   start: Flag, text: Type, image: ImageIcon, video: Video, carousel: GalleryHorizontal,
@@ -1005,20 +1009,34 @@ function OptionsEditor({ options, onChange }: { options: QuestionOption[]; onCha
               <input className={inputCls} value={o.label} onChange={(e) => setOpt(i, { label: e.target.value })} />
               <button onClick={() => remove(i)} className="text-slate-400 hover:text-rose-500"><Trash2 className="h-4 w-4" /></button>
             </div>
+            {/* Emoji */}
+            <div className="mb-1.5 flex flex-wrap items-center gap-1">
+              <span className="text-[11px] text-slate-400">Emoji</span>
+              <input className="w-12 rounded border border-slate-200 px-2 py-1 text-center text-sm" placeholder="😊" value={o.emoji ?? ""} onChange={(e) => setOpt(i, { emoji: e.target.value || undefined })} />
+              {QUICK_EMOJIS.map((em) => (
+                <button key={em} onClick={() => setOpt(i, { emoji: em })} className={cn("rounded px-1 text-base leading-none hover:bg-slate-100", o.emoji === em && "bg-emerald-100 ring-1 ring-emerald-300")}>{em}</button>
+              ))}
+              {o.emoji && <button onClick={() => setOpt(i, { emoji: undefined })} className="text-[11px] text-slate-400 hover:text-rose-500">limpar</button>}
+            </div>
             <div className="mb-1.5 grid grid-cols-2 gap-1.5">
               <label className="flex items-center gap-1 text-[11px] text-slate-500">
                 Pontos
                 <input type="number" className="w-full rounded border border-slate-200 px-2 py-1 text-sm" value={o.score ?? 0} onChange={(e) => setOpt(i, { score: Number(e.target.value) })} />
               </label>
-              <select className="rounded border border-slate-200 px-2 py-1 text-sm text-slate-600" value={o.image_style ?? ""} onChange={(e) => setOpt(i, { image_style: (e.target.value || undefined) as "cover" | "circle" | undefined })}>
+              <select className="rounded border border-slate-200 px-2 py-1 text-sm text-slate-600" value={o.image_style ?? ""} onChange={(e) => setOpt(i, { image_style: (e.target.value || undefined) as "cover" | "circle" | "float" | undefined })}>
                 <option value="">Sem imagem</option>
                 <option value="cover">Imagem capa</option>
                 <option value="circle">Imagem círculo</option>
+                <option value="float">Imagem flutuante (sem fundo)</option>
               </select>
             </div>
             {o.image_style && (
-              <input className="mb-1.5 w-full rounded border border-slate-200 px-2 py-1 text-sm" placeholder="URL da imagem" value={o.image_url ?? ""} onChange={(e) => setOpt(i, { image_url: e.target.value })} />
+              <div className="mb-1.5 flex gap-1.5">
+                <input className="w-full rounded border border-slate-200 px-2 py-1 text-sm" placeholder="URL da imagem" value={o.image_url ?? ""} onChange={(e) => setOpt(i, { image_url: e.target.value })} />
+                <UploadButton label="Enviar" onUploaded={(url) => setOpt(i, { image_url: url })} />
+              </div>
             )}
+            {o.image_style === "float" && <p className="mb-1.5 text-[10px] text-slate-400">Dica: use um PNG com fundo transparente — ele flutua no botão, sem moldura.</p>}
             <input className="w-full rounded border border-slate-200 px-2 py-1 text-sm" placeholder="Link externo (opcional)" value={o.href ?? ""} onChange={(e) => setOpt(i, { href: e.target.value || undefined })} />
           </div>
         ))}
