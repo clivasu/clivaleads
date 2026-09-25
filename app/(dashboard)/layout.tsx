@@ -13,7 +13,9 @@ export default async function DashboardLayout({
 }) {
   const nav = await getNavInfo();
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="relative flex min-h-screen bg-gradient-to-br from-emerald-50 via-slate-50 to-teal-50/60">
+      <div className="pointer-events-none fixed -left-32 top-0 h-96 w-96 rounded-full bg-emerald-200/30 blur-3xl" />
+      <div className="pointer-events-none fixed bottom-0 right-0 h-96 w-96 rounded-full bg-teal-200/20 blur-3xl" />
       <Sidebar orgName={nav.orgName} userName={nav.userName} userRole={nav.userRole} isAdmin={nav.isAdmin} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />

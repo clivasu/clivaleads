@@ -88,8 +88,8 @@ export function Sidebar({ orgName, userName, userRole, isAdmin }: SidebarProps =
           "group flex items-center rounded-lg text-sm font-medium transition-colors",
           collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5",
           active
-            ? "bg-emerald-50 text-emerald-700"
-            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+            ? "bg-white/70 text-emerald-700 shadow-sm ring-1 ring-white/70 backdrop-blur"
+            : "text-slate-600 hover:bg-white/50 hover:text-slate-900",
         )}
       >
         <Icon
@@ -105,14 +105,15 @@ export function Sidebar({ orgName, userName, userRole, isAdmin }: SidebarProps =
   return (
     <aside
       className={cn(
-        "hidden shrink-0 flex-col border-r bg-white transition-[width] duration-300 md:flex",
-        collapsed ? "w-[76px]" : "w-64",
+        "sticky top-3 z-30 m-3 hidden h-[calc(100vh-1.5rem)] shrink-0 flex-col overflow-hidden rounded-[28px] border border-white/60 bg-white/55 shadow-xl shadow-emerald-950/5 backdrop-blur-2xl transition-[width] duration-300 md:flex",
+        "before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-24 before:bg-gradient-to-b before:from-white/70 before:to-transparent",
+        collapsed ? "w-[80px]" : "w-64",
       )}
     >
       {/* Logo + collapse */}
       <div
         className={cn(
-          "flex border-b px-4 py-4",
+          "flex border-b border-white/50 px-4 py-4",
           collapsed
             ? "flex-col items-center gap-3"
             : "items-center justify-between",
@@ -138,7 +139,7 @@ export function Sidebar({ orgName, userName, userRole, isAdmin }: SidebarProps =
       <div className="px-3 pt-4">
         <button
           className={cn(
-            "flex w-full items-center rounded-xl border bg-white transition-colors hover:bg-slate-50",
+            "flex w-full items-center rounded-xl border border-white/60 bg-white/50 backdrop-blur transition-colors hover:bg-white/70",
             collapsed ? "justify-center p-2" : "gap-3 p-3",
           )}
           title="Trocar de clínica"
@@ -195,7 +196,7 @@ export function Sidebar({ orgName, userName, userRole, isAdmin }: SidebarProps =
       </nav>
 
       {/* Bottom: settings + support + profile */}
-      <div className="border-t px-3 py-3">
+      <div className="border-t border-white/50 px-3 py-3">
         <div className="flex flex-col gap-1">
           {BOTTOM.map((item) => (
             <NavLink key={item.href} {...item} />
@@ -215,7 +216,7 @@ export function Sidebar({ orgName, userName, userRole, isAdmin }: SidebarProps =
 
         <div
           className={cn(
-            "mt-3 flex items-center border-t pt-3",
+            "mt-3 flex items-center border-t border-white/50 pt-3",
             collapsed ? "justify-center" : "gap-3 px-1",
           )}
         >

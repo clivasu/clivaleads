@@ -1,6 +1,11 @@
+@import url('https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Fonte geométrica (estilo do print inlead) usada na landing e nos planos. */
+.font-display { font-family: "General Sans", var(--font-sans), system-ui, sans-serif; }
+.tracking-tightish { letter-spacing: -0.02em; }
 
 @layer base {
   :root {
