@@ -252,6 +252,10 @@ export interface StepConfig {
   max_attempts?: number; // nº de tentativas (giros)
   attempt_outcomes?: number[]; // índice da fatia que cai em cada tentativa (-1 = aleatório)
   retry_label?: string; // texto do botão "girar de novo"
+  // roleta — cofre: borra o prêmio até a pessoa preencher os dados
+  gate_enabled?: boolean;
+  gate_fields?: FormField[]; // campos pedidos p/ revelar (com required por campo)
+  gate_consent?: string; // texto LGPD opcional abaixo do formulário
   // roleta — cores do bloco
   wheel_bg?: string; // fundo do bloco
   wheel_color_a?: string; // cor das fatias A

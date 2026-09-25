@@ -11,7 +11,7 @@ import {
   GripVertical, Trash2, Copy, Plus, ArrowLeft, ExternalLink, Check, ChevronDown,
   Layers, GitBranch, Palette, Users, Settings,
 } from "lucide-react";
-import type { FlowStep, PublicFlow, StepType, QuestionOption, ButtonItem } from "@/lib/types";
+import type { FlowStep, PublicFlow, StepType, QuestionOption, ButtonItem, FormField } from "@/lib/types";
 import { BLOCK_CATALOG, defaultConfig, type BlockDef } from "@/lib/block-catalog";
 import { FlowRunner } from "@/components/flow-runner/flow-runner";
 import { FlowCanvas } from "@/components/builder/flow-canvas";
@@ -450,6 +450,13 @@ function ToggleRow({ label, desc, on, onChange }: { label: string; desc?: string
   );
 }
 
+// Campos possíveis no "cofre" da roleta (revelar prêmio após preencher).
+const GATE_FIELDS: FormField[] = [
+  { name: "name", label: "Nome", type: "text", placeholder: "Seu nome" },
+  { name: "phone", label: "WhatsApp / Telefone", type: "tel", placeholder: "(00) 00000-0000" },
+  { name: "email", label: "E-mail", type: "email", placeholder: "voce@email.com" },
+];
+
 // Blocos que exibem o botão automático "Continuar" (podem ocultá-lo).
 const HAS_CONTINUE = new Set<StepType>([
   "text", "image", "before_after", "carousel", "testimonial", "video", "stats",
@@ -859,6 +866,45 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
             <p className="mt-2 text-[11px] text-slate-400">Ex.: 3 tentativas — 1ª "Não foi dessa vez", 2ª "Brinde", 3ª o prêmio principal.</p>
             {(c.max_attempts ?? 1) > 1 && (
               <Field label="Texto do botão de girar de novo"><input className={inputCls} value={c.retry_label ?? ""} onChange={(e) => onChange({ retry_label: e.target.value })} placeholder="Girar novamente" /></Field>
+            )}
+          </div>
+
+          {/* Cofre: revelar prêmio só após preencher dados */}
+          <div className="mt-5 border-t pt-4">
+            <ToggleRow
+              label="Bloquear prêmio até preencher (borrado)"
+              desc="A pessoa gira, o prêmio fica desfocado e só aparece depois de enviar os dados."
+              on={!!c.gate_enabled}
+              onChange={(v) => onChange({ gate_enabled: v })}
+            />
+            {c.gate_enabled && (
+              <div className="mt-1 flex flex-col gap-1.5">
+                <p className="text-xs text-slate-400">Escolha o que pedir e o que é obrigatório:</p>
+                {GATE_FIELDS.map((gf) => {
+                  const cur = (c.gate_fields ?? []).find((x) => x.name === gf.name);
+                  const included = !!cur;
+                  const setField = (patch: Partial<FormField> | null) => {
+                    const rest = (c.gate_fields ?? []).filter((x) => x.name !== gf.name);
+                    if (patch === null) { onChange({ gate_fields: rest }); return; }
+                    onChange({ gate_fields: [...rest, { ...(cur ?? gf), ...patch }] });
+                  };
+                  return (
+                    <div key={gf.name} className="rounded-lg border p-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-700">{gf.label}</span>
+                        <Toggle on={included} onChange={(v) => setField(v ? {} : null)} />
+                      </div>
+                      {included && (
+                        <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+                          <span>Obrigatório</span>
+                          <Toggle on={!!cur?.required} onChange={(v) => setField({ required: v })} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                <Field label="Texto LGPD (opcional)"><input className={inputCls} value={c.gate_consent ?? ""} onChange={(e) => onChange({ gate_consent: e.target.value })} placeholder="Seus dados estão protegidos (LGPD)." /></Field>
+              </div>
             )}
           </div>
 

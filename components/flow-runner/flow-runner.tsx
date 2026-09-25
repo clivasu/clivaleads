@@ -180,7 +180,7 @@ export function FlowRunner({
       case "spin_wheel": {
         const isLast = index >= total - 1;
         return (
-          <SpinWheelBlock step={blk} onFinish={(prize) => {
+          <SpinWheelBlock step={blk} onCapture={(cc) => setContact((prev) => ({ ...prev, ...cc }))} onFinish={(prize) => {
             const a: LeadAnswer = { question_title: blk.config.title || "Roleta", answer_value: "wheel", answer_label: prize, score: 0, phrase: `Girei a roleta e ganhei: ${prize}` };
             if (isLast) {
               // Roleta como etapa final: o CTA leva direto ao WhatsApp.

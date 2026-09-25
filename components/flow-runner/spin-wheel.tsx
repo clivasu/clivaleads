@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { ArrowRight, Gift, RotateCw } from "lucide-react";
-import type { FlowStep, WheelSegment } from "@/lib/types";
+import { ArrowRight, Gift, RotateCw, Lock } from "lucide-react";
+import type { FlowStep, WheelSegment, ContactInfo } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 const ORANGE = "#f59e0b";
 const BLUE = "#1d4ed8";
@@ -20,10 +21,38 @@ const BULBS = 18;
 
 type Phase = "idle" | "spinning" | "retry" | "win";
 
-export function SpinWheelBlock({ step, onFinish }: { step: FlowStep; onFinish: (prize: string) => void }) {
+export function SpinWheelBlock({ step, onFinish, onCapture }: { step: FlowStep; onFinish: (prize: string) => void; onCapture?: (c: Partial<ContactInfo>) => void }) {
   const c = step.config;
   const segments = c.wheel_segments && c.wheel_segments.length >= 2 ? c.wheel_segments : DEFAULT_SEGMENTS;
   const spinEnabled = c.spin_enabled ?? true;
+
+  // Cofre: borra o prêmio até preencher os dados.
+  const gateFields = c.gate_fields ?? [];
+  const gated = Boolean(c.gate_enabled) && gateFields.length > 0;
+  const [unlocked, setUnlocked] = useState(false);
+  const [gateData, setGateData] = useState<Record<string, string>>({});
+  const [gateError, setGateError] = useState<string | null>(null);
+
+  const submitGate = (e: React.FormEvent) => {
+    e.preventDefault();
+    for (const f of gateFields) {
+      if (f.required && !(gateData[f.name] ?? "").trim()) {
+        setGateError("Preencha os campos obrigatórios para revelar seu prêmio.");
+        return;
+      }
+    }
+    setGateError(null);
+    const contact: Partial<ContactInfo> = {};
+    for (const f of gateFields) {
+      const v = (gateData[f.name] ?? "").trim();
+      if (!v) continue;
+      if (f.name === "email" || f.type === "email") contact.email = v;
+      else if (f.name === "phone" || f.type === "tel") contact.phone = v;
+      else contact.name = v;
+    }
+    onCapture?.(contact);
+    setUnlocked(true);
+  };
   const centerLabel = c.button_label ?? "GIRE!";
   const resultPrefix = c.result_prefix ?? "Você ganhou:";
   const ctaLabel = c.cta_label ?? "Resgatar no WhatsApp";
@@ -177,12 +206,37 @@ export function SpinWheelBlock({ step, onFinish }: { step: FlowStep; onFinish: (
       {phase === "win" && result !== null ? (
         <div className="relative z-30 mt-6 rounded-2xl bg-white/10 p-4 backdrop-blur">
           <p className="text-sm text-white/70">{resultPrefix}</p>
-          <p className="mb-3 flex items-center justify-center gap-2 text-xl font-extrabold" style={{ color: accent }}>
+          <p className={cn("mb-3 flex items-center justify-center gap-2 text-xl font-extrabold transition", gated && !unlocked && "select-none blur-[7px]")} style={{ color: accent }}>
             <Gift className="h-5 w-5" /> {segments[result].label}
           </p>
-          <button onClick={() => onFinish(segments[result].label)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3.5 text-base font-semibold text-white hover:bg-emerald-600">
-            {ctaLabel} <ArrowRight className="h-4 w-4" />
-          </button>
+
+          {gated && !unlocked ? (
+            <form onSubmit={submitGate} className="flex flex-col gap-2 text-left">
+              <div className="mb-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-white/85">
+                <Lock className="h-3.5 w-3.5" /> Preencha para revelar seu prêmio
+              </div>
+              {gateFields.map((f) => (
+                <input
+                  key={f.name}
+                  type={f.type}
+                  required={f.required}
+                  placeholder={(f.placeholder || f.label) + (f.required ? " *" : "")}
+                  value={gateData[f.name] ?? ""}
+                  onChange={(e) => setGateData((p) => ({ ...p, [f.name]: e.target.value }))}
+                  className="w-full rounded-lg border border-white/25 bg-white/10 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/50 focus:border-white/60"
+                />
+              ))}
+              {gateError && <p className="text-xs text-red-300">{gateError}</p>}
+              <button type="submit" className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3.5 text-base font-semibold text-white hover:bg-emerald-600">
+                Desbloquear meu prêmio 🎁
+              </button>
+              {c.gate_consent && <p className="text-center text-[11px] text-white/50">{c.gate_consent}</p>}
+            </form>
+          ) : (
+            <button onClick={() => onFinish(segments[result].label)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3.5 text-base font-semibold text-white hover:bg-emerald-600">
+              {ctaLabel} <ArrowRight className="h-4 w-4" />
+            </button>
+          )}
         </div>
       ) : phase === "retry" && result !== null ? (
         <div className="mt-6 rounded-2xl bg-white/10 p-4">
