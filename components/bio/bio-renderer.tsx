@@ -7,6 +7,7 @@ import {
   Link as LinkIcon, Globe, Mail, Music2, ChevronRight, ChevronDown,
 } from "lucide-react";
 import type { BioConfig, BioLinkIcon, BioSocialType, FaqItem } from "@/lib/types";
+import { bioFont } from "@/lib/bio-fonts";
 import { cn } from "@/lib/utils";
 
 const LINK_ICONS: Record<BioLinkIcon, React.ElementType> = {
@@ -19,8 +20,20 @@ const SOCIAL_ICONS: Record<BioSocialType, React.ElementType> = {
   tiktok: Music2, linkedin: Linkedin, map: MapPin, site: Globe, email: Mail,
 };
 
-function headingFont(h: BioConfig["theme"]["heading"]) {
-  return h === "script" ? "var(--font-script)" : h === "serif" ? "var(--font-playfair)" : "var(--font-poppins)";
+// Fundo da página conforme o "papel de parede" escolhido.
+function wallpaperBg(t: BioConfig["theme"]): React.CSSProperties {
+  const w = t.wallpaper ?? "fill";
+  if (w === "gradient") return { background: `linear-gradient(180deg, ${t.bg}, ${t.bg2 || "color-mix(in srgb, " + t.bg + " 55%, #000)"})` };
+  if ((w === "image" || w === "blur") && t.wallpaperImage) {
+    return {
+      backgroundColor: t.bg,
+      backgroundImage: `url(${t.wallpaperImage})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+      ...(w === "blur" ? {} : {}),
+    };
+  }
+  return { background: t.bg };
 }
 
 export function BioRenderer({
@@ -33,7 +46,9 @@ export function BioRenderer({
   preview?: boolean;
 }) {
   const t = config.theme;
-  const hFont = headingFont(t.heading);
+  const hFont = bioFont(t.heading) ?? "var(--font-playfair)";
+  const bodyFont = bioFont(t.font);
+  const isBlur = t.wallpaper === "blur" && !!t.wallpaperImage;
 
   const track = (label: string, url: string) => {
     if (preview || !pageId) return;
@@ -43,20 +58,31 @@ export function BioRenderer({
     } catch { /* noop */ }
   };
 
+  const shadowFor = (fallback: string) => {
+    switch (t.buttonShadow) {
+      case "none": return "none";
+      case "soft": return "0 6px 18px rgba(0,0,0,.12)";
+      case "strong": return "0 16px 36px rgba(0,0,0,.24)";
+      default: return fallback;
+    }
+  };
   const buttonStyle = (highlight?: boolean): React.CSSProperties => {
     const radius = t.buttonRadius;
     if (t.buttonStyle === "gradient")
-      return { background: `linear-gradient(135deg, ${t.primary}, color-mix(in srgb, ${t.primary} 60%, #000))`, color: t.cardText, borderRadius: radius, boxShadow: "0 10px 24px rgba(0,0,0,.14)" };
+      return { background: `linear-gradient(135deg, ${t.primary}, color-mix(in srgb, ${t.primary} 60%, #000))`, color: t.cardText, borderRadius: radius, boxShadow: shadowFor("0 10px 24px rgba(0,0,0,.14)") };
     if (t.buttonStyle === "glass")
-      return { background: `linear-gradient(180deg, ${t.card}, color-mix(in srgb, ${t.card} 80%, #000 6%))`, color: t.cardText, borderRadius: radius, boxShadow: "0 8px 22px rgba(0,0,0,.3)" };
+      return { background: `linear-gradient(180deg, ${t.card}, color-mix(in srgb, ${t.card} 80%, #000 6%))`, color: t.cardText, borderRadius: radius, boxShadow: shadowFor("0 8px 22px rgba(0,0,0,.3)") };
     if (t.buttonStyle === "outline")
-      return { background: "transparent", color: t.primary, border: `1.5px solid ${t.primary}`, borderRadius: radius };
-    return { background: t.card, color: t.cardText, borderRadius: radius, boxShadow: highlight ? `0 10px 24px color-mix(in srgb, ${t.primary} 30%, transparent)` : "0 4px 14px rgba(0,0,0,.06)" };
+      return { background: "transparent", color: t.primary, border: `1.5px solid ${t.primary}`, borderRadius: radius, boxShadow: shadowFor("none") };
+    return { background: t.card, color: t.cardText, borderRadius: radius, boxShadow: shadowFor(highlight ? `0 10px 24px color-mix(in srgb, ${t.primary} 30%, transparent)` : "0 4px 14px rgba(0,0,0,.06)") };
   };
 
   return (
-    <div className="min-h-[100dvh] w-full" style={{ background: t.bg, color: t.text }}>
-      <div className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col">
+    <div className="relative min-h-[100dvh] w-full" style={{ ...(isBlur ? { background: t.bg } : wallpaperBg(t)), color: t.text, fontFamily: bodyFont }}>
+      {isBlur && (
+        <div className="pointer-events-none fixed inset-0" style={{ backgroundImage: `url(${t.wallpaperImage})`, backgroundSize: "cover", backgroundPosition: "center", filter: "blur(22px)", transform: "scale(1.15)" }} />
+      )}
+      <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-md flex-col">
         {/* Capa / foto */}
         {config.cover_url && (config.cover_shape ?? "cover") === "circle" ? (
           <div className="flex justify-center px-5 pt-8">

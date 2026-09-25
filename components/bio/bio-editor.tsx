@@ -2,9 +2,10 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { ExternalLink, Check, Plus, Trash2, ArrowUp, ArrowDown, Copy, BarChart3 } from "lucide-react";
+import { ExternalLink, Check, Plus, Trash2, ArrowUp, ArrowDown, Copy, BarChart3, Image as ImageIcon, Square, Type, Palette, AlignLeft, ChevronDown } from "lucide-react";
 import type { BioConfig, BioPage, BioTemplateId, BioBlock, BioLinkIcon, BioSocialType } from "@/lib/types";
 import { BIO_TEMPLATES, defaultBioConfig } from "@/lib/bio-templates";
+import { BIO_FONTS } from "@/lib/bio-fonts";
 import { BioRenderer } from "@/components/bio/bio-renderer";
 import { UploadButton } from "@/components/bio/upload-button";
 import { saveBio } from "@/lib/actions/bio";
@@ -58,6 +59,7 @@ export function BioEditor({
   const [status, setStatus] = useState<"draft" | "published">(bio.status);
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [openRow, setOpenRow] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const publicUrl = `${baseUrl}/${handle}`;
@@ -193,7 +195,7 @@ export function BioEditor({
           </Section>
 
           {/* Blocos */}
-          <Section title="Botões e seções">
+          <Section title="Links e seções">
             <div className="flex flex-col gap-3">
               {config.blocks.map((b, i) => (
                 <div key={i} className="rounded-xl border border-slate-100 p-3">
@@ -266,28 +268,57 @@ export function BioEditor({
             </div>
           </Section>
 
-          {/* Cores */}
-          <Section title="Cores e estilo">
-            <Color label="Fundo" value={config.theme.bg} onChange={(v) => setTheme({ bg: v })} />
-            <Color label="Texto" value={config.theme.text} onChange={(v) => setTheme({ text: v })} />
-            <Color label="Destaque" value={config.theme.primary} onChange={(v) => setTheme({ primary: v })} />
-            <Color label="Botão (fundo)" value={config.theme.card} onChange={(v) => setTheme({ card: v })} />
-            <Color label="Botão (texto)" value={config.theme.cardText} onChange={(v) => setTheme({ cardText: v })} />
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <Field label="Estilo do botão">
-                <select className={input} value={config.theme.buttonStyle} onChange={(e) => setTheme({ buttonStyle: e.target.value as BioConfig["theme"]["buttonStyle"] })}>
-                  <option value="solid">Sólido</option><option value="glass">Vidro</option><option value="gradient">Degradê</option><option value="outline">Contorno</option>
-                </select>
-              </Field>
-              <Field label="Fonte dos títulos">
-                <select className={input} value={config.theme.heading} onChange={(e) => setTheme({ heading: e.target.value as BioConfig["theme"]["heading"] })}>
-                  <option value="serif">Serifada (elegante)</option><option value="sans">Moderna</option><option value="script">Manuscrita</option>
-                </select>
-              </Field>
+          {/* DESIGN — organizado no padrão Linktree (linhas que expandem) */}
+          <Section title="Personalizar o design">
+            <div className="flex flex-col gap-2">
+              {/* Papel de parede */}
+              <DesignRow icon={ImageIcon} title="Papel de parede" value={WP_LABEL[config.theme.wallpaper ?? "fill"]} open={openRow === "wp"} onToggle={() => setOpenRow(openRow === "wp" ? null : "wp")}>
+                <Seg options={[["fill", "Preenchimento"], ["gradient", "Degradê"], ["blur", "Desfoque"], ["image", "Imagem"]]} value={config.theme.wallpaper ?? "fill"} onChange={(v) => setTheme({ wallpaper: v as BioConfig["theme"]["wallpaper"] })} />
+                {(config.theme.wallpaper ?? "fill") === "fill" && <Color label="Cor de fundo" value={config.theme.bg} onChange={(v) => setTheme({ bg: v })} />}
+                {config.theme.wallpaper === "gradient" && (<><Color label="Cor de cima" value={config.theme.bg} onChange={(v) => setTheme({ bg: v })} /><Color label="Cor de baixo" value={config.theme.bg2 ?? "#0d9488"} onChange={(v) => setTheme({ bg2: v })} /></>)}
+                {(config.theme.wallpaper === "image" || config.theme.wallpaper === "blur") && (
+                  <div className="mt-1 flex gap-2">
+                    <input className={input} placeholder="URL da imagem de fundo" value={config.theme.wallpaperImage ?? ""} onChange={(e) => setTheme({ wallpaperImage: e.target.value })} />
+                    <UploadButton label="Enviar" onUploaded={(url) => setTheme({ wallpaperImage: url })} />
+                  </div>
+                )}
+              </DesignRow>
+
+              {/* Botões */}
+              <DesignRow icon={Square} title="Botões" value={BTN_LABEL[config.theme.buttonStyle]} open={openRow === "btn"} onToggle={() => setOpenRow(openRow === "btn" ? null : "btn")}>
+                <p className="mb-1.5 text-xs font-medium text-slate-500">Estilo</p>
+                <Seg options={[["solid", "Sólido"], ["glass", "Vidro"], ["gradient", "Degradê"], ["outline", "Contorno"]]} value={config.theme.buttonStyle} onChange={(v) => setTheme({ buttonStyle: v as BioConfig["theme"]["buttonStyle"] })} />
+                <p className="mb-1.5 text-xs font-medium text-slate-500">Sombra</p>
+                <Seg options={[["none", "Nenhuma"], ["soft", "Suave"], ["strong", "Forte"]]} value={config.theme.buttonShadow ?? "soft"} onChange={(v) => setTheme({ buttonShadow: v as BioConfig["theme"]["buttonShadow"] })} />
+                <Field label={`Arredondamento das pontas: ${config.theme.buttonRadius}px`}>
+                  <input type="range" min={0} max={28} value={config.theme.buttonRadius} onChange={(e) => setTheme({ buttonRadius: Number(e.target.value) })} className="w-full accent-emerald-500" />
+                </Field>
+                <div className="mt-1"><Color label="Cor do botão" value={config.theme.card} onChange={(v) => setTheme({ card: v })} /><Color label="Cor do texto" value={config.theme.cardText} onChange={(v) => setTheme({ cardText: v })} /></div>
+              </DesignRow>
+
+              {/* Texto */}
+              <DesignRow icon={Type} title="Texto" value={fontLabel(config.theme.font ?? "inter")} open={openRow === "txt"} onToggle={() => setOpenRow(openRow === "txt" ? null : "txt")}>
+                <p className="mb-1.5 text-xs font-medium text-slate-500">Fonte da página</p>
+                <FontPicker value={normFont(config.theme.font ?? "inter")} onChange={(v) => setTheme({ font: v })} />
+                <p className="mb-1.5 mt-3 text-xs font-medium text-slate-500">Fonte dos títulos</p>
+                <FontPicker value={normFont(config.theme.heading)} onChange={(v) => setTheme({ heading: v })} />
+                <div className="mt-3"><Color label="Cor do texto" value={config.theme.text} onChange={(v) => setTheme({ text: v })} /></div>
+              </DesignRow>
+
+              {/* Cores */}
+              <DesignRow icon={Palette} title="Cores" value="" open={openRow === "col"} onToggle={() => setOpenRow(openRow === "col" ? null : "col")}>
+                <Color label="Fundo" value={config.theme.bg} onChange={(v) => setTheme({ bg: v })} />
+                <Color label="Destaque" value={config.theme.primary} onChange={(v) => setTheme({ primary: v })} />
+                <Color label="Texto" value={config.theme.text} onChange={(v) => setTheme({ text: v })} />
+                <Color label="Botão (fundo)" value={config.theme.card} onChange={(v) => setTheme({ card: v })} />
+                <Color label="Botão (texto)" value={config.theme.cardText} onChange={(v) => setTheme({ cardText: v })} />
+              </DesignRow>
+
+              {/* Rodapé */}
+              <DesignRow icon={AlignLeft} title="Rodapé" value={config.footer ? "Preenchido" : "Vazio"} open={openRow === "ftr"} onToggle={() => setOpenRow(openRow === "ftr" ? null : "ftr")}>
+                <input className={input} value={config.footer ?? ""} onChange={(e) => set({ footer: e.target.value })} placeholder="Texto do rodapé (ex.: sua marca)" />
+              </DesignRow>
             </div>
-            <Field label={`Arredondamento dos botões: ${config.theme.buttonRadius}px`}>
-              <input type="range" min={0} max={28} value={config.theme.buttonRadius} onChange={(e) => setTheme({ buttonRadius: Number(e.target.value) })} className="w-full accent-emerald-500" />
-            </Field>
           </Section>
 
           {/* Cliques */}
@@ -317,6 +348,49 @@ export function BioEditor({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ---- helpers do Design (padrão Linktree) ---- */
+const WP_LABEL: Record<string, string> = { fill: "Preenchimento", gradient: "Degradê", blur: "Desfoque", image: "Imagem" };
+const BTN_LABEL: Record<string, string> = { solid: "Sólido", glass: "Vidro", gradient: "Degradê", outline: "Contorno" };
+function normFont(k?: string) { if (k === "serif") return "playfair"; if (k === "sans") return "poppins"; return k ?? "inter"; }
+function fontLabel(k?: string) { const n = normFont(k); return BIO_FONTS.find((f) => f.key === n)?.label ?? "Moderna"; }
+
+function DesignRow({ icon: Icon, title, value, open, onToggle, children }: { icon: React.ElementType; title: string; value?: string; open: boolean; onToggle: () => void; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-slate-100 bg-white">
+      <button onClick={onToggle} className="flex w-full items-center gap-3 px-3 py-3 text-left">
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-600"><Icon className="h-4 w-4" /></span>
+        <span className="flex-1 text-sm font-semibold text-slate-800">{title}</span>
+        {value ? <span className="text-xs text-slate-400">{value}</span> : null}
+        <ChevronDown className={cn("h-4 w-4 text-slate-400 transition-transform", open && "rotate-180")} />
+      </button>
+      {open && <div className="border-t border-slate-100 px-3 pb-3 pt-3">{children}</div>}
+    </div>
+  );
+}
+
+function Seg({ options, value, onChange }: { options: [string, string][]; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="mb-3 grid gap-1.5" style={{ gridTemplateColumns: `repeat(${Math.min(options.length, 4)}, minmax(0,1fr))` }}>
+      {options.map(([val, label]) => (
+        <button key={val} onClick={() => onChange(val)} className={cn("rounded-lg border py-2 text-xs font-medium transition-colors", value === val ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-600 hover:bg-slate-50")}>{label}</button>
+      ))}
+    </div>
+  );
+}
+
+function FontPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="grid grid-cols-3 gap-1.5">
+      {BIO_FONTS.map((f) => (
+        <button key={f.key} onClick={() => onChange(f.key)} className={cn("rounded-lg border py-2 text-center transition-colors", value === f.key ? "border-emerald-400 bg-emerald-50" : "border-slate-200 hover:bg-slate-50")}>
+          <span className="block text-lg leading-none text-slate-800" style={{ fontFamily: f.css }}>Aa</span>
+          <span className="mt-0.5 block text-[10px] text-slate-500">{f.label}</span>
+        </button>
+      ))}
     </div>
   );
 }

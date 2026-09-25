@@ -338,9 +338,15 @@ export interface BioTheme {
   card: string; // fundo dos botões/cards
   cardText: string; // texto dos botões
   accent: string; // detalhes
-  heading: "serif" | "sans" | "script";
+  heading: string; // fonte dos títulos (serif|sans|script ou chave de BIO_FONTS)
+  font?: string; // fonte do corpo da página (chave de BIO_FONTS)
   buttonRadius: number;
   buttonStyle: "solid" | "glass" | "gradient" | "outline";
+  buttonShadow?: "none" | "soft" | "strong";
+  // papel de parede (fundo da página)
+  wallpaper?: "fill" | "gradient" | "blur" | "image";
+  bg2?: string; // segunda cor do degradê
+  wallpaperImage?: string; // imagem de fundo (image/blur)
 }
 
 export interface BioSocial {
