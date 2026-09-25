@@ -339,11 +339,17 @@ export function BioEditor({
           </Section>
         </div>
 
-        {/* Preview */}
+        {/* Preview — celular realista (estilo Linktree) */}
         <div className="lg:sticky lg:top-4 lg:self-start">
-          <div className="overflow-hidden rounded-[2rem] border-4 border-slate-800 shadow-xl">
-            <div className="max-h-[80vh] overflow-y-auto">
-              <BioRenderer config={config} preview />
+          <div className="mx-auto w-full max-w-[360px]">
+            <div className="rounded-[2.9rem] bg-white p-2.5 shadow-[0_35px_80px_-24px_rgba(15,23,42,.4)] ring-1 ring-slate-200/70">
+              <div className="relative overflow-hidden rounded-[2.35rem] bg-white">
+                {/* alto-falante */}
+                <div className="absolute left-1/2 top-2 z-10 h-1.5 w-16 -translate-x-1/2 rounded-full bg-slate-900/10" />
+                <div className="h-[78vh] max-h-[720px] min-h-[520px] overflow-y-auto">
+                  <BioRenderer config={config} preview />
+                </div>
+              </div>
             </div>
           </div>
         </div>
