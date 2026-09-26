@@ -14,6 +14,7 @@ interface Body {
   device?: string;
   browser?: string;
   entry_page?: string;
+  whatsapp_clicked?: boolean;
 }
 
 export async function POST(request: NextRequest) {
@@ -53,7 +54,8 @@ export async function POST(request: NextRequest) {
       email: body.contact?.email ?? null,
       procedure: procedure ?? null,
       score,
-      status: "new",
+      status: body.whatsapp_clicked ? "whatsapp" : "new",
+      whatsapp_clicked: body.whatsapp_clicked ?? false,
       device: body.device ?? null,
       browser: body.browser ?? null,
       entry_page: body.entry_page ?? null,
@@ -86,4 +88,25 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ ok: true, id: session.id, score });
+}
+
+// Marca a conversão (clique no botão final) numa sessão já registrada.
+export async function PATCH(request: NextRequest) {
+  let body: { id?: string; whatsapp_clicked?: boolean };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ ok: false }, { status: 400 });
+  }
+  if (!body.id) return NextResponse.json({ ok: false }, { status: 400 });
+  if (!isSupabaseConfigured) return NextResponse.json({ ok: true, skipped: true });
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("lead_sessions")
+    .update({ whatsapp_clicked: body.whatsapp_clicked ?? true, status: "whatsapp" })
+    .eq("id", body.id);
+
+  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
 }
