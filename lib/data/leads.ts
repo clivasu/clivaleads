@@ -69,6 +69,19 @@ export async function listLeads(orgId: string): Promise<LeadWithAnswers[]> {
   return (data as unknown as LeadWithAnswers[]) ?? [];
 }
 
+// Leads de um funil específico (para a visualização de jornada no editor de fluxo).
+export async function listLeadsByFlow(flowId: string): Promise<LeadWithAnswers[]> {
+  if (!isSupabaseConfigured) return DEMO_LEADS.filter((l) => l.flow_id === flowId);
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("lead_sessions")
+    .select("*, answers:lead_answers(question_title, answer_value, answer_label, score)")
+    .eq("flow_id", flowId)
+    .order("created_at", { ascending: false })
+    .limit(300);
+  return (data as unknown as LeadWithAnswers[]) ?? [];
+}
+
 export interface LeadPatch {
   name?: string | null;
   phone?: string | null;

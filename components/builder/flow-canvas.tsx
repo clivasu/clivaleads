@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import { Plus, Sparkles, Minus, Maximize2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Plus, Sparkles, Minus, Maximize2, Play, Pause, BarChart3, X, Users } from "lucide-react";
 import type { FlowStep, StepType } from "@/lib/types";
 import { BLOCK_CATALOG } from "@/lib/block-catalog";
+import { computeFlowMetrics, type JourneyLead, buildJourneys } from "@/lib/flow-journeys";
 import { cn } from "@/lib/utils";
 
 const LABELS = Object.fromEntries(BLOCK_CATALOG.map((b) => [b.type, b.label])) as Record<StepType, string>;
@@ -19,41 +20,6 @@ const ITEM_H = 24;
 const METRIC_H = 24;
 
 type XY = { x: number; y: number };
-
-/* ---- métricas (demo) da jornada por bloco ---- */
-const DROP: Partial<Record<StepType, number>> = {
-  start: 0.06, hero: 0.05, question: 0.1, multi_choice: 0.12, rating: 0.14, form: 0.28,
-  timer: 0.16, loading: 0.03, buttons: 0.1, result: 0.05, spin_wheel: 0.08, whatsapp: 0, container: 0.04,
-};
-const RET: Partial<Record<StepType, number>> = { question: 0.08, multi_choice: 0.09, rating: 0.1, faq: 0.12, form: 0.06 };
-const TIM: Partial<Record<StepType, number>> = {
-  text: 22, news: 26, video: 30, question: 9, multi_choice: 11, rating: 12, form: 25, loading: 3,
-  before_after: 14, carousel: 16, faq: 18, hero: 8, timer: 15, stats: 12, testimonial: 16,
-};
-
-interface Metric { id: string; i: number; reached: number; exit: number; dropPct: number; returns: number; time: number }
-
-function computeMetrics(steps: FlowStep[], base = 138) {
-  let leads = base;
-  const per: Metric[] = steps.map((s, i) => {
-    const dr = s.type === "whatsapp" ? 0 : DROP[s.type] ?? 0.045;
-    const reached = Math.round(leads);
-    const after = Math.round(leads * (1 - dr));
-    const exit = reached - after;
-    leads = after;
-    return { id: s.id, i, reached, exit, dropPct: reached ? Math.round((exit / reached) * 100) : 0, returns: Math.round(reached * (RET[s.type] ?? 0.03)), time: TIM[s.type] ?? 10 };
-  });
-  const byId = new Map(per.map((m) => [m.id, m]));
-  const pick = (key: keyof Metric) => per.reduce((a, b) => ((b[key] as number) > (a[key] as number) ? b : a), per[0]);
-  return {
-    byId,
-    total: base,
-    completed: per.length ? per[per.length - 1].reached : 0,
-    worstExit: per.length ? pick("exit") : null,
-    mostReturns: per.length ? pick("returns") : null,
-    mostTime: per.length ? pick("time") : null,
-  };
-}
 
 interface Node {
   step: FlowStep;
@@ -96,10 +62,13 @@ function seqPath(a: Node, b: Node) {
   return `M ${a.x} ${ay} C ${a.x - 45} ${ay}, ${b.x + NODE_W + 45} ${by}, ${b.x + NODE_W} ${by}`;
 }
 
+const TICK_MS = 700;
+
 export function FlowCanvas({
-  steps, selectedId, positions, onSelect, onEdit, onAddStep, onMoveNode, onResetLayout, onSetBranch,
+  steps, leads = [], selectedId, positions, onSelect, onEdit, onAddStep, onMoveNode, onResetLayout, onSetBranch,
 }: {
   steps: FlowStep[];
+  leads?: JourneyLead[];
   selectedId: string;
   positions: Record<string, XY>;
   onSelect: (id: string) => void;
@@ -112,6 +81,7 @@ export function FlowCanvas({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(0.85);
   const [connect, setConnect] = useState<{ fromId: string; optIndex: number; fx: number; fy: number; cx: number; cy: number } | null>(null);
+  const [statsOpen, setStatsOpen] = useState(false);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const panRef = useRef<{ mx: number; my: number; px: number; py: number } | null>(null);
@@ -133,9 +103,34 @@ export function FlowCanvas({
     });
   }, [steps, positions]);
 
-  const metrics = useMemo(() => computeMetrics(steps), [steps]);
+  const metrics = useMemo(() => computeFlowMetrics(steps, leads), [steps, leads]);
+  const journeys = useMemo(() => buildJourneys(steps, leads), [steps, leads]);
+  const hasLeads = leads.length > 0;
 
-  const nodeById = useMemo(() => Object.fromEntries(nodes.map((n) => [n.step.id, n])), [nodes]);
+  const nodeCenter = (i: number) => {
+    const n = nodes[i];
+    return n ? { cx: n.x + NODE_W / 2, cy: n.y + n.h / 2 } : { cx: 0, cy: 0 };
+  };
+
+  /* ---------------- simulação de leads (bolinhas em movimento) ---------------- */
+  const [playing, setPlaying] = useState(false);
+  const [tick, setTick] = useState(0);
+
+  // Auto-inicia quando há leads reais.
+  useEffect(() => { setPlaying(hasLeads); setTick(0); }, [hasLeads]);
+
+  const balls = useMemo(() => journeys.map((j, idx) => ({ ...j, startTick: idx * 2 })), [journeys]);
+  const maxTick = useMemo(() => balls.reduce((m, b) => Math.max(m, b.startTick + b.stop), 0), [balls]);
+
+  useEffect(() => {
+    if (!playing || balls.length === 0) return;
+    const t = setInterval(() => {
+      setTick((prev) => (prev > maxTick + 2 ? 0 : prev + 1)); // loop contínuo
+    }, TICK_MS);
+    return () => clearInterval(t);
+  }, [playing, balls.length, maxTick]);
+
+  const restartSim = () => { setTick(0); setPlaying(true); };
 
   const branches = useMemo(() => {
     const out: { fromId: string; optIndex: number; sx: number; sy: number; tx: number; ty: number }[] = [];
@@ -149,7 +144,7 @@ export function FlowCanvas({
   }, [nodes]);
 
   const bounds = nodes.reduce(
-    (b, n) => ({ w: Math.max(b.w, n.x + NODE_W + 80), h: Math.max(b.h, n.y + n.h + 80) }),
+    (b, n) => ({ w: Math.max(b.w, n.x + NODE_W + 80), h: Math.max(b.h, n.y + n.h + 120) }),
     { w: 900, h: 560 },
   );
 
@@ -191,12 +186,24 @@ export function FlowCanvas({
     <div className="relative flex-1 overflow-hidden bg-slate-50">
       <div className="absolute inset-0" style={{ backgroundImage: "radial-gradient(#cbd5e1 1px, transparent 1px)", backgroundSize: "22px 22px" }} />
 
-      <div className="absolute left-4 top-4 z-20 flex gap-2">
+      <div className="absolute left-4 top-4 z-20 flex flex-wrap gap-2">
         <button onClick={onAddStep} className="flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800">
           <Plus className="h-4 w-4" /> Adicionar etapa
         </button>
         <button onClick={autoOrganize} className="flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50">
           <Sparkles className="h-4 w-4" /> Auto-organizar
+        </button>
+        <button
+          onClick={hasLeads ? (playing ? () => setPlaying(false) : restartSim) : undefined}
+          disabled={!hasLeads}
+          title={hasLeads ? "Reproduzir a jornada real dos leads" : "Sem leads para simular ainda"}
+          className={cn(
+            "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium shadow-sm",
+            hasLeads ? "bg-emerald-500 border-emerald-500 text-white hover:bg-emerald-600" : "cursor-not-allowed bg-white text-slate-300",
+          )}
+        >
+          {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          {playing ? "Pausar simulação" : "Simular leads"}
         </button>
       </div>
 
@@ -204,19 +211,45 @@ export function FlowCanvas({
         Arraste os nós • puxe a bolinha de uma opção até outra etapa para ramificar
       </div>
 
-      <div className="pointer-events-none absolute bottom-4 left-4 z-20 flex max-w-[340px] flex-wrap gap-2">
-        <MiniStat label="Interação" value="86%" sub="interagiram" />
-        <MiniStat label="Leads" value={String(metrics.total)} sub="iniciaram" />
-        {metrics.worstExit && (
-          <MiniStat label="Maior saída" value={`${LABELS[steps[metrics.worstExit.i]?.type]}`} sub={`${metrics.worstExit.exit} leads (${metrics.worstExit.dropPct}%)`} accent="rose" />
-        )}
-        {metrics.mostReturns && (
-          <MiniStat label="Mais voltou" value={`${LABELS[steps[metrics.mostReturns.i]?.type]}`} sub={`${metrics.mostReturns.returns} retornos`} accent="amber" />
-        )}
-        {metrics.mostTime && (
-          <MiniStat label="Mais demorou" value={`${LABELS[steps[metrics.mostTime.i]?.type]}`} sub={`~${metrics.mostTime.time}s p/ clicar`} accent="sky" />
-        )}
+      {/* Stats minimizado (bolinha) + painel vertical */}
+      <div className="absolute bottom-4 left-4 z-30">
+        <button
+          onClick={() => setStatsOpen((s) => !s)}
+          className={cn(
+            "flex items-center gap-2 rounded-full py-2 pl-2 pr-3 text-xs font-semibold shadow-lg transition-colors",
+            statsOpen ? "bg-slate-900 text-white" : "bg-white text-slate-700 hover:bg-slate-50",
+          )}
+          title="Ver estatísticas do funil"
+        >
+          <span className={cn("flex h-6 w-6 items-center justify-center rounded-full", statsOpen ? "bg-white/20" : "bg-emerald-100")}>
+            <BarChart3 className={cn("h-3.5 w-3.5", statsOpen ? "text-white" : "text-emerald-600")} />
+          </span>
+          {metrics.total} leads
+        </button>
       </div>
+
+      {statsOpen && (
+        <div className="absolute bottom-4 left-4 top-20 z-30 flex w-[224px] flex-col gap-2 overflow-y-auto rounded-2xl border bg-white/95 p-3 shadow-2xl backdrop-blur">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Estatísticas</span>
+            <button onClick={() => setStatsOpen(false)} className="rounded-md p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
+          </div>
+          {!hasLeads ? (
+            <div className="rounded-xl bg-slate-50 p-4 text-center text-xs text-slate-400">
+              Ainda sem leads reais neste funil. As métricas aparecem aqui quando alguém responder.
+            </div>
+          ) : (
+            <>
+              <StatRow label="Interação" value={`${metrics.interactionPct}%`} sub="interagiram" />
+              <StatRow label="Leads" value={String(metrics.total)} sub="iniciaram" />
+              <StatRow label="Concluíram" value={String(metrics.completed)} sub="chegaram ao fim" accent="emerald" />
+              {metrics.worstExit && (
+                <StatRow label="Maior saída" value={`${LABELS[steps[metrics.worstExit.i]?.type]}`} sub={`${metrics.worstExit.exit} leads (${metrics.worstExit.dropPct}%)`} accent="rose" />
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       <div className="absolute bottom-6 right-6 z-20 flex flex-col overflow-hidden rounded-lg border bg-white shadow-sm">
         <button onClick={() => setZoom((z) => Math.min(1.6, z + 0.1))} className="p-2 hover:bg-slate-50"><Plus className="h-4 w-4" /></button>
@@ -248,80 +281,138 @@ export function FlowCanvas({
             )}
           </svg>
 
-          {nodes.map((n) => (
-            <div
-              key={n.step.id}
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                const p = toCanvas(e);
-                dragRef.current = { id: n.step.id, sx: p.x, sy: p.y, ox: n.x, oy: n.y, moved: false };
-              }}
-              onMouseUp={(e) => {
-                if (connect && connect.fromId !== n.step.id) {
-                  onSetBranch(connect.fromId, connect.optIndex, n.i);
-                  setConnect(null);
+          {/* bolinhas de leads em movimento (simulação) */}
+          {playing && balls.map((b) => {
+            const rel = tick - b.startTick;
+            if (rel < 0 || rel > b.stop) return null; // ainda não entrou ou já chegou
+            const idx = Math.max(0, Math.min(rel, b.stop));
+            const { cx, cy } = nodeCenter(idx);
+            const color = b.completed ? "#10b981" : "#f43f5e";
+            return (
+              <div
+                key={"ball" + b.id}
+                className="pointer-events-none absolute z-10 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[8px] font-bold text-white shadow-md"
+                style={{
+                  left: cx, top: cy, background: color,
+                  transition: `left ${TICK_MS - 60}ms ease-in-out, top ${TICK_MS - 60}ms ease-in-out`,
+                  boxShadow: `0 0 0 3px ${color}33`,
+                }}
+                title={b.name}
+              >
+                {b.name.slice(0, 1)}
+              </div>
+            );
+          })}
+
+          {nodes.map((n) => {
+            const m = metrics.perStep[n.i];
+            const cor = m && m.dropPct >= 15 ? "text-rose-600" : m && m.dropPct >= 8 ? "text-amber-600" : "text-emerald-600";
+            const stoppedHeads = m ? [...m.exits.map((e) => ({ ...e, completed: false })), ...m.completed.map((e) => ({ ...e, completed: true }))] : [];
+            return (
+            <div key={n.step.id} className="absolute" style={{ left: n.x, top: n.y, width: NODE_W }}>
+              <div
+                onMouseDown={(e) => {
                   e.stopPropagation();
-                }
-              }}
-              onDoubleClick={() => { onSelect(n.step.id); onEdit(); }}
-              title="Duplo-clique para editar este bloco"
-              className={cn(
-                "absolute select-none rounded-xl border bg-white shadow-sm transition-shadow hover:shadow-md",
-                metrics.worstExit?.id === n.step.id ? "border-rose-300 ring-2 ring-rose-200" : n.step.id === selectedId ? "border-emerald-400 ring-2 ring-emerald-200" : "border-slate-200",
-              )}
-              style={{ left: n.x, top: n.y, width: NODE_W, cursor: "grab" }}
-            >
-              {metrics.worstExit?.id === n.step.id && (
-                <span className="absolute -top-2.5 left-3 rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white shadow">Maior saída</span>
-              )}
-              <div className="flex items-center justify-between border-b px-3 py-2">
-                <span className="truncate text-sm font-semibold text-slate-800">{n.i + 1}. {LABELS[n.step.type]}</span>
-                <span className="text-slate-300">→</span>
-              </div>
-              <div className="relative p-2">
-                {n.rows.map((r, ri) => (
-                  <div key={ri} className="relative flex h-6 items-center truncate rounded px-2 text-xs text-slate-500">
-                    <span className="truncate">{r}</span>
-                    {n.isChoice && (
-                      <span
-                        onMouseDown={(e) => {
-                          e.stopPropagation();
-                          const fx = n.x + NODE_W, fy = handleY(n, ri);
-                          const p = toCanvas(e);
-                          setConnect({ fromId: n.step.id, optIndex: ri, fx, fy, cx: p.x, cy: p.y });
-                        }}
-                        title="Arraste até uma etapa para ramificar"
-                        className="absolute -right-[15px] top-1/2 h-3 w-3 -translate-y-1/2 cursor-crosshair rounded-full border-2 border-white bg-emerald-400 hover:scale-125"
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
-              {(() => {
-                const m = metrics.byId.get(n.step.id);
-                if (!m) return null;
-                const cor = m.dropPct >= 15 ? "text-rose-600" : m.dropPct >= 8 ? "text-amber-600" : "text-emerald-600";
-                return (
+                  const p = toCanvas(e);
+                  dragRef.current = { id: n.step.id, sx: p.x, sy: p.y, ox: n.x, oy: n.y, moved: false };
+                }}
+                onMouseUp={(e) => {
+                  if (connect && connect.fromId !== n.step.id) {
+                    onSetBranch(connect.fromId, connect.optIndex, n.i);
+                    setConnect(null);
+                    e.stopPropagation();
+                  }
+                }}
+                onDoubleClick={() => { onSelect(n.step.id); onEdit(); }}
+                title="Duplo-clique para editar este bloco"
+                className={cn(
+                  "relative select-none rounded-xl border bg-white shadow-sm transition-shadow hover:shadow-md",
+                  metrics.worstExit?.i === n.i ? "border-rose-300 ring-2 ring-rose-200" : n.step.id === selectedId ? "border-emerald-400 ring-2 ring-emerald-200" : "border-slate-200",
+                )}
+                style={{ width: NODE_W, cursor: "grab" }}
+              >
+                {metrics.worstExit?.i === n.i && (
+                  <span className="absolute -top-2.5 left-3 rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white shadow">Maior saída</span>
+                )}
+                <div className="flex items-center justify-between border-b px-3 py-2">
+                  <span className="truncate text-sm font-semibold text-slate-800">{n.i + 1}. {LABELS[n.step.type]}</span>
+                  <span className="text-slate-300">→</span>
+                </div>
+                <div className="relative p-2">
+                  {n.rows.map((r, ri) => (
+                    <div key={ri} className="relative flex h-6 items-center truncate rounded px-2 text-xs text-slate-500">
+                      <span className="truncate">{r}</span>
+                      {n.isChoice && (
+                        <span
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            const fx = n.x + NODE_W, fy = handleY(n, ri);
+                            const p = toCanvas(e);
+                            setConnect({ fromId: n.step.id, optIndex: ri, fx, fy, cx: p.x, cy: p.y });
+                          }}
+                          title="Arraste até uma etapa para ramificar"
+                          className="absolute -right-[15px] top-1/2 h-3 w-3 -translate-y-1/2 cursor-crosshair rounded-full border-2 border-white bg-emerald-400 hover:scale-125"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {m && (
                   <div className="flex items-center justify-between border-t px-3 py-1.5 text-[11px]">
                     <span className="font-medium text-slate-500">{m.reached} leads</span>
-                    <span className={cn("font-semibold", cor)}>↓ {m.dropPct}% saída</span>
+                    {m.reached > 0
+                      ? <span className={cn("font-semibold", cor)}>↓ {m.dropPct}% saída</span>
+                      : <span className="font-medium text-slate-300">—</span>}
                   </div>
-                );
-              })()}
-              <span className="absolute -left-1.5 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border-2 border-white bg-slate-300" />
-              {!n.isChoice && <span className="absolute -right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border-2 border-white bg-slate-300" />}
+                )}
+                <span className="absolute -left-1.5 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border-2 border-white bg-slate-300" />
+                {!n.isChoice && <span className="absolute -right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border-2 border-white bg-slate-300" />}
+              </div>
+
+              {/* Bloco de saída abaixo — cabecinhas 3D de quem parou aqui */}
+              {stoppedHeads.length > 0 && (
+                <div className="mt-2 rounded-lg border border-slate-200 bg-white/95 px-2 py-1.5 shadow-sm">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {stoppedHeads.slice(0, 5).map((h, hi) => (
+                      <span key={h.id + hi} className="flex items-center gap-1" title={`${h.name} — ${h.completed ? "concluiu" : "saiu aqui"}`}>
+                        <Head3D completed={h.completed} />
+                        <span className="max-w-[52px] truncate text-[10px] font-medium text-slate-600">{h.name}</span>
+                      </span>
+                    ))}
+                    {stoppedHeads.length > 5 && (
+                      <span className="text-[10px] font-semibold text-slate-400">+{stoppedHeads.length - 5}</span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-          ))}
+          );})}
         </div>
       </div>
     </div>
   );
 }
 
-function MiniStat({ label, value, sub, accent }: { label: string; value: string; sub: string; accent?: "rose" | "amber" | "sky" }) {
-  const dot = accent === "rose" ? "bg-rose-500" : accent === "amber" ? "bg-amber-500" : accent === "sky" ? "bg-sky-500" : "bg-slate-300";
+// Cabecinha 3D (verde = concluiu / vermelho = saiu do fluxo).
+function Head3D({ completed }: { completed: boolean }) {
+  const c = completed ? { a: "#34d399", b: "#059669" } : { a: "#fb7185", b: "#e11d48" };
   return (
-    <div className="w-[158px] rounded-xl bg-white p-3 shadow-lg">
+    <span
+      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+      style={{
+        background: `radial-gradient(circle at 32% 28%, ${c.a}, ${c.b})`,
+        boxShadow: `inset 0 1px 1.5px rgba(255,255,255,.55), inset 0 -2px 3px rgba(0,0,0,.28), 0 1.5px 3px rgba(0,0,0,.25)`,
+      }}
+    >
+      <Users className="h-2.5 w-2.5 text-white/95" />
+    </span>
+  );
+}
+
+function StatRow({ label, value, sub, accent }: { label: string; value: string; sub: string; accent?: "rose" | "amber" | "sky" | "emerald" }) {
+  const dot = accent === "rose" ? "bg-rose-500" : accent === "amber" ? "bg-amber-500" : accent === "sky" ? "bg-sky-500" : accent === "emerald" ? "bg-emerald-500" : "bg-slate-300";
+  return (
+    <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
       <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
         <span className={`h-1.5 w-1.5 rounded-full ${dot}`} /> {label}
       </p>

@@ -15,6 +15,7 @@ import type { FlowStep, PublicFlow, StepType, QuestionOption, ButtonItem, FormFi
 import { BLOCK_CATALOG, defaultConfig, type BlockDef } from "@/lib/block-catalog";
 import { FlowRunner } from "@/components/flow-runner/flow-runner";
 import { FlowCanvas } from "@/components/builder/flow-canvas";
+import type { JourneyLead } from "@/lib/flow-journeys";
 import { DEFAULT_THEME, type FlowTheme, type FontChoice } from "@/lib/theme";
 import { saveFlow } from "@/lib/actions/flows";
 import { UploadButton } from "@/components/bio/upload-button";
@@ -119,7 +120,7 @@ function isInSubtree(node: FlowStep, id: string): boolean {
   return (node.children ?? []).some((c) => isInSubtree(c, id));
 }
 
-export function BuilderClient({ flow }: { flow: PublicFlow }) {
+export function BuilderClient({ flow, leads = [] }: { flow: PublicFlow; leads?: JourneyLead[] }) {
   const [steps, setSteps] = useState<FlowStep[]>(flow.steps);
   const [selectedId, setSelectedId] = useState<string>(flow.steps[0]?.id ?? "");
   const [saved, setSaved] = useState(false);
@@ -367,6 +368,7 @@ export function BuilderClient({ flow }: { flow: PublicFlow }) {
         {tab === "flow" && (
           <FlowCanvas
             steps={steps}
+            leads={leads}
             selectedId={selectedId}
             positions={positions}
             onSelect={setSelectedId}
