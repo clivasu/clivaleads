@@ -19,7 +19,14 @@ const BODY_TOP = 8;
 const ITEM_H = 24;
 const METRIC_H = 24;
 
+// Paleta para as bolinhas de leads (distingue várias pessoas ao mesmo tempo).
+const BALL_PALETTE = ["#6366f1", "#f43f5e", "#10b981", "#f59e0b", "#0ea5e9", "#a855f7", "#ec4899", "#14b8a6"];
+const MAX_BALLS = 30;
+const T_LINE = 900;   // ms percorrendo uma linha
+const T_CARD = 620;   // ms completando a borda de um card
+
 type XY = { x: number; y: number };
+type Cubic = { p0: XY; p1: XY; p2: XY; p3: XY };
 
 interface Node {
   step: FlowStep;
@@ -51,18 +58,55 @@ function curve(sx: number, sy: number, tx: number, ty: number) {
   return `M ${sx} ${sy} C ${sx + c} ${sy}, ${tx - c} ${ty}, ${tx} ${ty}`;
 }
 
-// Aresta sequencial (snake) entre dois nós.
-function seqPath(a: Node, b: Node) {
+// Geometria (cubic bezier) da aresta sequencial entre dois nós — casa com seqPath.
+function seqGeom(a: Node, b: Node): Cubic {
   const ay = a.y + a.h / 2, by = b.y + b.h / 2;
   if (Math.abs(a.x - b.x) < 4) {
     const sx = a.x + NODE_W / 2, sy = a.y + a.h, tx = b.x + NODE_W / 2, ty = b.y;
-    return `M ${sx} ${sy} C ${sx} ${sy + 40}, ${tx} ${ty - 40}, ${tx} ${ty}`;
+    return { p0: { x: sx, y: sy }, p1: { x: sx, y: sy + 40 }, p2: { x: tx, y: ty - 40 }, p3: { x: tx, y: ty } };
   }
-  if (b.x > a.x) return curve(a.x + NODE_W, ay, b.x, by);
-  return `M ${a.x} ${ay} C ${a.x - 45} ${ay}, ${b.x + NODE_W + 45} ${by}, ${b.x + NODE_W} ${by}`;
+  if (b.x > a.x) {
+    const sx = a.x + NODE_W, sy = ay, tx = b.x, ty = by;
+    const c = Math.max(40, Math.abs(tx - sx) * 0.4);
+    return { p0: { x: sx, y: sy }, p1: { x: sx + c, y: sy }, p2: { x: tx - c, y: ty }, p3: { x: tx, y: ty } };
+  }
+  return { p0: { x: a.x, y: ay }, p1: { x: a.x - 45, y: ay }, p2: { x: b.x + NODE_W + 45, y: by }, p3: { x: b.x + NODE_W, y: by } };
+}
+function seqPath(a: Node, b: Node) {
+  const g = seqGeom(a, b);
+  return `M ${g.p0.x} ${g.p0.y} C ${g.p1.x} ${g.p1.y}, ${g.p2.x} ${g.p2.y}, ${g.p3.x} ${g.p3.y}`;
+}
+function bezierAt(g: Cubic, t: number): XY {
+  const mt = 1 - t;
+  const a = mt * mt * mt, b = 3 * mt * mt * t, c = 3 * mt * t * t, d = t * t * t;
+  return { x: a * g.p0.x + b * g.p1.x + c * g.p2.x + d * g.p3.x, y: a * g.p0.y + b * g.p1.y + c * g.p2.y + d * g.p3.y };
 }
 
-const TICK_MS = 700;
+interface AnimBall {
+  id: string;
+  name: string;
+  color: string;
+  path: number[];   // índices de etapa
+  segs: Cubic[];    // curvas entre etapas consecutivas
+  delay: number;    // atraso de entrada (stagger)
+  total: number;    // duração total da jornada
+}
+
+function phaseAt(b: AnimBall, local: number):
+  | { kind: "card"; node: number; prog: number }
+  | { kind: "line"; seg: number; prog: number }
+  | { kind: "end" } {
+  let acc = 0;
+  if (local < acc + T_CARD) return { kind: "card", node: b.path[0], prog: (local - acc) / T_CARD };
+  acc += T_CARD;
+  for (let k = 0; k < b.segs.length; k++) {
+    if (local < acc + T_LINE) return { kind: "line", seg: k, prog: (local - acc) / T_LINE };
+    acc += T_LINE;
+    if (local < acc + T_CARD) return { kind: "card", node: b.path[k + 1], prog: (local - acc) / T_CARD };
+    acc += T_CARD;
+  }
+  return { kind: "end" };
+}
 
 export function FlowCanvas({
   steps, leads = [], selectedId, positions, onSelect, onEdit, onAddStep, onMoveNode, onResetLayout, onSetBranch,
@@ -107,30 +151,59 @@ export function FlowCanvas({
   const journeys = useMemo(() => buildJourneys(steps, leads), [steps, leads]);
   const hasLeads = leads.length > 0;
 
-  const nodeCenter = (i: number) => {
-    const n = nodes[i];
-    return n ? { cx: n.x + NODE_W / 2, cy: n.y + n.h / 2 } : { cx: 0, cy: 0 };
-  };
-
-  /* ---------------- simulação de leads (bolinhas em movimento) ---------------- */
+  /* ---------------- simulação: bolinhas seguindo a linha + borda do card ---------------- */
   const [playing, setPlaying] = useState(false);
-  const [tick, setTick] = useState(0);
+  const [runId, setRunId] = useState(0);
+  const ballEls = useRef<(HTMLDivElement | null)[]>([]);
+  const traceEls = useRef<(SVGRectElement | null)[]>([]);
 
-  // Auto-inicia quando há leads reais.
-  useEffect(() => { setPlaying(hasLeads); setTick(0); }, [hasLeads]);
+  const animBalls: AnimBall[] = useMemo(() => {
+    return journeys.slice(0, MAX_BALLS).map((j, idx) => {
+      const segs: Cubic[] = [];
+      for (let k = 0; k < j.path.length - 1; k++) segs.push(seqGeom(nodes[j.path[k]], nodes[j.path[k + 1]]));
+      return {
+        id: j.id, name: j.name, color: BALL_PALETTE[idx % BALL_PALETTE.length],
+        path: j.path, segs, delay: idx * 520, total: T_CARD + segs.length * (T_LINE + T_CARD),
+      };
+    });
+  }, [journeys, nodes]);
 
-  const balls = useMemo(() => journeys.map((j, idx) => ({ ...j, startTick: idx * 2 })), [journeys]);
-  const maxTick = useMemo(() => balls.reduce((m, b) => Math.max(m, b.startTick + b.stop), 0), [balls]);
+  const cycle = useMemo(() => animBalls.reduce((m, b) => Math.max(m, b.delay + b.total), 0) + 1400, [animBalls]);
+
+  useEffect(() => { setPlaying(hasLeads); }, [hasLeads]);
 
   useEffect(() => {
-    if (!playing || balls.length === 0) return;
-    const t = setInterval(() => {
-      setTick((prev) => (prev > maxTick + 2 ? 0 : prev + 1)); // loop contínuo
-    }, TICK_MS);
-    return () => clearInterval(t);
-  }, [playing, balls.length, maxTick]);
-
-  const restartSim = () => { setTick(0); setPlaying(true); };
+    if (!playing || animBalls.length === 0) return;
+    let raf = 0;
+    const start = performance.now();
+    const loop = (now: number) => {
+      const t = (now - start) % cycle;
+      traceEls.current.forEach((el) => { if (el) el.style.opacity = "0"; });
+      animBalls.forEach((b, bi) => {
+        const el = ballEls.current[bi];
+        if (!el) return;
+        const local = t - b.delay;
+        if (local < 0 || local > b.total) { el.style.opacity = "0"; return; }
+        const ph = phaseAt(b, local);
+        if (ph.kind === "card") {
+          el.style.opacity = "0";
+          const tr = traceEls.current[ph.node];
+          if (tr) { tr.style.stroke = b.color; tr.style.opacity = "1"; tr.style.strokeDashoffset = String(Math.max(0, 1 - ph.prog)); }
+        } else if (ph.kind === "line") {
+          const pt = bezierAt(b.segs[ph.seg], ph.prog);
+          el.style.opacity = "1";
+          el.style.transform = `translate(${pt.x}px, ${pt.y}px) translate(-50%, -50%)`;
+          el.style.background = b.color;
+          el.style.boxShadow = `0 0 0 3px ${b.color}33, 0 2px 6px ${b.color}55`;
+        } else {
+          el.style.opacity = "0";
+        }
+      });
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [playing, animBalls, cycle, runId]);
 
   const branches = useMemo(() => {
     const out: { fromId: string; optIndex: number; sx: number; sy: number; tx: number; ty: number }[] = [];
@@ -181,10 +254,18 @@ export function FlowCanvas({
   };
 
   const autoOrganize = () => { onResetLayout(); setPan({ x: 0, y: 0 }); setZoom(0.85); };
+  const toggleSim = () => { if (!hasLeads) return; if (playing) setPlaying(false); else { setRunId((r) => r + 1); setPlaying(true); } };
 
   return (
-    <div className="relative flex-1 overflow-hidden bg-slate-50">
-      <div className="absolute inset-0" style={{ backgroundImage: "radial-gradient(#cbd5e1 1px, transparent 1px)", backgroundSize: "22px 22px" }} />
+    <div className="relative flex-1 overflow-hidden bg-[#fbfbfe]">
+      {/* grid estilo Funnelytics */}
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage:
+            "repeating-linear-gradient(90deg, rgba(59, 70, 196, 0.05) 0px, rgba(59, 70, 196, 0.05) 1px, transparent 1px, transparent 36px), repeating-linear-gradient(0deg, rgba(59, 70, 196, 0.05) 0px, rgba(59, 70, 196, 0.05) 1px, transparent 1px, transparent 36px)",
+        }}
+      />
 
       <div className="absolute left-4 top-4 z-20 flex flex-wrap gap-2">
         <button onClick={onAddStep} className="flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800">
@@ -194,7 +275,7 @@ export function FlowCanvas({
           <Sparkles className="h-4 w-4" /> Auto-organizar
         </button>
         <button
-          onClick={hasLeads ? (playing ? () => setPlaying(false) : restartSim) : undefined}
+          onClick={toggleSim}
           disabled={!hasLeads}
           title={hasLeads ? "Reproduzir a jornada real dos leads" : "Sem leads para simular ainda"}
           className={cn(
@@ -281,29 +362,6 @@ export function FlowCanvas({
             )}
           </svg>
 
-          {/* bolinhas de leads em movimento (simulação) */}
-          {playing && balls.map((b) => {
-            const rel = tick - b.startTick;
-            if (rel < 0 || rel > b.stop) return null; // ainda não entrou ou já chegou
-            const idx = Math.max(0, Math.min(rel, b.stop));
-            const { cx, cy } = nodeCenter(idx);
-            const color = b.completed ? "#10b981" : "#f43f5e";
-            return (
-              <div
-                key={"ball" + b.id}
-                className="pointer-events-none absolute z-10 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[8px] font-bold text-white shadow-md"
-                style={{
-                  left: cx, top: cy, background: color,
-                  transition: `left ${TICK_MS - 60}ms ease-in-out, top ${TICK_MS - 60}ms ease-in-out`,
-                  boxShadow: `0 0 0 3px ${color}33`,
-                }}
-                title={b.name}
-              >
-                {b.name.slice(0, 1)}
-              </div>
-            );
-          })}
-
           {nodes.map((n) => {
             const m = metrics.perStep[n.i];
             const cor = m && m.dropPct >= 15 ? "text-rose-600" : m && m.dropPct >= 8 ? "text-amber-600" : "text-emerald-600";
@@ -387,6 +445,34 @@ export function FlowCanvas({
               )}
             </div>
           );})}
+
+          {/* Overlay de animação: borda dos cards se completando (por cima) */}
+          <svg width={bounds.w} height={bounds.h} className="pointer-events-none absolute left-0 top-0 z-10 overflow-visible">
+            {nodes.map((n, i) => (
+              <rect
+                key={"tr" + n.step.id}
+                ref={(el) => { traceEls.current[i] = el; }}
+                x={n.x} y={n.y} width={NODE_W} height={n.h} rx={12}
+                fill="none" strokeWidth={2.5} pathLength={1} strokeLinecap="round"
+                style={{ strokeDasharray: 1, strokeDashoffset: 1, opacity: 0, stroke: "#6366f1" }}
+              />
+            ))}
+          </svg>
+
+          {/* Overlay de animação: bolinhas percorrendo as linhas */}
+          <div className="pointer-events-none absolute left-0 top-0 z-10">
+            {animBalls.map((b, bi) => (
+              <div
+                key={"ball" + b.id}
+                ref={(el) => { ballEls.current[bi] = el; }}
+                className="absolute left-0 top-0 flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-bold text-white"
+                style={{ opacity: 0, background: b.color, willChange: "transform, opacity" }}
+                title={b.name}
+              >
+                {b.name.slice(0, 1)}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
