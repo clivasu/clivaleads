@@ -8,26 +8,32 @@ import { isSupabaseConfigured } from "@/lib/env";
 export function UploadButton({
   onUploaded,
   label = "Enviar foto",
+  maxSizeMB = 5,
+  accept = "image/*",
 }: {
   onUploaded: (url: string) => void;
   label?: string;
+  maxSizeMB?: number;
+  accept?: string;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const isVideo = accept.startsWith("video");
 
   async function handle(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 6 * 1024 * 1024) {
-      alert("A imagem deve ter até 6 MB.");
+    if (file.size > maxSizeMB * 1024 * 1024) {
+      alert(`O arquivo deve ter até ${maxSizeMB} MB para não ocupar muito espaço.`);
+      if (ref.current) ref.current.value = "";
       return;
     }
     setBusy(true);
     try {
       if (isSupabaseConfigured) {
         const supabase = createClient();
-        const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-        const path = `bio/${crypto.randomUUID()}.${ext}`;
+        const ext = (file.name.split(".").pop() || (isVideo ? "mp4" : "jpg")).toLowerCase();
+        const path = `${isVideo ? "video" : "bio"}/${crypto.randomUUID()}.${ext}`;
         const { error } = await supabase.storage
           .from("media")
           .upload(path, file, { upsert: true, contentType: file.type });
@@ -62,7 +68,7 @@ export function UploadButton({
       >
         <Upload className="h-4 w-4" /> {busy ? "Enviando..." : label}
       </button>
-      <input ref={ref} type="file" accept="image/*" hidden onChange={handle} />
+      <input ref={ref} type="file" accept={accept} hidden onChange={handle} />
     </>
   );
 }

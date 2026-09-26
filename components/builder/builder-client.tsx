@@ -596,6 +596,21 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
         </Field>
       )}
 
+      {/* Alinhamento vertical do conteúdo — disponível em todos os blocos */}
+      <Field label="Posição do conteúdo">
+        <div className="grid grid-cols-2 gap-1.5">
+          {([["center", "Centralizado"], ["top", "Colado no topo"]] as const).map(([v, lbl]) => (
+            <button
+              key={v}
+              onClick={() => onChange({ top_align: v })}
+              className={cn("rounded-lg border py-1.5 text-xs font-medium", (c.top_align ?? "center") === v ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-600")}
+            >
+              {lbl}
+            </button>
+          ))}
+        </div>
+      </Field>
+
       {/* Opções (question / multi_choice) */}
       {(t === "question" || t === "multi_choice") && (
         <>
@@ -608,6 +623,7 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
       {t === "hero" && (
         <>
           <Field label="Imagem de fundo (URL)"><input className={inputCls} value={c.image_url ?? ""} onChange={(e) => onChange({ image_url: e.target.value })} placeholder="https://..." /></Field>
+          <div className="-mt-2 mb-3"><UploadButton label="Enviar imagem" maxSizeMB={5} onUploaded={(url) => onChange({ image_url: url })} /></div>
           <Field label="Texto do botão (CTA)"><input className={inputCls} value={c.button_label ?? ""} onChange={(e) => onChange({ button_label: e.target.value })} placeholder="Quero saber mais" /></Field>
           <p className="mb-2 mt-1 text-sm font-semibold text-slate-700">Degradê</p>
           <ColorRow label="Cor" value={c.overlay_color ?? "#0b1220"} onChange={(v) => onChange({ overlay_color: v })} />
@@ -789,10 +805,17 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
             <Field label="Palavra em destaque (vermelho)"><input className={inputCls} value={c.highlight_word ?? ""} onChange={(e) => onChange({ highlight_word: e.target.value })} placeholder="VARIZES" /></Field>
           )}
           <Field label="Imagem principal (URL)"><input className={inputCls} value={c.image_url ?? ""} onChange={(e) => onChange({ image_url: e.target.value })} placeholder="https://..." /></Field>
+          <div className="-mt-2 mb-3"><UploadButton label="Enviar imagem" maxSizeMB={5} onUploaded={(url) => onChange({ image_url: url })} /></div>
           {c.layout === "saude" && (
             <div className="grid grid-cols-2 gap-2">
-              <Field label="Imagem antes"><input className={inputCls} value={c.before_url ?? ""} onChange={(e) => onChange({ before_url: e.target.value })} placeholder="https://..." /></Field>
-              <Field label="Imagem depois"><input className={inputCls} value={c.after_url ?? ""} onChange={(e) => onChange({ after_url: e.target.value })} placeholder="https://..." /></Field>
+              <div>
+                <Field label="Imagem antes"><input className={inputCls} value={c.before_url ?? ""} onChange={(e) => onChange({ before_url: e.target.value })} placeholder="https://..." /></Field>
+                <div className="-mt-2 mb-3"><UploadButton label="Enviar" maxSizeMB={5} onUploaded={(url) => onChange({ before_url: url })} /></div>
+              </div>
+              <div>
+                <Field label="Imagem depois"><input className={inputCls} value={c.after_url ?? ""} onChange={(e) => onChange({ after_url: e.target.value })} placeholder="https://..." /></Field>
+                <div className="-mt-2 mb-3"><UploadButton label="Enviar" maxSizeMB={5} onUploaded={(url) => onChange({ after_url: url })} /></div>
+              </div>
             </div>
           )}
           {c.layout === "buzz" && (
@@ -802,7 +825,10 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
             </div>
           )}
           {(c.layout === "buzz" || c.layout === "metropoles") && (
-            <Field label="Foto do autor (URL)"><input className={inputCls} value={c.columnist?.avatar_url ?? ""} onChange={(e) => onChange({ columnist: { ...(c.columnist ?? { name: c.byline ?? "" }), avatar_url: e.target.value } })} placeholder="https://..." /></Field>
+            <>
+              <Field label="Foto do autor (URL)"><input className={inputCls} value={c.columnist?.avatar_url ?? ""} onChange={(e) => onChange({ columnist: { ...(c.columnist ?? { name: c.byline ?? "" }), avatar_url: e.target.value } })} placeholder="https://..." /></Field>
+              <div className="-mt-2 mb-3"><UploadButton label="Enviar foto" maxSizeMB={5} onUploaded={(url) => onChange({ columnist: { ...(c.columnist ?? { name: c.byline ?? "" }), avatar_url: url } })} /></div>
+            </>
           )}
           <Field label="Vídeo (YouTube embed)"><input className={inputCls} value={c.video_url ?? ""} onChange={(e) => onChange({ video_url: e.target.value })} /></Field>
           <Field label={c.layout === "atarde" ? "Parágrafos (um por linha; use \"- \" para lista)" : "Parágrafos (um por linha)"}>
@@ -944,12 +970,46 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
       {t === "image" && (
         <>
           <Field label="URL da imagem"><input className={inputCls} value={c.image_url ?? ""} onChange={(e) => onChange({ image_url: e.target.value })} /></Field>
+          <div className="-mt-2 mb-3"><UploadButton label="Enviar imagem" maxSizeMB={5} onUploaded={(url) => onChange({ image_url: url })} /></div>
           <ToggleRow label="Colar no topo" desc="Encosta a imagem na linha do cabeçalho (ideal quando não há logo)." on={!!c.flush_top} onChange={(v) => onChange({ flush_top: v })} />
           <ToggleRow label="Largura total" desc="Ocupa toda a largura, sem margens laterais." on={!!c.full_bleed} onChange={(v) => onChange({ full_bleed: v })} />
         </>
       )}
       {t === "video" && (
-        <Field label="URL do vídeo (embed)"><input className={inputCls} value={c.url ?? ""} onChange={(e) => onChange({ url: e.target.value })} /></Field>
+        <>
+          <Field label="Onde está o vídeo?">
+            <div className="grid grid-cols-3 gap-1.5">
+              {([["youtube", "YouTube"], ["drive", "Google Drive"], ["vturb", "VTurb"], ["vimeo", "Vimeo"], ["mp4", "MP4 / Upload"]] as const).map(([v, lbl]) => (
+                <button key={v} onClick={() => onChange({ video_provider: v })}
+                  className={cn("rounded-lg border py-1.5 text-[11px] font-medium", (c.video_provider ?? "youtube") === v ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-600")}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <Field label={(c.video_provider ?? "youtube") === "vturb" ? "URL do embed VTurb" : (c.video_provider === "mp4" ? "URL do MP4 (ou envie abaixo)" : "URL / link do vídeo")}>
+            <input className={inputCls} value={c.url ?? ""} onChange={(e) => onChange({ url: e.target.value })} placeholder="https://..." />
+          </Field>
+          {c.video_provider === "mp4" && (
+            <div className="-mt-2 mb-3"><UploadButton label="Enviar vídeo (até 40 MB)" accept="video/*" maxSizeMB={40} onUploaded={(url) => onChange({ url })} /></div>
+          )}
+          <ToggleRow label="Ocultar controles do player" desc="Esconde os botões que vêm do YouTube/Drive/etc. pra pessoa não sair do funil. Controle total só com MP4." on={!!c.video_hide_controls} onChange={(v) => onChange({ video_hide_controls: v })} />
+          <ToggleRow label="Barra de progresso falsa" desc="Uma linha que corre rápido no começo e desacelera perto do fim, dando a sensação de que o vídeo está quase acabando." on={!!c.video_fake_bar} onChange={(v) => onChange({ video_fake_bar: v })} />
+          {c.video_fake_bar && (
+            <>
+              <Field label={`Velocidade da barra: ${c.video_fake_speed ?? 0.5}`}>
+                <input type="range" min={0.2} max={0.8} step={0.05} value={c.video_fake_speed ?? 0.5} onChange={(e) => onChange({ video_fake_speed: Number(e.target.value) })} className="w-full accent-emerald-500" />
+                <p className="mt-1 text-[11px] text-slate-400">Menor = corre mais rápido no início e desacelera mais no fim.</p>
+              </Field>
+              {c.video_provider !== "mp4" && (
+                <Field label={`Duração estimada do vídeo: ${c.video_fake_duration ?? 120}s`}>
+                  <input type="range" min={15} max={1200} step={15} value={c.video_fake_duration ?? 120} onChange={(e) => onChange({ video_fake_duration: Number(e.target.value) })} className="w-full accent-emerald-500" />
+                  <p className="mt-1 text-[11px] text-slate-400">Usada só quando o player não é MP4 (não dá pra ler o tempo real).</p>
+                </Field>
+              )}
+            </>
+          )}
+        </>
       )}
 
       {/* Testimonial */}
@@ -958,6 +1018,7 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
           <Field label="Depoimento"><textarea className={inputCls} rows={3} value={c.quote ?? ""} onChange={(e) => onChange({ quote: e.target.value })} /></Field>
           <Field label="Autor"><input className={inputCls} value={c.author ?? ""} onChange={(e) => onChange({ author: e.target.value })} /></Field>
           <Field label="Foto do paciente (URL)"><input className={inputCls} value={c.avatar_url ?? ""} onChange={(e) => onChange({ avatar_url: e.target.value })} placeholder="https://..." /></Field>
+          <div className="-mt-2 mb-3"><UploadButton label="Enviar foto" maxSizeMB={5} onUploaded={(url) => onChange({ avatar_url: url })} /></div>
         </>
       )}
 
@@ -1075,7 +1136,12 @@ function ButtonsEditor({ buttons, onChange }: { buttons: ButtonItem[]; onChange:
                 <option value="circle">Imagem círculo</option>
               </select>
             </div>
-            {b.image_style && <input className="mb-1.5 w-full rounded border border-slate-200 px-2 py-1 text-sm" placeholder="URL da imagem" value={b.image_url ?? ""} onChange={(e) => set(i, { image_url: e.target.value })} />}
+            {b.image_style && (
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <input className="w-full rounded border border-slate-200 px-2 py-1 text-sm" placeholder="URL da imagem" value={b.image_url ?? ""} onChange={(e) => set(i, { image_url: e.target.value })} />
+                <UploadButton label="Enviar" maxSizeMB={5} onUploaded={(url) => set(i, { image_url: url })} />
+              </div>
+            )}
             <input className="w-full rounded border border-slate-200 px-2 py-1 text-sm" placeholder="Link externo (opcional)" value={b.href ?? ""} onChange={(e) => set(i, { href: e.target.value || undefined })} />
           </div>
         ))}
@@ -1099,6 +1165,7 @@ function CarouselEditor({ items, onChange }: { items: { image_url: string; capti
           <div key={i} className="rounded-lg border p-2">
             <div className="mb-1.5 flex items-center gap-2">
               <input className={inputCls} placeholder="URL da imagem" value={it.image_url} onChange={(e) => set(i, { image_url: e.target.value })} />
+              <UploadButton label="Enviar" maxSizeMB={5} onUploaded={(url) => set(i, { image_url: url })} />
               <button onClick={() => remove(i)} className="text-slate-400 hover:text-rose-500"><Trash2 className="h-4 w-4" /></button>
             </div>
             <input className="w-full rounded border border-slate-200 px-2 py-1 text-sm" placeholder="Legenda / texto" value={it.caption ?? ""} onChange={(e) => set(i, { caption: e.target.value })} />

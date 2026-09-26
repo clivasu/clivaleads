@@ -247,7 +247,9 @@ export function FlowRunner({
   // "Colar no topo": quando o bloco do topo é uma imagem com flush_top,
   // encostamos o conteúdo na linha do cabeçalho (sem centralizar).
   const topHead = step?.type === "container" ? step.children?.[0] : step;
-  const flushTop = Boolean(topHead && topHead.type === "image" && topHead.config.flush_top);
+  const flushTop =
+    Boolean(topHead && topHead.type === "image" && topHead.config.flush_top) ||
+    step?.config.top_align === "top";
 
   return (
     <div
@@ -918,21 +920,120 @@ function TestimonialStep({ step }: { step: FlowStep }) {
   );
 }
 
+function inferProvider(url: string): NonNullable<FlowStep["config"]["video_provider"]> {
+  if (/youtu\.?be/i.test(url)) return "youtube";
+  if (/drive\.google/i.test(url)) return "drive";
+  if (/vimeo/i.test(url)) return "vimeo";
+  if (/\.mp4($|\?)/i.test(url)) return "mp4";
+  return "youtube";
+}
+
+// Monta a URL de embed conforme o provedor, escondendo os controles/botões
+// nativos quando pedido (pra manter a pessoa dentro do funil).
+function buildVideoEmbed(url: string, provider: NonNullable<FlowStep["config"]["video_provider"]>, hide?: boolean): string {
+  if (!url) return "";
+  if (provider === "youtube") {
+    const m = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{6,})/);
+    const id = m?.[1] ?? url;
+    const base = `https://www.youtube.com/embed/${id}`;
+    const params = ["rel=0", "modestbranding=1", "playsinline=1", "iv_load_policy=3"];
+    if (hide) params.push("controls=0", "disablekb=1", "fs=0");
+    return `${base}?${params.join("&")}`;
+  }
+  if (provider === "drive") {
+    const m = url.match(/\/d\/([\w-]+)/) ?? url.match(/id=([\w-]+)/);
+    const id = m?.[1];
+    return id ? `https://drive.google.com/file/d/${id}/preview` : url;
+  }
+  if (provider === "vimeo") {
+    const m = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+    const id = m?.[1] ?? url;
+    const params = ["playsinline=1", "dnt=1"];
+    if (hide) params.push("controls=0", "title=0", "byline=0", "portrait=0");
+    return `https://player.vimeo.com/video/${id}?${params.join("&")}`;
+  }
+  // vturb / outros: usa a URL como veio (embed próprio do provedor)
+  return url;
+}
+
 function VideoStep({ step }: { step: FlowStep }) {
   const c = step.config;
+  const url = c.url ?? c.video_url ?? "";
+  const provider = c.video_provider ?? inferProvider(url);
+  const hide = c.video_hide_controls;
+  const src = buildVideoEmbed(url, provider, hide);
+  const isMp4 = provider === "mp4";
+
   return (
     <div>
       <StepTitle title={c.title} />
-      <div className="aspect-video w-full overflow-hidden rounded-xl bg-black">
-        {c.url && (
-          <iframe
-            src={c.url}
-            className="h-full w-full"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          />
+      <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-black">
+        {url && isMp4 ? (
+          <VideoMp4 url={url} hide={hide} fake={c.video_fake_bar} speed={c.video_fake_speed} />
+        ) : url ? (
+          <>
+            <iframe
+              src={src}
+              className="h-full w-full"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+            {c.video_fake_bar && <FakeBar duration={c.video_fake_duration ?? 120} speed={c.video_fake_speed ?? 0.5} />}
+          </>
+        ) : (
+          <div className="flex h-full items-center justify-center text-xs text-white/50">Adicione a URL do vídeo</div>
         )}
       </div>
+    </div>
+  );
+}
+
+// Player MP4 com barra de progresso falsa sincronizada ao tempo real do vídeo.
+function VideoMp4({ url, hide, fake, speed }: { url: string; hide?: boolean; fake?: boolean; speed?: number }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const [pct, setPct] = useState(0);
+  const exp = speed ?? 0.5;
+  return (
+    <>
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+      <video
+        ref={ref}
+        src={url}
+        className="h-full w-full"
+        controls={!hide}
+        playsInline
+        onContextMenu={(e) => hide && e.preventDefault()}
+        onTimeUpdate={(e) => {
+          const v = e.currentTarget;
+          if (v.duration) setPct(Math.pow(Math.min(1, v.currentTime / v.duration), exp) * 100);
+        }}
+      />
+      {fake && <BarOverlay pct={pct} />}
+    </>
+  );
+}
+
+// Barra falsa por tempo estimado (players em iframe, sem acesso ao tempo real).
+function FakeBar({ duration, speed }: { duration: number; speed: number }) {
+  const [pct, setPct] = useState(0);
+  useEffect(() => {
+    const start = performance.now();
+    let raf = 0;
+    const loop = (now: number) => {
+      const t = Math.min(1, (now - start) / 1000 / Math.max(5, duration));
+      setPct(Math.pow(t, speed) * 100); // rápido no início, desacelera no fim
+      if (t < 1) raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [duration, speed]);
+  return <BarOverlay pct={pct} />;
+}
+
+function BarOverlay({ pct }: { pct: number }) {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1.5 bg-black/30">
+      <div className="h-full rounded-r-full transition-[width] duration-200 ease-linear" style={{ width: `${pct}%`, background: "var(--brand)" }} />
     </div>
   );
 }

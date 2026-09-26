@@ -234,6 +234,14 @@ export interface StepConfig {
   video_url?: string;
   audio_url?: string;
   share_links?: ShareLinks;
+  // alinhamento vertical do conteúdo (título mais perto da barra = "top")
+  top_align?: "center" | "top";
+  // vídeo — provedor + comportamento
+  video_provider?: "youtube" | "drive" | "vturb" | "vimeo" | "mp4";
+  video_hide_controls?: boolean; // esconde controles/botões do player (mantém dentro do funil)
+  video_fake_bar?: boolean; // barra de progresso falsa (acelera e desacelera no fim)
+  video_fake_speed?: number; // curva 0.2–0.8 (menor = mais rápido no início)
+  video_fake_duration?: number; // duração estimada (s) p/ players em iframe
   // chart_growth (cartesiano "Você vs Concorrência")
   you_label?: string;
   competitor_label?: string;
