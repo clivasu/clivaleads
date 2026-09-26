@@ -62,6 +62,28 @@ export function procColor(name: string): string {
   return PROCEDURES.find((p) => p.name === name)?.color ?? "#64748b";
 }
 
+// Paletas para novos profissionais/procedimentos criados na tela.
+export const AVATAR_COLORS = [
+  "bg-emerald-100 text-emerald-700",
+  "bg-sky-100 text-sky-700",
+  "bg-violet-100 text-violet-700",
+  "bg-amber-100 text-amber-700",
+  "bg-rose-100 text-rose-700",
+  "bg-teal-100 text-teal-700",
+  "bg-indigo-100 text-indigo-700",
+];
+
+export const PROC_COLORS = [
+  "#10b981", "#0ea5e9", "#8b5cf6", "#ec4899", "#f59e0b",
+  "#14b8a6", "#f43f5e", "#6366f1", "#84cc16", "#64748b",
+];
+
+export function initialsFrom(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  return (parts.length === 1 ? parts[0].slice(0, 2) : parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 export const STATUS_META: Record<Status, { label: string; dot: string }> = {
   registered: { label: "Registrado", dot: "#94a3b8" },
   confirmed: { label: "Confirmado", dot: "#6366f1" },

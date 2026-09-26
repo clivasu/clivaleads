@@ -8,16 +8,18 @@ import { cn } from "@/lib/utils";
 const STATUS_ORDER: Status[] = ["registered", "confirmed", "in_progress", "done", "cancelled"];
 
 export function PatientPanel({
-  appt, patient, doctor, onClose, onStatus, onEdit,
+  appt, patient, doctor, procColorOf, onClose, onStatus, onEdit,
 }: {
   appt: Appt;
   patient: Patient;
   doctor?: Doctor;
+  procColorOf?: (name: string) => string;
   onClose: () => void;
   onStatus: (s: Status) => void;
   onEdit: () => void;
 }) {
-  const color = procColor(appt.procedure);
+  const colorOf = procColorOf ?? procColor;
+  const color = colorOf(appt.procedure);
   const waHref = `https://wa.me/${patient.phone}?text=${encodeURIComponent(`Olá ${patient.name.split(" ")[0]}! Tudo bem?`)}`;
 
   return (
@@ -109,7 +111,7 @@ export function PatientPanel({
               <div className="flex flex-col gap-2">
                 {patient.history.map((h, i) => (
                   <div key={i} className="flex items-start gap-3 rounded-lg border p-3">
-                    <span className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: procColor(h.procedure) }} />
+                    <span className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorOf(h.procedure) }} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium text-slate-800">{h.procedure}</span>

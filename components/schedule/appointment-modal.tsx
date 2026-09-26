@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { X } from "lucide-react";
-import type { Appt, Status } from "@/lib/demo-schedule";
-import { doctors, patients, PROCEDURES, STATUS_META, DAY_START, DAY_END, fmtHour } from "@/lib/demo-schedule";
+import { X, Plus, Trash2, Settings2 } from "lucide-react";
+import type { Appt, Doctor, Procedure, Status } from "@/lib/demo-schedule";
+import { patients, STATUS_META, DAY_START, DAY_END, fmtHour, PROC_COLORS } from "@/lib/demo-schedule";
 
 export interface ApptDraft {
   id?: string;
@@ -23,17 +23,24 @@ const slots: number[] = [];
 for (let h = DAY_START; h < DAY_END; h += 0.5) slots.push(h);
 
 export function AppointmentModal({
-  initial, onClose, onSave, onDelete,
+  initial, doctors, procedures, onClose, onSave, onDelete,
+  onAddDoctor, onDeleteDoctor, onAddProcedure, onDeleteProcedure,
 }: {
   initial: Partial<ApptDraft> & { id?: string };
+  doctors: Doctor[];
+  procedures: Procedure[];
   onClose: () => void;
   onSave: (d: ApptDraft) => void;
   onDelete?: () => void;
+  onAddDoctor: (name: string) => void;
+  onDeleteDoctor: (id: string) => void;
+  onAddProcedure: (name: string, color: string) => void;
+  onDeleteProcedure: (name: string) => void;
 }) {
   const [d, setD] = useState<ApptDraft>({
     patientName: initial.patientName ?? "",
-    procedure: initial.procedure ?? PROCEDURES[0].name,
-    doctorId: initial.doctorId ?? doctors[0].id,
+    procedure: initial.procedure ?? procedures[0]?.name ?? "",
+    doctorId: initial.doctorId ?? doctors[0]?.id ?? "",
     date: initial.date ?? new Date().toISOString().slice(0, 10),
     start: initial.start ?? 9,
     duration: initial.duration ?? 60,
@@ -42,6 +49,25 @@ export function AppointmentModal({
   });
   const set = (p: Partial<ApptDraft>) => setD((prev) => ({ ...prev, ...p }));
   const isEdit = Boolean(initial.id);
+
+  const [manageDocs, setManageDocs] = useState(false);
+  const [manageProcs, setManageProcs] = useState(false);
+  const [newDoc, setNewDoc] = useState("");
+  const [newProc, setNewProc] = useState("");
+  const [newProcColor, setNewProcColor] = useState(PROC_COLORS[0]);
+
+  const addDoc = () => {
+    if (!newDoc.trim()) return;
+    onAddDoctor(newDoc.trim());
+    setNewDoc("");
+  };
+  const addProc = () => {
+    if (!newProc.trim()) return;
+    onAddProcedure(newProc.trim(), newProcColor);
+    setD((prev) => ({ ...prev, procedure: newProc.trim() }));
+    setNewProc("");
+    setNewProcColor(PROC_COLORS[(PROC_COLORS.indexOf(newProcColor) + 1) % PROC_COLORS.length]);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4" onClick={onClose}>
@@ -58,19 +84,74 @@ export function AppointmentModal({
             <datalist id="pt-list">{patients.map((p) => <option key={p.id} value={p.name} />)}</datalist>
           </label>
 
-          <label className="mb-3 block">
-            <span className="mb-1 block text-xs font-medium text-slate-500">Procedimento</span>
+          {/* Procedimento + gerenciar */}
+          <div className="mb-3">
+            <div className="mb-1 flex items-center justify-between">
+              <span className="text-xs font-medium text-slate-500">Procedimento</span>
+              <button type="button" onClick={() => setManageProcs((s) => !s)} className="flex items-center gap-1 text-xs font-medium text-emerald-600 hover:text-emerald-700">
+                <Settings2 className="h-3.5 w-3.5" /> Gerenciar
+              </button>
+            </div>
             <select className={inputCls} value={d.procedure} onChange={(e) => set({ procedure: e.target.value })}>
-              {PROCEDURES.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
+              {procedures.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
             </select>
-          </label>
+            {manageProcs && (
+              <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50/70 p-2.5">
+                <div className="flex max-h-36 flex-col gap-1 overflow-y-auto">
+                  {procedures.map((p) => (
+                    <div key={p.name} className="flex items-center gap-2 rounded-md bg-white px-2 py-1.5 text-sm">
+                      <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: p.color }} />
+                      <span className="flex-1 truncate text-slate-700">{p.name}</span>
+                      <button type="button" onClick={() => onDeleteProcedure(p.name)} disabled={procedures.length <= 1} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-30" aria-label="Remover procedimento">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <input type="color" value={newProcColor} onChange={(e) => setNewProcColor(e.target.value)} className="h-8 w-8 shrink-0 cursor-pointer rounded border border-slate-200 bg-white p-0.5" aria-label="Cor do procedimento" />
+                  <input className={inputCls} value={newProc} onChange={(e) => setNewProc(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addProc())} placeholder="Novo procedimento" />
+                  <button type="button" onClick={addProc} className="flex shrink-0 items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-2 text-xs font-semibold text-white hover:bg-emerald-600">
+                    <Plus className="h-3.5 w-3.5" /> Add
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
-          <label className="mb-3 block">
-            <span className="mb-1 block text-xs font-medium text-slate-500">Profissional</span>
+          {/* Profissional + gerenciar */}
+          <div className="mb-3">
+            <div className="mb-1 flex items-center justify-between">
+              <span className="text-xs font-medium text-slate-500">Profissional</span>
+              <button type="button" onClick={() => setManageDocs((s) => !s)} className="flex items-center gap-1 text-xs font-medium text-emerald-600 hover:text-emerald-700">
+                <Settings2 className="h-3.5 w-3.5" /> Gerenciar
+              </button>
+            </div>
             <select className={inputCls} value={d.doctorId} onChange={(e) => set({ doctorId: e.target.value })}>
               {doctors.map((doc) => <option key={doc.id} value={doc.id}>{doc.name}</option>)}
             </select>
-          </label>
+            {manageDocs && (
+              <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50/70 p-2.5">
+                <div className="flex max-h-36 flex-col gap-1 overflow-y-auto">
+                  {doctors.map((doc) => (
+                    <div key={doc.id} className="flex items-center gap-2 rounded-md bg-white px-2 py-1.5 text-sm">
+                      <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${doc.avatarColor}`}>{doc.initials}</span>
+                      <span className="flex-1 truncate text-slate-700">{doc.name}</span>
+                      <button type="button" onClick={() => onDeleteDoctor(doc.id)} disabled={doctors.length <= 1} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-30" aria-label="Remover profissional">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <input className={inputCls} value={newDoc} onChange={(e) => setNewDoc(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addDoc())} placeholder="Nome do profissional" />
+                  <button type="button" onClick={addDoc} className="flex shrink-0 items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-2 text-xs font-semibold text-white hover:bg-emerald-600">
+                    <Plus className="h-3.5 w-3.5" /> Add
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="mb-3 grid grid-cols-2 gap-3">
             <label className="block">

@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/env";
-import type { LeadAnswer, LeadSession } from "@/lib/types";
+import type { LeadAnswer, LeadSession, LeadStatus } from "@/lib/types";
 
 export interface LeadWithAnswers extends LeadSession {
   answers: LeadAnswer[];
@@ -67,6 +67,31 @@ export async function listLeads(orgId: string): Promise<LeadWithAnswers[]> {
     .order("created_at", { ascending: false })
     .limit(200);
   return (data as unknown as LeadWithAnswers[]) ?? [];
+}
+
+export interface LeadPatch {
+  name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  procedure?: string | null;
+  status?: LeadStatus;
+}
+
+// Edita os campos editáveis de um lead. Em modo demo (sem Supabase) a UI mantém
+// o estado localmente; aqui só persistimos quando há banco conectado.
+export async function updateLead(id: string, patch: LeadPatch): Promise<boolean> {
+  if (!isSupabaseConfigured) return true;
+  const supabase = await createClient();
+  const { error } = await supabase.from("lead_sessions").update(patch).eq("id", id);
+  return !error;
+}
+
+// Remove um lead (e suas respostas via cascade no banco).
+export async function deleteLead(id: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return true;
+  const supabase = await createClient();
+  const { error } = await supabase.from("lead_sessions").delete().eq("id", id);
+  return !error;
 }
 
 export async function getLead(id: string): Promise<LeadWithAnswers | null> {

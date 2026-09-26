@@ -1,16 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { revenueLabels, revenueRanges, type RevenueRange } from "@/lib/demo-dashboard";
 
-type Range = "overview" | "monthly" | "yearly";
-
-const LABELS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set"];
-
-const DATASETS: Record<Range, number[]> = {
-  overview: [7, 6.5, 9.5, 9, 20, 11, 10.5, 9.5, 14],
-  monthly: [5, 8, 7, 12, 15, 13, 9, 16, 18],
-  yearly: [10, 12, 11, 14, 22, 19, 17, 15, 24],
-};
+const LABELS = revenueLabels;
 
 const W = 640;
 const H = 280;
@@ -46,14 +39,21 @@ function smoothPath(pts: { x: number; y: number }[]) {
 }
 
 export function RevenueChart() {
-  const [range, setRange] = useState<Range>("overview");
-  const data = DATASETS[range];
+  const [range, setRange] = useState<RevenueRange>("overview");
+  const data = revenueRanges[range];
   const pts = data.map((v, i) => ({ x: scaleX(i, data.length), y: scaleY(v) }));
   const line = smoothPath(pts);
   const area = `${line} L ${pts[pts.length - 1].x} ${H - PAD_B} L ${pts[0].x} ${H - PAD_B} Z`;
 
   const peakIdx = data.indexOf(Math.max(...data));
   const peak = pts[peakIdx];
+  // Mantém o balão do pico dentro do viewBox (não corta nas bordas).
+  const BALLOON_HW = 46; // meia-largura do balão
+  const balloonCX = Math.min(W - PAD_R - BALLOON_HW, Math.max(PAD_L + BALLOON_HW, peak.x));
+  // Se o pico está muito no topo, joga o balão para baixo do ponto.
+  const balloonAbove = peak.y - 34 > PAD_T;
+  const balloonY = balloonAbove ? peak.y - 34 : peak.y + 12;
+  const balloonTextY = balloonAbove ? peak.y - 19 : peak.y + 27;
   const gridVals = [0, 6, 12, 18, 24, 30, 36];
 
   return (
@@ -64,7 +64,7 @@ export function RevenueChart() {
           <p className="text-sm text-slate-400">Desempenho dos últimos meses</p>
         </div>
         <div className="flex rounded-full bg-slate-100 p-1 text-xs font-medium">
-          {(["overview", "monthly", "yearly"] as Range[]).map((r) => (
+          {(["overview", "monthly", "yearly"] as RevenueRange[]).map((r) => (
             <button
               key={r}
               onClick={() => setRange(r)}
@@ -109,8 +109,8 @@ export function RevenueChart() {
 
         {/* balão do pico */}
         <g>
-          <rect x={peak.x - 42} y={peak.y - 34} width={84} height={22} rx={11} fill="#dcfce7" />
-          <text x={peak.x} y={peak.y - 19} textAnchor="middle" className="fill-emerald-700" fontSize={11} fontWeight={600}>
+          <rect x={balloonCX - BALLOON_HW} y={balloonY} width={BALLOON_HW * 2} height={22} rx={11} fill="#dcfce7" />
+          <text x={balloonCX} y={balloonTextY} textAnchor="middle" className="fill-emerald-700" fontSize={11} fontWeight={600}>
             R$ {(data[peakIdx] * 1000).toLocaleString("pt-BR")}
           </text>
         </g>

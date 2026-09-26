@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Calendar as CalIcon, ArrowLeft2, ArrowRight2, Filter, ArrowDown2, More, Coffee, Add,
+  Calendar as CalIcon, ArrowLeft2, ArrowRight2, Filter, ArrowDown2, Add,
 } from "iconsax-reactjs";
-import { Bell, X, Repeat } from "lucide-react";
+import { Bell, X, Repeat, MoreVertical, Pencil, Trash2, CalendarClock } from "lucide-react";
 import {
-  doctors, patients as seedPatients, PROCEDURES, STATUS_META, DAY_START, DAY_END,
-  procColor, fmtHour, iso, addDays, seedAppointments, patientById as findSeedPatient,
-  type Appt, type Patient, type Status,
+  doctors as seedDoctors, patients as seedPatients, PROCEDURES as seedProcedures,
+  STATUS_META, DAY_START, DAY_END, fmtHour, iso, addDays, seedAppointments,
+  patientById as findSeedPatient, AVATAR_COLORS, PROC_COLORS, initialsFrom,
+  type Appt, type Patient, type Status, type Doctor, type Procedure,
 } from "@/lib/demo-schedule";
 import { PatientPanel } from "@/components/schedule/patient-panel";
 import { AppointmentModal, draftToAppt, type ApptDraft } from "@/components/schedule/appointment-modal";
@@ -28,9 +29,12 @@ function startOfWeek(d: Date) {
 }
 
 type View = "day" | "week" | "month";
+type ColorOf = (name: string) => string;
 
 export function ScheduleBoard() {
   const [appts, setAppts] = useState<Appt[]>(() => seedAppointments());
+  const [docs, setDocs] = useState<Doctor[]>(seedDoctors);
+  const [procs, setProcs] = useState<Procedure[]>(seedProcedures);
   const [extraPatients, setExtraPatients] = useState<Patient[]>([]);
   const [view, setView] = useState<View>("day");
   const [cursor, setCursor] = useState(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
@@ -49,17 +53,19 @@ export function ScheduleBoard() {
     return () => clearInterval(t);
   }, []);
 
+  const procColorOf: ColorOf = (name) => procs.find((p) => p.name === name)?.color ?? "#64748b";
+
   const patientOf = (id: string): Patient | undefined =>
     findSeedPatient(id) ?? extraPatients.find((p) => p.id === id);
 
-  const visibleDoctors = docFilter === "all" ? doctors : doctors.filter((d) => d.id === docFilter);
+  const visibleDoctors = docFilter === "all" ? docs : docs.filter((d) => d.id === docFilter);
 
   const filtered = useMemo(
     () => appts.filter((a) => (procFilter.size === 0 || procFilter.has(a.procedure)) && (docFilter === "all" || a.doctorId === docFilter)),
     [appts, procFilter, docFilter],
   );
 
-  // ------- CRUD -------
+  // ------- CRUD agendamentos -------
   const saveDraft = (d: ApptDraft) => {
     let patient = seedPatients.find((p) => p.name === d.patientName) ?? extraPatients.find((p) => p.name === d.patientName);
     if (!patient) {
@@ -76,6 +82,32 @@ export function ScheduleBoard() {
   const setStatus = (id: string, s: Status) => setAppts((prev) => prev.map((a) => (a.id === id ? { ...a, status: s } : a)));
   const moveAppt = (id: string, patch: Partial<Appt>) => setAppts((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
   const deleteAppt = (id: string) => { setAppts((prev) => prev.filter((a) => a.id !== id)); setSelectedId(null); setModal(null); };
+
+  const openApptEdit = (a: Appt) => {
+    const p = patientOf(a.patientId);
+    const dur = Math.round((a.end - a.start) * 60);
+    setModal({ id: a.id, patientName: p?.name ?? "", procedure: a.procedure, doctorId: a.doctorId, date: a.date, start: a.start, duration: dur, status: a.status, isReturn: a.isReturn });
+    setSelectedId(null);
+  };
+
+  // ------- CRUD profissionais / procedimentos -------
+  const addDoctor = (name: string) => {
+    setDocs((prev) => {
+      if (prev.some((d) => d.name.toLowerCase() === name.toLowerCase())) return prev;
+      return [...prev, { id: "doc" + Date.now(), name, initials: initialsFrom(name), avatarColor: AVATAR_COLORS[prev.length % AVATAR_COLORS.length] }];
+    });
+  };
+  const deleteDoctor = (id: string) => {
+    setDocs((prev) => (prev.length <= 1 ? prev : prev.filter((d) => d.id !== id)));
+    setDocFilter((f) => (f === id ? "all" : f));
+  };
+  const addProcedure = (name: string, color: string) => {
+    setProcs((prev) => (prev.some((p) => p.name.toLowerCase() === name.toLowerCase()) ? prev : [...prev, { name, color }]));
+  };
+  const deleteProcedure = (name: string) => {
+    setProcs((prev) => (prev.length <= 1 ? prev : prev.filter((p) => p.name !== name)));
+    setProcFilter((prev) => { const n = new Set(prev); n.delete(name); return n; });
+  };
 
   // ------- notificação de próximo -------
   const todayIso = iso(now);
@@ -132,7 +164,7 @@ export function ScheduleBoard() {
       </div>
 
       {tab === "hist" ? (
-        <History appts={appts} patientOf={patientOf} onOpen={setSelectedId} />
+        <History appts={appts} patientOf={patientOf} procColorOf={procColorOf} onOpen={setSelectedId} onEdit={openApptEdit} onDelete={deleteAppt} />
       ) : (
         <>
           {/* controls */}
@@ -156,13 +188,13 @@ export function ScheduleBoard() {
 
               <div className="relative">
                 <button onClick={() => setShowDocMenu((s) => !s)} className="flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50">
-                  {docFilter === "all" ? "Todos os profissionais" : doctors.find((d) => d.id === docFilter)?.name}
+                  {docFilter === "all" ? "Todos os profissionais" : docs.find((d) => d.id === docFilter)?.name}
                   <ArrowDown2 size={14} color="currentColor" />
                 </button>
                 {showDocMenu && (
                   <div className="absolute right-0 z-30 mt-1 w-56 rounded-lg border bg-white p-1 shadow-lg">
                     <button onClick={() => { setDocFilter("all"); setShowDocMenu(false); }} className="block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50">Todos os profissionais</button>
-                    {doctors.map((d) => (
+                    {docs.map((d) => (
                       <button key={d.id} onClick={() => { setDocFilter(d.id); setShowDocMenu(false); }} className="block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50">{d.name}</button>
                     ))}
                   </div>
@@ -177,7 +209,7 @@ export function ScheduleBoard() {
                   <div className="absolute right-0 z-30 mt-1 w-60 rounded-lg border bg-white p-3 shadow-lg">
                     <p className="mb-2 text-xs font-semibold text-slate-500">Procedimentos</p>
                     <div className="flex flex-col gap-1">
-                      {PROCEDURES.map((p) => (
+                      {procs.map((p) => (
                         <label key={p.name} className="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-slate-50">
                           <input type="checkbox" checked={procFilter.has(p.name)} onChange={(e) => setProcFilter((prev) => { const n = new Set(prev); e.target.checked ? n.add(p.name) : n.delete(p.name); return n; })} className="accent-emerald-500" />
                           <span className="h-3 w-3 rounded-full" style={{ background: p.color }} />
@@ -194,7 +226,7 @@ export function ScheduleBoard() {
 
           {/* legenda */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-6 pb-3">
-            {PROCEDURES.map((p) => (
+            {procs.map((p) => (
               <span key={p.name} className="flex items-center gap-1.5 text-xs text-slate-500">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color }} /> {p.name}
               </span>
@@ -202,7 +234,7 @@ export function ScheduleBoard() {
           </div>
 
           {view === "month" ? (
-            <MonthGrid cursor={cursor} appts={filtered} onOpenDay={(d) => { setCursor(d); setView("day"); }} onOpenAppt={setSelectedId} />
+            <MonthGrid cursor={cursor} appts={filtered} procColorOf={procColorOf} onOpenDay={(d) => { setCursor(d); setView("day"); }} onOpenAppt={setSelectedId} />
           ) : (
             <TimeGrid
               view={view}
@@ -210,12 +242,13 @@ export function ScheduleBoard() {
               doctors={visibleDoctors}
               appts={filtered}
               patientOf={patientOf}
+              procColorOf={procColorOf}
               now={now}
               onOpen={setSelectedId}
               onMove={moveAppt}
               onCreate={(colKey, time) => setModal(view === "day"
                 ? { doctorId: colKey, date: iso(cursor), start: time }
-                : { doctorId: docFilter === "all" ? doctors[0].id : docFilter, date: colKey, start: time })}
+                : { doctorId: docFilter === "all" ? docs[0].id : docFilter, date: colKey, start: time })}
             />
           )}
         </>
@@ -225,19 +258,26 @@ export function ScheduleBoard() {
         <PatientPanel
           appt={selected}
           patient={selectedPatient}
-          doctor={doctors.find((d) => d.id === selected.doctorId)}
+          doctor={docs.find((d) => d.id === selected.doctorId)}
+          procColorOf={procColorOf}
           onClose={() => setSelectedId(null)}
           onStatus={(s) => setStatus(selected.id, s)}
-          onEdit={() => { const dur = Math.round((selected.end - selected.start) * 60); setModal({ id: selected.id, patientName: selectedPatient.name, procedure: selected.procedure, doctorId: selected.doctorId, date: selected.date, start: selected.start, duration: dur, status: selected.status, isReturn: selected.isReturn }); setSelectedId(null); }}
+          onEdit={() => openApptEdit(selected)}
         />
       )}
 
       {modal && (
         <AppointmentModal
           initial={modal}
+          doctors={docs}
+          procedures={procs}
           onClose={() => setModal(null)}
           onSave={saveDraft}
           onDelete={modal.id ? () => deleteAppt(modal.id!) : undefined}
+          onAddDoctor={addDoctor}
+          onDeleteDoctor={deleteDoctor}
+          onAddProcedure={addProcedure}
+          onDeleteProcedure={deleteProcedure}
         />
       )}
     </div>
@@ -247,13 +287,14 @@ export function ScheduleBoard() {
 /* ============================ TIME GRID (Dia / Semana) ============================ */
 
 function TimeGrid({
-  view, cursor, doctors: docs, appts, patientOf, now, onOpen, onMove, onCreate,
+  view, cursor, doctors: docs, appts, patientOf, procColorOf, now, onOpen, onMove, onCreate,
 }: {
   view: "day" | "week";
   cursor: Date;
-  doctors: typeof doctors;
+  doctors: Doctor[];
   appts: Appt[];
   patientOf: (id: string) => Patient | undefined;
+  procColorOf: ColorOf;
   now: Date;
   onOpen: (id: string) => void;
   onMove: (id: string, patch: Partial<Appt>) => void;
@@ -326,7 +367,7 @@ function TimeGrid({
                   />
                 ))}
                 {appts.filter((a) => inCol(a, c.key)).map((a) => {
-                  const color = procColor(a.procedure);
+                  const color = procColorOf(a.procedure);
                   const patient = patientOf(a.patientId);
                   const st = STATUS_META[a.status];
                   return (
@@ -383,7 +424,7 @@ function TimeGrid({
       </div>
 
       {ghost && (
-        <div className="pointer-events-none fixed z-50 rounded-lg border-l-4 bg-white px-3 py-2 text-sm shadow-xl" style={{ left: ghost.x + 12, top: ghost.y - 10, borderLeftColor: procColor(ghost.appt.procedure) }}>
+        <div className="pointer-events-none fixed z-50 rounded-lg border-l-4 bg-white px-3 py-2 text-sm shadow-xl" style={{ left: ghost.x + 12, top: ghost.y - 10, borderLeftColor: procColorOf(ghost.appt.procedure) }}>
           <span className="font-semibold text-slate-800">{patientOf(ghost.appt.patientId)?.name}</span>
           <span className="ml-2 text-slate-500">{fmtHour(ghost.time)}</span>
         </div>
@@ -395,10 +436,11 @@ function TimeGrid({
 /* ============================ MONTH ============================ */
 
 function MonthGrid({
-  cursor, appts, onOpenDay, onOpenAppt,
+  cursor, appts, procColorOf, onOpenDay, onOpenAppt,
 }: {
   cursor: Date;
   appts: Appt[];
+  procColorOf: ColorOf;
   onOpenDay: (d: Date) => void;
   onOpenAppt: (id: string) => void;
 }) {
@@ -424,8 +466,8 @@ function MonthGrid({
               </button>
               <div className="flex flex-col gap-0.5">
                 {dayAppts.slice(0, 3).map((a) => (
-                  <button key={a.id} onClick={() => onOpenAppt(a.id)} className="flex items-center gap-1 truncate rounded px-1 py-0.5 text-left text-[10px]" style={{ background: `${procColor(a.procedure)}18` }}>
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: procColor(a.procedure) }} />
+                  <button key={a.id} onClick={() => onOpenAppt(a.id)} className="flex items-center gap-1 truncate rounded px-1 py-0.5 text-left text-[10px]" style={{ background: `${procColorOf(a.procedure)}18` }}>
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: procColorOf(a.procedure) }} />
                     <span className="truncate text-slate-600">{fmtHour(a.start)} {a.procedure}</span>
                   </button>
                 ))}
@@ -441,30 +483,78 @@ function MonthGrid({
 
 /* ============================ HISTÓRICO ============================ */
 
-function History({ appts, patientOf, onOpen }: { appts: Appt[]; patientOf: (id: string) => Patient | undefined; onOpen: (id: string) => void }) {
+function History({
+  appts, patientOf, procColorOf, onOpen, onEdit, onDelete,
+}: {
+  appts: Appt[];
+  patientOf: (id: string) => Patient | undefined;
+  procColorOf: ColorOf;
+  onOpen: (id: string) => void;
+  onEdit: (a: Appt) => void;
+  onDelete: (id: string) => void;
+}) {
   const rows = [...appts].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.start - a.start));
+  const [menuId, setMenuId] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
   return (
-    <div className="p-6">
+    <div className="p-6" onClick={() => setMenuId(null)}>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-left text-xs uppercase tracking-wide text-slate-400">
-              <th className="pb-3 font-medium">Data</th><th className="pb-3 font-medium">Paciente</th><th className="pb-3 font-medium">Procedimento</th><th className="pb-3 font-medium">Horário</th><th className="pb-3 font-medium">Status</th>
+              <th className="pb-3 font-medium">Data</th><th className="pb-3 font-medium">Paciente</th><th className="pb-3 font-medium">Procedimento</th><th className="pb-3 font-medium">Horário</th><th className="pb-3 font-medium">Status</th><th className="pb-3 text-right font-medium">Ações</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((a) => (
-              <tr key={a.id} onClick={() => onOpen(a.id)} className="cursor-pointer border-b last:border-0 hover:bg-slate-50">
-                <td className="py-3 text-slate-500">{new Date(a.date + "T00:00:00").toLocaleDateString("pt-BR")}</td>
-                <td className="py-3 font-medium text-slate-800">{patientOf(a.patientId)?.name}</td>
-                <td className="py-3"><span className="inline-flex items-center gap-1.5 text-slate-600"><span className="h-2.5 w-2.5 rounded-full" style={{ background: procColor(a.procedure) }} />{a.procedure}</span></td>
-                <td className="py-3 text-slate-500">{fmtHour(a.start)}–{fmtHour(a.end)}</td>
-                <td className="py-3"><span className="inline-flex items-center gap-1.5 text-xs text-slate-600"><span className="h-1.5 w-1.5 rounded-full" style={{ background: STATUS_META[a.status].dot }} />{STATUS_META[a.status].label}</span></td>
+              <tr key={a.id} className="border-b last:border-0 hover:bg-slate-50">
+                <td className="cursor-pointer py-3 text-slate-500" onClick={() => onOpen(a.id)}>{new Date(a.date + "T00:00:00").toLocaleDateString("pt-BR")}</td>
+                <td className="cursor-pointer py-3 font-medium text-slate-800" onClick={() => onOpen(a.id)}>{patientOf(a.patientId)?.name}</td>
+                <td className="cursor-pointer py-3" onClick={() => onOpen(a.id)}><span className="inline-flex items-center gap-1.5 text-slate-600"><span className="h-2.5 w-2.5 rounded-full" style={{ background: procColorOf(a.procedure) }} />{a.procedure}</span></td>
+                <td className="cursor-pointer py-3 text-slate-500" onClick={() => onOpen(a.id)}>{fmtHour(a.start)}–{fmtHour(a.end)}</td>
+                <td className="cursor-pointer py-3" onClick={() => onOpen(a.id)}><span className="inline-flex items-center gap-1.5 text-xs text-slate-600"><span className="h-1.5 w-1.5 rounded-full" style={{ background: STATUS_META[a.status].dot }} />{STATUS_META[a.status].label}</span></td>
+                <td className="py-3 text-right">
+                  <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => setMenuId(menuId === a.id ? null : a.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Ações">
+                      <MoreVertical className="h-4 w-4" />
+                    </button>
+                    {menuId === a.id && (
+                      <div className="absolute right-0 z-30 mt-1 w-40 rounded-lg border bg-white p-1 shadow-lg">
+                        <button onClick={() => { onEdit(a); setMenuId(null); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
+                          <Pencil className="h-3.5 w-3.5" /> Editar
+                        </button>
+                        <button onClick={() => { onEdit(a); setMenuId(null); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
+                          <CalendarClock className="h-3.5 w-3.5" /> Reagendar
+                        </button>
+                        <button onClick={() => { setConfirmId(a.id); setMenuId(null); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-rose-600 hover:bg-rose-50">
+                          <Trash2 className="h-3.5 w-3.5" /> Excluir
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
+            {rows.length === 0 && (
+              <tr><td colSpan={6} className="py-10 text-center text-slate-400">Nenhum agendamento no histórico.</td></tr>
+            )}
           </tbody>
         </table>
       </div>
+
+      {confirmId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4" onClick={() => setConfirmId(null)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-slate-900">Excluir agendamento</h2>
+            <p className="mt-1 text-sm text-slate-500">Tem certeza? Essa ação não pode ser desfeita.</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setConfirmId(null)} className="rounded-lg border px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancelar</button>
+              <button onClick={() => { onDelete(confirmId); setConfirmId(null); }} className="rounded-lg bg-rose-500 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-600">Excluir</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

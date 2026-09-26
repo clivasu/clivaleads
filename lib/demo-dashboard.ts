@@ -18,18 +18,22 @@ export const kpis: KpiCard[] = [
   { key: "doctors", title: "Profissionais Ativos", value: "35", subtitle: "De licença 2%", trend: "2%", trendUp: false },
 ];
 
-// Série de receita (em milhares) — Jan..Set, pico em Maio.
-export const revenueSeries = [
-  { label: "Jan", value: 7 },
-  { label: "Fev", value: 6.5 },
-  { label: "Mar", value: 9.5 },
-  { label: "Abr", value: 9 },
-  { label: "Mai", value: 20 },
-  { label: "Jun", value: 11 },
-  { label: "Jul", value: 10.5 },
-  { label: "Ago", value: 9.5 },
-  { label: "Set", value: 14 },
-];
+// Receita mensal (em milhares de R$) — fonte única do gráfico de Receita.
+// O último ponto de cada série bate com o KPI "Receita Mensal" (R$ 24.500).
+// Quando o Supabase estiver conectado, troque por um SELECT de faturamento
+// agregado por mês; a UI já consome estes valores diretamente.
+export const revenueLabels = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set"];
+
+export type RevenueRange = "overview" | "monthly" | "yearly";
+
+export const revenueRanges: Record<RevenueRange, number[]> = {
+  // Geral: visão do desempenho ao longo do ano corrente.
+  overview: [7, 8.5, 9.5, 11, 15, 13.5, 16, 19, 24.5],
+  // Mensal: receita fechada mês a mês (crescimento recente).
+  monthly: [9, 10.5, 12, 14, 13, 16, 18, 21, 24.5],
+  // Anual: acumulado do ano, terminando na receita do mês atual.
+  yearly: [10, 12, 11, 14, 22, 19, 17, 20, 24.5],
+};
 
 export const appointmentStats = {
   total: 54,
