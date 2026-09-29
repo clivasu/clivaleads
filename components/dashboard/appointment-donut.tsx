@@ -4,8 +4,10 @@ const R = 70;
 const CIRC = 2 * Math.PI * R;
 const GAP = 8; // espaço entre segmentos (px de circunferência)
 
-export function AppointmentDonut() {
-  const { total, segments } = appointmentStats;
+export function AppointmentDonut({ empty = false }: { empty?: boolean }) {
+  const { total, segments } = empty
+    ? { total: 0, segments: appointmentStats.segments.map((s) => ({ ...s, value: 0 })) }
+    : appointmentStats;
   let offset = 0;
 
   return (
@@ -17,8 +19,8 @@ export function AppointmentDonut() {
         <div className="relative">
           <svg viewBox="0 0 200 200" className="h-52 w-52 -rotate-90">
             <circle cx="100" cy="100" r={R} fill="none" stroke="#f1f5f9" strokeWidth="22" />
-            {segments.map((seg) => {
-              const arc = (seg.value / total) * CIRC;
+            {total > 0 && segments.map((seg) => {
+              const arc = total > 0 ? (seg.value / total) * CIRC : 0;
               const dash = `${Math.max(arc - GAP, 0)} ${CIRC - Math.max(arc - GAP, 0)}`;
               const el = (
                 <circle

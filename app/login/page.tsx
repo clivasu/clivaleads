@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"signin" | "signup">("signin");
@@ -31,7 +32,7 @@ export default function LoginPage() {
     const fn =
       mode === "signin"
         ? supabase.auth.signInWithPassword({ email, password })
-        : supabase.auth.signUp({ email, password });
+        : supabase.auth.signUp({ email, password, options: { data: { full_name: name.trim() } } });
     const { error } = await fn;
     setLoading(false);
     if (error) {
@@ -54,6 +55,12 @@ export default function LoginPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={submit} className="flex flex-col gap-4">
+              {mode === "signup" && (
+                <div className="grid gap-2">
+                  <Label htmlFor="name">Seu nome</Label>
+                  <Input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} required placeholder="Ex.: Dra. Bárbara" />
+                </div>
+              )}
               <div className="grid gap-2">
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />

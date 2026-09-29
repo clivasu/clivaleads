@@ -11,12 +11,29 @@ import {
 import { RevenueChart } from "@/components/dashboard/revenue-chart";
 import { AppointmentDonut } from "@/components/dashboard/appointment-donut";
 import {
-  kpis,
-  todayAppointments,
-  recentPatients,
+  kpis as demoKpis,
+  todayAppointments as demoAppointments,
+  recentPatients as demoPatients,
+  type KpiCard,
 } from "@/lib/demo-dashboard";
+import { isSupabaseConfigured } from "@/lib/env";
+import { getNavInfo } from "@/lib/data/org";
 
 export const dynamic = "force-dynamic";
+
+// KPIs zerados para uma clínica que acabou de começar (conta real, sem dados).
+const ZERO_KPIS: KpiCard[] = [
+  { key: "patients", title: "Total de Pacientes", value: "0", subtitle: "Este mês", trend: "0%", trendUp: false },
+  { key: "appointments", title: "Agendamentos", value: "0", subtitle: "Novas marcações", trend: "0%", trendUp: false },
+  { key: "revenue", title: "Receita Mensal", value: "R$ 0", subtitle: "Mês passado", trend: "0%", trendUp: false },
+  { key: "doctors", title: "Profissionais Ativos", value: "0", subtitle: "Cadastre na Agenda", trend: "0%", trendUp: false },
+];
+
+function firstName(full: string): string {
+  const t = (full || "").trim();
+  if (!t || t.includes("@")) return "";
+  return t.split(/\s+/)[0];
+}
 
 const KPI_STYLES: Record<string, { grad: string; icon: React.ReactNode }> = {
   patients: {
@@ -43,7 +60,7 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   cancelled: { label: "Cancelado", cls: "bg-rose-100 text-rose-700" },
 };
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
   const today = new Date().toLocaleDateString("pt-BR", {
     weekday: "long",
     day: "2-digit",
@@ -51,13 +68,21 @@ export default function DashboardPage() {
     year: "numeric",
   });
 
+  // Conta real (Supabase) começa zerada; modo demo mantém a vitrine.
+  const demo = !isSupabaseConfigured;
+  const nav = await getNavInfo();
+  const greetName = demo ? "Dra. Sarah" : (firstName(nav.userName) || nav.orgName || "por aqui");
+  const kpis = demo ? demoKpis : ZERO_KPIS;
+  const todayAppointments = demo ? demoAppointments : [];
+  const recentPatients = demo ? demoPatients : [];
+
   return (
     <div className="space-y-6">
       {/* Greeting */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            Bom dia, <span className="font-serif italic">Dra. Sarah</span>
+            Bom dia, <span className="font-serif italic">{greetName}</span>
           </h1>
           <p className="text-sm text-slate-500">
             Veja o que está acontecendo na sua clínica hoje.
@@ -113,9 +138,9 @@ export default function DashboardPage() {
       {/* Revenue + donut */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <RevenueChart />
+          <RevenueChart empty={!demo} />
         </div>
-        <AppointmentDonut />
+        <AppointmentDonut empty={!demo} />
       </div>
 
       {/* Today's appointments + recent patients */}
@@ -164,6 +189,9 @@ export default function DashboardPage() {
                     </tr>
                   );
                 })}
+                {todayAppointments.length === 0 && (
+                  <tr><td colSpan={5} className="py-10 text-center text-sm text-slate-400">Nenhum agendamento por enquanto. Cadastre na Agenda.</td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -190,6 +218,9 @@ export default function DashboardPage() {
                 </div>
               </div>
             ))}
+            {recentPatients.length === 0 && (
+              <p className="py-8 text-center text-sm text-slate-400">Seus pacientes recentes aparecem aqui.</p>
+            )}
           </div>
         </div>
       </div>

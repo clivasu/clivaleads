@@ -49,9 +49,11 @@ export async function getNavInfo(): Promise<NavInfo> {
     .eq("id", user.id)
     .single();
   const org = await getCurrentOrg();
+  // Nome do cadastro: metadata do signup > perfil > e-mail.
+  const metaName = (user.user_metadata?.full_name as string | undefined)?.trim();
   return {
     orgName: org?.name ?? "Minha Clínica",
-    userName: profile?.full_name ?? user.email ?? "",
+    userName: metaName || profile?.full_name || user.email || "",
     userRole: profile?.is_super_admin ? "Admin geral" : "Proprietário",
     isAdmin: Boolean(profile?.is_super_admin),
   };

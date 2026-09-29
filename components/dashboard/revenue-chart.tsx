@@ -38,9 +38,9 @@ function smoothPath(pts: { x: number; y: number }[]) {
   return d;
 }
 
-export function RevenueChart() {
+export function RevenueChart({ empty = false }: { empty?: boolean }) {
   const [range, setRange] = useState<RevenueRange>("overview");
-  const data = revenueRanges[range];
+  const data = empty ? revenueRanges[range].map(() => 0) : revenueRanges[range];
   const pts = data.map((v, i) => ({ x: scaleX(i, data.length), y: scaleY(v) }));
   const line = smoothPath(pts);
   const area = `${line} L ${pts[pts.length - 1].x} ${H - PAD_B} L ${pts[0].x} ${H - PAD_B} Z`;
@@ -103,17 +103,24 @@ export function RevenueChart() {
         <path d={area} fill="url(#revArea)" />
         <path d={line} fill="none" stroke="#84cc16" strokeWidth={3} strokeLinecap="round" />
 
-        {/* linha vertical do pico */}
-        <line x1={peak.x} y1={peak.y} x2={peak.x} y2={H - PAD_B} stroke="#cbd5e1" strokeWidth={1} strokeDasharray="3 3" />
-        <circle cx={peak.x} cy={peak.y} r={5} fill="#84cc16" stroke="#fff" strokeWidth={2} />
-
-        {/* balão do pico */}
-        <g>
-          <rect x={balloonCX - BALLOON_HW} y={balloonY} width={BALLOON_HW * 2} height={22} rx={11} fill="#dcfce7" />
-          <text x={balloonCX} y={balloonTextY} textAnchor="middle" className="fill-emerald-700" fontSize={11} fontWeight={600}>
-            R$ {(data[peakIdx] * 1000).toLocaleString("pt-BR")}
+        {/* pico + balão (só quando há dados) */}
+        {!empty && (
+          <>
+            <line x1={peak.x} y1={peak.y} x2={peak.x} y2={H - PAD_B} stroke="#cbd5e1" strokeWidth={1} strokeDasharray="3 3" />
+            <circle cx={peak.x} cy={peak.y} r={5} fill="#84cc16" stroke="#fff" strokeWidth={2} />
+            <g>
+              <rect x={balloonCX - BALLOON_HW} y={balloonY} width={BALLOON_HW * 2} height={22} rx={11} fill="#dcfce7" />
+              <text x={balloonCX} y={balloonTextY} textAnchor="middle" className="fill-emerald-700" fontSize={11} fontWeight={600}>
+                R$ {(data[peakIdx] * 1000).toLocaleString("pt-BR")}
+              </text>
+            </g>
+          </>
+        )}
+        {empty && (
+          <text x={W / 2} y={H / 2} textAnchor="middle" className="fill-slate-300" fontSize={13} fontWeight={500}>
+            Sem receita registrada ainda
           </text>
-        </g>
+        )}
 
         {/* x labels */}
         {LABELS.map((l, i) => (

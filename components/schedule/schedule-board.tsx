@@ -31,8 +31,8 @@ function startOfWeek(d: Date) {
 type View = "day" | "week" | "month";
 type ColorOf = (name: string) => string;
 
-export function ScheduleBoard() {
-  const [appts, setAppts] = useState<Appt[]>(() => seedAppointments());
+export function ScheduleBoard({ demo = true }: { demo?: boolean }) {
+  const [appts, setAppts] = useState<Appt[]>(() => (demo ? seedAppointments() : []));
   const [docs, setDocs] = useState<Doctor[]>(seedDoctors);
   const [procs, setProcs] = useState<Procedure[]>(seedProcedures);
   const [extraPatients, setExtraPatients] = useState<Patient[]>([]);
