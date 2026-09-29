@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { ExternalLink, Pencil, Plus } from "lucide-react";
 import { getCurrentOrg } from "@/lib/data/org";
 import { listFlows } from "@/lib/data/flows";
+import { seedTemplateFlows } from "@/lib/actions/flows";
+import { isSupabaseConfigured } from "@/lib/env";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,7 +14,14 @@ export const dynamic = "force-dynamic";
 export default async function FlowsPage() {
   const org = await getCurrentOrg();
   if (!org) redirect("/login");
-  const flows = await listFlows(org.id);
+  let flows = await listFlows(org.id);
+  // Conta nova (real) recebe os modelos de funil da Cliva na primeira visita.
+  if (isSupabaseConfigured && flows.length === 0) {
+    try {
+      const n = await seedTemplateFlows(org.id);
+      if (n > 0) flows = await listFlows(org.id);
+    } catch { /* segue sem modelos se algo falhar */ }
+  }
 
   return (
     <div>

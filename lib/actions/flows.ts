@@ -140,3 +140,61 @@ export async function createFlow(input: {
   revalidatePath("/flows");
   return { ok: true, id: flow.id };
 }
+
+// Modelos de funil prontos entregues a toda conta nova.
+const TEMPLATE_SLUGS = [
+  "harmonizacao-facial-clinica-demo",
+  "rinomodelacao-clinica-demo",
+  "botox-full-face-clinica-demo",
+  "roleta-clinica-demo",
+];
+
+const TEMPLATE_NAMES: Record<string, string> = {
+  "harmonizacao-facial-clinica-demo": "Harmonização Facial — Avaliação",
+  "rinomodelacao-clinica-demo": "Rinomodelação — Avaliação",
+  "botox-full-face-clinica-demo": "Botox Full Face — Avaliação",
+  "roleta-clinica-demo": "Brinde — Roleta",
+};
+
+function slugifyBase(v: string) {
+  return v.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+// Semeia os modelos de funil da Cliva na organização (uma vez, quando vazia).
+export async function seedTemplateFlows(orgId: string): Promise<number> {
+  if (!isSupabaseConfigured) return 0;
+  const { demoFlows } = await import("@/lib/demo-data");
+  const supabase = await createClient();
+  let created = 0;
+
+  for (const slug of TEMPLATE_SLUGS) {
+    const tpl = demoFlows.find((f) => f.slug === slug);
+    if (!tpl) continue;
+    const name = TEMPLATE_NAMES[slug] ?? tpl.name;
+    const newSlug = `${slugifyBase(name)}-${Math.random().toString(36).slice(2, 7)}`;
+
+    const { data: flow, error } = await supabase
+      .from("flows")
+      .insert({
+        organization_id: orgId,
+        name,
+        slug: newSlug,
+        procedure: tpl.procedure ?? null,
+        description: tpl.description ?? null,
+        status: "published",
+        whatsapp_number: null,
+        final_message: tpl.final_message ?? null,
+        settings: {},
+      })
+      .select("id")
+      .single();
+    if (error || !flow) continue;
+
+    const rows = serializeSteps((tpl.steps ?? []).map((s) => ({ ...s, flow_id: flow.id })));
+    if (rows.length > 0) await supabase.from("flow_steps").insert(rows);
+    created += 1;
+  }
+
+  return created;
+}
