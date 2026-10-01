@@ -4,6 +4,9 @@ import { ExternalLink, Pencil, Plus } from "lucide-react";
 import { getCurrentOrg } from "@/lib/data/org";
 import { listFlows } from "@/lib/data/flows";
 import { seedTemplateFlows } from "@/lib/actions/flows";
+import { getDashboardData } from "@/lib/data/dashboard";
+import { getLeadInsights } from "@/lib/data/lead-insights";
+import { FunnelInsights } from "@/components/dashboard/funnel-insights";
 import { isSupabaseConfigured } from "@/lib/env";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +25,10 @@ export default async function FlowsPage() {
       if (n > 0) flows = await listFlows(org.id);
     } catch { /* segue sem modelos se algo falhar */ }
   }
+
+  // Dados de desempenho dos funis (eventos + leads capturados).
+  const funnelData = await getDashboardData(org.id);
+  const insights = await getLeadInsights(org.id);
 
   return (
     <div>
@@ -72,6 +79,11 @@ export default async function FlowsPage() {
             </CardContent>
           </Card>
         )}
+      </div>
+
+      {/* Desempenho dos funis (dados reais) */}
+      <div className="mt-10">
+        <FunnelInsights data={funnelData} insights={insights} />
       </div>
     </div>
   );

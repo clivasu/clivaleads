@@ -17,10 +17,7 @@ import {
   type KpiCard,
 } from "@/lib/demo-dashboard";
 import { isSupabaseConfigured } from "@/lib/env";
-import { getNavInfo, getCurrentOrg } from "@/lib/data/org";
-import { getDashboardData } from "@/lib/data/dashboard";
-import { getLeadInsights } from "@/lib/data/lead-insights";
-import { FunnelInsights } from "@/components/dashboard/funnel-insights";
+import { getNavInfo } from "@/lib/data/org";
 
 export const dynamic = "force-dynamic";
 
@@ -79,11 +76,6 @@ export default async function DashboardPage() {
   const todayAppointments = demo ? demoAppointments : [];
   const recentPatients = demo ? demoPatients : [];
 
-  // Dados reais dos funis (tabela de eventos + leads capturados).
-  const org = await getCurrentOrg();
-  const funnelData = org ? await getDashboardData(org.id) : null;
-  const insights = org ? await getLeadInsights(org.id) : null;
-
   return (
     <div className="space-y-6">
       {/* Greeting */}
@@ -106,9 +98,6 @@ export default async function DashboardPage() {
           </span>
         </div>
       </div>
-
-      {/* Desempenho dos funis (dados reais) */}
-      {funnelData && insights && <FunnelInsights data={funnelData} insights={insights} />}
 
       {/* KPI cards (clínica) */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
