@@ -1638,14 +1638,6 @@ function SettingsPanel({ s, setS, slug }: { s: FunnelSettings; setS: (p: Partial
           </div>
         </Section>
 
-        <Section title="Notificações">
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="E-mail de notificação"><input className={inputCls} value={s.notifyEmail} onChange={(e) => setS({ notifyEmail: e.target.value })} placeholder="voce@clinica.com" /></Field>
-            <Field label="WhatsApp de notificação"><input className={inputCls} value={s.notifyWhatsapp} onChange={(e) => setS({ notifyWhatsapp: e.target.value })} placeholder="5561..." /></Field>
-          </div>
-          <SwitchRow label="Notificar a cada novo lead" on={s.notifyOnLead} onChange={(v) => setS({ notifyOnLead: v })} />
-        </Section>
-
         <Section title="Privacidade (LGPD)">
           <Field label="Texto de consentimento"><textarea rows={2} className={inputCls} value={s.consentText} onChange={(e) => setS({ consentText: e.target.value })} /></Field>
           <Field label="URL da política de privacidade"><input className={inputCls} value={s.privacyUrl} onChange={(e) => setS({ privacyUrl: e.target.value })} placeholder="https://..." /></Field>

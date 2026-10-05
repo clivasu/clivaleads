@@ -378,14 +378,14 @@ export function FlowRunner({
       </main>
 
       {showFooterContinue && (
-        <footer className="pt-6">
+        <footer className="cta-dock mt-4">
           <button
             onClick={() => {
               // No último bloco, o "Continuar" é o botão final: registra a conversão.
               if (index >= mainLast) persistSession(answers, contact, true);
               else advance();
             }}
-            className="brand-btn flex w-full items-center justify-center gap-2 rounded-xl py-4 text-base font-semibold shadow-sm transition-transform active:scale-[0.99]"
+            className="brand-btn flex w-full items-center justify-center gap-2 rounded-xl py-4 text-base font-semibold shadow-lg transition-transform active:scale-[0.99]"
           >
             Continuar <ArrowRight className="h-4 w-4" />
           </button>
@@ -413,13 +413,15 @@ function StepTitle({ title, subtitle, center }: { title?: string; subtitle?: str
 
 function PrimaryButton({ children, onClick, disabled }: { children: React.ReactNode; onClick: () => void; disabled?: boolean }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="brand-btn mt-6 flex w-full items-center justify-center gap-2 rounded-xl py-4 text-base font-semibold shadow-sm transition-transform active:scale-[0.99] disabled:opacity-40"
-    >
-      {children}
-    </button>
+    <div className="cta-dock mt-4">
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        className="brand-btn flex w-full items-center justify-center gap-2 rounded-xl py-4 text-base font-semibold shadow-lg transition-transform active:scale-[0.99] disabled:opacity-40"
+      >
+        {children}
+      </button>
+    </div>
   );
 }
 
@@ -1396,16 +1398,18 @@ function WhatsappStep({
         <ShieldCheck className="h-4 w-4" /> Atendimento humano e sem compromisso
       </div>
       <div className="mb-6 rounded-xl bg-slate-50 p-4 text-left text-sm text-slate-500">{message}</div>
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={onClick}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-4 text-base font-semibold text-white shadow-sm transition-transform hover:bg-emerald-600 active:scale-[0.99]"
-      >
-        <WhatsAppGlyph className="h-5 w-5" />
-        {c.button_label ?? "Falar no WhatsApp"}
-      </a>
+      <div className="cta-dock">
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={onClick}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-4 text-base font-semibold text-white shadow-lg transition-transform hover:bg-emerald-600 active:scale-[0.99]"
+        >
+          <WhatsAppGlyph className="h-5 w-5" />
+          {c.button_label ?? "Falar no WhatsApp"}
+        </a>
+      </div>
     </div>
   );
 }

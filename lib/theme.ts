@@ -48,6 +48,7 @@ export function themeVars(
       : t.primaryColor,
     ["--btn-fg" as string]: soft ? t.primaryColor : "#fff",
     ["--btn-radius" as string]: `${t.buttonRadius}px`,
+    ["--page-bg" as string]: t.backgroundColor,
     background: t.backgroundColor,
     color: t.textColor,
     fontFamily: FONT_STACK[t.fontFamily],

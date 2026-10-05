@@ -198,3 +198,44 @@ export async function seedTemplateFlows(orgId: string): Promise<number> {
 
   return created;
 }
+
+// Cria um funil a partir de um modelo por especialidade (galeria do "Novo funil").
+export async function createFlowFromTemplate(key: string): Promise<ActionResult> {
+  const { getSpecialty, buildSpecialtySteps, specialtyFlows } = await import("@/lib/specialty-templates");
+  const spec = getSpecialty(key);
+  if (!spec) return { ok: false, error: "Modelo não encontrado." };
+
+  // Modo demo: abre o próprio modelo no builder (nada é persistido).
+  if (!isSupabaseConfigured) {
+    return { ok: true, id: specialtyFlows.find((f) => f.slug === `modelo-${key}`)?.id };
+  }
+
+  const org = await getCurrentOrg();
+  if (!org) return { ok: false, error: "Nenhuma organização encontrada. Faça login." };
+
+  const supabase = await createClient();
+  const { data: flow, error } = await supabase
+    .from("flows")
+    .insert({
+      organization_id: org.id,
+      name: spec.name,
+      slug: `${slugifyBase(spec.specialty)}-${Math.random().toString(36).slice(2, 7)}`,
+      procedure: spec.procedure,
+      description: spec.description,
+      cover_image_url: `/templates/${spec.key}/cover.webp`,
+      status: "draft",
+      whatsapp_number: org.whatsapp_number ?? null,
+      final_message: spec.final_message,
+      settings: {},
+    })
+    .select("id")
+    .single();
+  if (error || !flow) return { ok: false, error: error?.message ?? "Falha ao criar." };
+
+  const rows = serializeSteps(buildSpecialtySteps(spec, flow.id));
+  const { error: insErr } = await supabase.from("flow_steps").insert(rows);
+  if (insErr) return { ok: false, error: insErr.message };
+
+  revalidatePath("/flows");
+  return { ok: true, id: flow.id };
+}

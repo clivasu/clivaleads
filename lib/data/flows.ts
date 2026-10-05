@@ -1,7 +1,11 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/env";
-import { demoFlows, getDemoFlowBySlug } from "@/lib/demo-data";
+import { demoFlows, getDemoFlowBySlug as demoBySlug } from "@/lib/demo-data";
+import { specialtyFlows } from "@/lib/specialty-templates";
+
+// Demo: modelos por especialidade também abrem no builder e no link público.
+const getDemoFlowBySlug = (slug: string) => demoBySlug(slug) ?? specialtyFlows.find((f) => f.slug === slug) ?? null;
 import type { Flow, FlowStep, PublicFlow } from "@/lib/types";
 
 // Reidrata a árvore: extrai os blocos aninhados guardados em config.__children
@@ -35,7 +39,7 @@ export async function listFlows(orgId: string): Promise<Flow[]> {
 // Busca um funil por id, com steps (para o builder). Demo fallback.
 export async function getFlowById(id: string): Promise<PublicFlow | null> {
   if (!isSupabaseConfigured) {
-    return demoFlows.find((f) => f.id === id) ?? null;
+    return [...demoFlows, ...specialtyFlows].find((f) => f.id === id) ?? null;
   }
   const supabase = await createClient();
   const { data: flow } = await supabase

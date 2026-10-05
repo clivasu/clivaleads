@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X, Plus, Trash2, Settings2 } from "lucide-react";
-import type { Appt, Doctor, Procedure, Status } from "@/lib/demo-schedule";
-import { patients, STATUS_META, DAY_START, DAY_END, fmtHour, PROC_COLORS } from "@/lib/demo-schedule";
+import type { Appt, Doctor, Patient, Procedure, Status } from "@/lib/demo-schedule";
+import { patients as demoPatients, STATUS_META, DAY_START, DAY_END, fmtHour, PROC_COLORS } from "@/lib/demo-schedule";
 
 export interface ApptDraft {
   id?: string;
@@ -23,9 +23,10 @@ const slots: number[] = [];
 for (let h = DAY_START; h < DAY_END; h += 0.5) slots.push(h);
 
 export function AppointmentModal({
-  initial, doctors, procedures, onClose, onSave, onDelete,
+  initial, doctors, procedures, patients = demoPatients, onClose, onSave, onDelete,
   onAddDoctor, onDeleteDoctor, onAddProcedure, onDeleteProcedure,
 }: {
+  patients?: Patient[];
   initial: Partial<ApptDraft> & { id?: string };
   doctors: Doctor[];
   procedures: Procedure[];
@@ -50,8 +51,17 @@ export function AppointmentModal({
   const set = (p: Partial<ApptDraft>) => setD((prev) => ({ ...prev, ...p }));
   const isEdit = Boolean(initial.id);
 
-  const [manageDocs, setManageDocs] = useState(false);
-  const [manageProcs, setManageProcs] = useState(false);
+  // Sem profissionais/procedimentos cadastrados: já abre o cadastro.
+  const [manageDocs, setManageDocs] = useState(doctors.length === 0);
+  const [manageProcs, setManageProcs] = useState(procedures.length === 0);
+  // Seleciona automaticamente o que acabou de ser cadastrado.
+  useEffect(() => {
+    if (doctors.length && !doctors.some((x) => x.id === d.doctorId)) setD((p) => ({ ...p, doctorId: doctors[doctors.length - 1].id }));
+  }, [doctors, d.doctorId]);
+  useEffect(() => {
+    if (procedures.length && !procedures.some((x) => x.name === d.procedure)) setD((p) => ({ ...p, procedure: procedures[procedures.length - 1].name }));
+  }, [procedures, d.procedure]);
+  const ready = Boolean(d.patientName.trim()) && doctors.some((x) => x.id === d.doctorId) && procedures.some((x) => x.name === d.procedure);
   const [newDoc, setNewDoc] = useState("");
   const [newProc, setNewProc] = useState("");
   const [newProcColor, setNewProcColor] = useState(PROC_COLORS[0]);
@@ -194,8 +204,8 @@ export function AppointmentModal({
           <div className="flex gap-2">
             <button onClick={onClose} className="rounded-lg border px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancelar</button>
             <button
-              onClick={() => d.patientName.trim() && onSave(d)}
-              disabled={!d.patientName.trim()}
+              onClick={() => ready && onSave(d)}
+              disabled={!ready}
               className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-40"
             >
               {isEdit ? "Salvar" : "Agendar"}

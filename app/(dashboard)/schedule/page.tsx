@@ -1,9 +1,11 @@
 import { ScheduleBoard } from "@/components/schedule/schedule-board";
 import { isSupabaseConfigured } from "@/lib/env";
+import { getCurrentOrg } from "@/lib/data/org";
 
 export const dynamic = "force-dynamic";
 
-export default function SchedulePage() {
+export default async function SchedulePage() {
+  const org = await getCurrentOrg();
   return (
     <div className="space-y-5">
       <div>
@@ -11,7 +13,7 @@ export default function SchedulePage() {
         <p className="text-sm text-slate-500">Agendamentos por profissional.</p>
       </div>
       {/* Conta real começa com a agenda vazia; modo demo mostra exemplos. */}
-      <ScheduleBoard demo={!isSupabaseConfigured} />
+      <ScheduleBoard demo={!isSupabaseConfigured} storageKey={org?.id} />
     </div>
   );
 }

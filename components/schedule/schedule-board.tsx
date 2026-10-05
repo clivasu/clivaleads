@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Calendar as CalIcon, ArrowLeft2, ArrowRight2, Filter, ArrowDown2, Add,
 } from "iconsax-reactjs";
-import { Bell, X, Repeat, MoreVertical, Pencil, Trash2, CalendarClock } from "lucide-react";
+import { Bell, X, Repeat, MoreVertical, Pencil, Trash2, CalendarClock, Plus, UserPlus, Stethoscope } from "lucide-react";
 import {
   doctors as seedDoctors, patients as seedPatients, PROCEDURES as seedProcedures,
   STATUS_META, DAY_START, DAY_END, fmtHour, iso, addDays, seedAppointments,
@@ -31,11 +31,34 @@ function startOfWeek(d: Date) {
 type View = "day" | "week" | "month";
 type ColorOf = (name: string) => string;
 
-export function ScheduleBoard({ demo = true }: { demo?: boolean }) {
+export function ScheduleBoard({ demo = true, storageKey }: { demo?: boolean; storageKey?: string }) {
+  // Conta real começa em branco: só aparece o que a clínica cadastrar.
   const [appts, setAppts] = useState<Appt[]>(() => (demo ? seedAppointments() : []));
-  const [docs, setDocs] = useState<Doctor[]>(seedDoctors);
-  const [procs, setProcs] = useState<Procedure[]>(seedProcedures);
+  const [docs, setDocs] = useState<Doctor[]>(demo ? seedDoctors : []);
+  const [procs, setProcs] = useState<Procedure[]>(demo ? seedProcedures : []);
   const [extraPatients, setExtraPatients] = useState<Patient[]>([]);
+
+  // Guarda a agenda da clínica neste navegador (por organização).
+  const loadedRef = useRef(false);
+  const key = !demo && storageKey ? `cliva_agenda_${storageKey}` : null;
+  useEffect(() => {
+    if (!key) return;
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (Array.isArray(d.docs)) setDocs(d.docs);
+        if (Array.isArray(d.procs)) setProcs(d.procs);
+        if (Array.isArray(d.appts)) setAppts(d.appts);
+        if (Array.isArray(d.patients)) setExtraPatients(d.patients);
+      }
+    } catch { /* noop */ }
+    loadedRef.current = true;
+  }, [key]);
+  useEffect(() => {
+    if (!key || !loadedRef.current) return;
+    try { localStorage.setItem(key, JSON.stringify({ docs, procs, appts, patients: extraPatients })); } catch { /* noop */ }
+  }, [key, docs, procs, appts, extraPatients]);
   const [view, setView] = useState<View>("day");
   const [cursor, setCursor] = useState(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
   const [docFilter, setDocFilter] = useState<string>("all");
@@ -56,7 +79,7 @@ export function ScheduleBoard({ demo = true }: { demo?: boolean }) {
   const procColorOf: ColorOf = (name) => procs.find((p) => p.name === name)?.color ?? "#64748b";
 
   const patientOf = (id: string): Patient | undefined =>
-    findSeedPatient(id) ?? extraPatients.find((p) => p.id === id);
+    (demo ? findSeedPatient(id) : undefined) ?? extraPatients.find((p) => p.id === id);
 
   const visibleDoctors = docFilter === "all" ? docs : docs.filter((d) => d.id === docFilter);
 
@@ -67,7 +90,7 @@ export function ScheduleBoard({ demo = true }: { demo?: boolean }) {
 
   // ------- CRUD agendamentos -------
   const saveDraft = (d: ApptDraft) => {
-    let patient = seedPatients.find((p) => p.name === d.patientName) ?? extraPatients.find((p) => p.name === d.patientName);
+    let patient = (demo ? seedPatients.find((p) => p.name === d.patientName) : undefined) ?? extraPatients.find((p) => p.name === d.patientName);
     if (!patient) {
       patient = { id: "np" + Date.now(), name: d.patientName, phone: "55", age: 30, gender: "F", since: iso(new Date()), tags: ["Novo"], notes: "", history: [] };
       setExtraPatients((p) => [...p, patient!]);
@@ -233,7 +256,9 @@ export function ScheduleBoard({ demo = true }: { demo?: boolean }) {
             ))}
           </div>
 
-          {view === "month" ? (
+          {docs.length === 0 ? (
+            <AgendaSetup procedures={procs} onAddDoctor={addDoctor} onAddProcedure={addProcedure} onDeleteProcedure={deleteProcedure} />
+          ) : view === "month" ? (
             <MonthGrid cursor={cursor} appts={filtered} procColorOf={procColorOf} onOpenDay={(d) => { setCursor(d); setView("day"); }} onOpenAppt={setSelectedId} />
           ) : (
             <TimeGrid
@@ -248,7 +273,7 @@ export function ScheduleBoard({ demo = true }: { demo?: boolean }) {
               onMove={moveAppt}
               onCreate={(colKey, time) => setModal(view === "day"
                 ? { doctorId: colKey, date: iso(cursor), start: time }
-                : { doctorId: docFilter === "all" ? docs[0].id : docFilter, date: colKey, start: time })}
+                : { doctorId: docFilter === "all" ? docs[0]?.id : docFilter, date: colKey, start: time })}
             />
           )}
         </>
@@ -271,6 +296,7 @@ export function ScheduleBoard({ demo = true }: { demo?: boolean }) {
           initial={modal}
           doctors={docs}
           procedures={procs}
+          patients={demo ? seedPatients : extraPatients}
           onClose={() => setModal(null)}
           onSave={saveDraft}
           onDelete={modal.id ? () => deleteAppt(modal.id!) : undefined}
@@ -555,6 +581,67 @@ function History({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ============================ PRIMEIROS PASSOS (agenda vazia) ============================ */
+
+function AgendaSetup({
+  procedures, onAddDoctor, onAddProcedure, onDeleteProcedure,
+}: {
+  procedures: Procedure[];
+  onAddDoctor: (name: string) => void;
+  onAddProcedure: (name: string, color: string) => void;
+  onDeleteProcedure: (name: string) => void;
+}) {
+  const [doc, setDoc] = useState("");
+  const [proc, setProc] = useState("");
+  const [color, setColor] = useState(PROC_COLORS[0]);
+  const addDoc = () => { if (doc.trim()) { onAddDoctor(doc.trim()); setDoc(""); } };
+  const addProc = () => {
+    if (!proc.trim()) return;
+    onAddProcedure(proc.trim(), color);
+    setProc("");
+    setColor(PROC_COLORS[(PROC_COLORS.indexOf(color) + 1) % PROC_COLORS.length]);
+  };
+  const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none";
+  return (
+    <div className="px-6 pb-10 pt-2">
+      <div className="mx-auto max-w-3xl rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/40 p-6 text-center sm:p-8">
+        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm"><Stethoscope className="h-6 w-6 text-emerald-600" /></span>
+        <h3 className="mt-4 text-lg font-semibold text-slate-900">Monte a agenda da sua clínica</h3>
+        <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">Cadastre quem atende e os procedimentos que vocês fazem. Depois é só clicar em um horário para agendar.</p>
+        <div className="mt-6 grid gap-4 text-left sm:grid-cols-2">
+          <div className="rounded-xl bg-white p-4 shadow-sm">
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-800"><UserPlus className="h-4 w-4 text-emerald-600" /> 1. Profissional</p>
+            <p className="mt-0.5 text-xs text-slate-400">Cada profissional vira uma coluna da agenda.</p>
+            <div className="mt-3 flex gap-2">
+              <input className={input} value={doc} onChange={(e) => setDoc(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addDoc()} placeholder="Ex.: Dra. Ana Souza" />
+              <button onClick={addDoc} className="shrink-0 rounded-lg bg-emerald-500 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-600">Adicionar</button>
+            </div>
+          </div>
+          <div className="rounded-xl bg-white p-4 shadow-sm">
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-800"><Plus className="h-4 w-4 text-emerald-600" /> 2. Procedimentos</p>
+            <p className="mt-0.5 text-xs text-slate-400">Cada um ganha uma cor no calendário.</p>
+            <div className="mt-3 flex gap-2">
+              <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-9 w-9 shrink-0 cursor-pointer rounded-lg border border-slate-200 bg-white p-0.5" aria-label="Cor do procedimento" />
+              <input className={input} value={proc} onChange={(e) => setProc(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addProc()} placeholder="Ex.: Avaliação" />
+              <button onClick={addProc} className="shrink-0 rounded-lg border border-emerald-200 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50">+</button>
+            </div>
+            {procedures.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {procedures.map((p) => (
+                  <span key={p.name} className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600">
+                    <span className="h-2 w-2 rounded-full" style={{ background: p.color }} /> {p.name}
+                    <button onClick={() => onDeleteProcedure(p.name)} className="text-slate-300 hover:text-rose-500" aria-label={`Remover ${p.name}`}><X className="h-3 w-3" /></button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

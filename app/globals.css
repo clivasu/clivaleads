@@ -111,3 +111,16 @@ html.lenis, html.lenis body { height: auto; }
 /* borda em degradê girando (plano em destaque) */
 @property --a { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
 @keyframes spin-border { to { --a: 360deg; } }
+
+/* ===================== Funil: botão principal fixo no rodapé ===================== */
+/* Fica preso à base da tela enquanto o conteúdo rola por baixo, com um degradê
+   na cor de fundo do funil. Usado pelo "Continuar" e pelos botões das etapas. */
+.cta-dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  margin-left: -1.25rem;
+  margin-right: -1.25rem;
+  padding: 0.75rem 1.25rem max(0.9rem, env(safe-area-inset-bottom));
+  background: linear-gradient(to top, var(--page-bg, #fff) 72%, transparent);
+}

@@ -3,12 +3,13 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2, Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { createFlow } from "@/lib/actions/flows";
+import { createFlow, createFlowFromTemplate } from "@/lib/actions/flows";
+import { SPECIALTIES } from "@/lib/specialty-templates";
 
 function slugify(v: string) {
   return v
@@ -27,6 +28,22 @@ export function NewFlowForm({ configured }: { configured: boolean }) {
   const [slug, setSlug] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [usingTpl, setUsingTpl] = useState<string | null>(null);
+  const [tplError, setTplError] = useState<string | null>(null);
+
+  function applyTemplate(key: string) {
+    setTplError(null);
+    setUsingTpl(key);
+    startTransition(async () => {
+      const res = await createFlowFromTemplate(key);
+      if (res.ok && res.id) {
+        router.push(`/flows/${res.id}/builder`);
+      } else {
+        setTplError(res.error ?? "Falha ao criar o funil.");
+        setUsingTpl(null);
+      }
+    });
+  }
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -47,13 +64,47 @@ export function NewFlowForm({ configured }: { configured: boolean }) {
   }
 
   return (
-    <div className="mx-auto max-w-xl">
+    <div className="mx-auto max-w-5xl">
       <Link href="/flows" className="mb-6 flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900">
         <ArrowLeft className="h-4 w-4" /> Voltar
       </Link>
-      <Card>
+
+      <div className="mb-4">
+        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900">
+          <Sparkles className="h-5 w-5 text-emerald-500" /> Comece com um modelo pronto
+        </h1>
+        <p className="text-sm text-slate-500">Funis completos por especialidade, com imagens, lógica de desinteresse e captura de WhatsApp. Você edita tudo no construtor.</p>
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {SPECIALTIES.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => applyTemplate(t.key)}
+            disabled={pending}
+            className="group overflow-hidden rounded-2xl border border-slate-200 bg-white text-left transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-60"
+          >
+            <div className="relative h-36 overflow-hidden bg-slate-100">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/templates/${t.key}/cover.webp`} alt="" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+              <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold text-slate-700">{t.specialty}</span>
+              {usingTpl === t.key && (
+                <div className="absolute inset-0 flex items-center justify-center bg-white/70"><Loader2 className="h-6 w-6 animate-spin text-emerald-600" /></div>
+              )}
+            </div>
+            <div className="p-4">
+              <p className="font-semibold text-slate-900">{t.name}</p>
+              <p className="mt-1 line-clamp-2 text-xs text-slate-500">{t.description}</p>
+              <span className="mt-3 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white">Usar este modelo</span>
+            </div>
+          </button>
+        ))}
+      </div>
+      {tplError && <p className="mt-3 text-sm text-destructive">{tplError}</p>}
+
+      <Card className="mx-auto mt-10 max-w-xl">
         <CardHeader>
-          <CardTitle>Novo funil</CardTitle>
+          <CardTitle>Ou comece do zero</CardTitle>
         </CardHeader>
         <CardContent>
           <form className="flex flex-col gap-4" onSubmit={submit}>

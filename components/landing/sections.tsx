@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { FlowRunner } from "@/components/flow-runner/flow-runner";
 import { demoFlows } from "@/lib/demo-data";
+import { SPECIALTIES, specialtyFlows } from "@/lib/specialty-templates";
 import { Reveal, SpotlightCard } from "@/components/landing/motion";
 import { cn } from "@/lib/utils";
 
@@ -117,9 +118,13 @@ const MODEL_META: Record<string, { tag: string; grad: string }> = {
   "advertorial-clinica-demo": { tag: "Advertorial", grad: "from-slate-300 via-zinc-300 to-stone-300" },
 };
 
+// Modelos por especialidade primeiro (com foto), depois os de estética.
+const MODEL_FLOWS = [...specialtyFlows, ...demoFlows];
+const SPECIALTY_TAG: Record<string, string> = Object.fromEntries(SPECIALTIES.map((s) => [`modelo-${s.key}`, s.specialty]));
+
 export function Models() {
   const [open, setOpen] = useState<string | null>(null);
-  const flow = demoFlows.find((f) => f.slug === open);
+  const flow = MODEL_FLOWS.find((f) => f.slug === open);
 
   useEffect(() => {
     if (!open) return;
@@ -132,12 +137,16 @@ export function Models() {
   return (
     <>
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {demoFlows.map((f, i) => {
-          const m = MODEL_META[f.slug] ?? { tag: "Modelo", grad: "from-emerald-300 to-teal-300" };
+        {MODEL_FLOWS.map((f, i) => {
+          const m = MODEL_META[f.slug] ?? { tag: SPECIALTY_TAG[f.slug] ?? "Modelo", grad: "from-emerald-300 to-teal-300" };
           return (
             <Reveal key={f.id} delay={(i % 3) * 0.08}>
               <button onClick={() => setOpen(f.slug)} className="group block w-full overflow-hidden rounded-3xl border border-slate-200 bg-white text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-emerald-900/10">
                 <div className={cn("relative h-44 overflow-hidden bg-gradient-to-br", m.grad)}>
+                  {f.cover_image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={f.cover_image_url} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                  ) : (
                   <div className="absolute inset-x-10 bottom-0 top-8 rounded-t-[1.4rem] border-4 border-b-0 border-slate-900 bg-white p-3 transition-transform duration-500 group-hover:-translate-y-2">
                     <div className="h-1 rounded-full bg-slate-100"><div className="h-1 w-1/2 rounded-full bg-emerald-500" /></div>
                     <div className="mt-3 h-2.5 w-4/5 rounded bg-slate-800" />
@@ -146,6 +155,7 @@ export function Models() {
                       {[0, 1].map((k) => <div key={k} className="h-6 rounded-lg border border-slate-200" />)}
                     </div>
                   </div>
+                  )}
                   <span className="absolute left-4 top-4 rounded-full bg-white/85 px-2.5 py-1 text-[11px] font-bold text-slate-700 backdrop-blur">{m.tag}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3 p-5">
