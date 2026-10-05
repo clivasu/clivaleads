@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { ExternalLink, Check, Plus, Trash2, ArrowUp, ArrowDown, Copy, BarChart3, Image as ImageIcon, Square, Type, Palette, AlignLeft, ChevronDown } from "lucide-react";
+import { ExternalLink, Check, Plus, Trash2, ArrowUp, ArrowDown, Copy, BarChart3, Image as ImageIcon, Square, Type, Palette, AlignLeft, ChevronDown, Move, ZoomIn, ZoomOut } from "lucide-react";
 import type { BioConfig, BioPage, BioTemplateId, BioBlock, BioLinkIcon, BioSocialType } from "@/lib/types";
 import { BIO_TEMPLATES, defaultBioConfig } from "@/lib/bio-templates";
 import { BIO_FONTS } from "@/lib/bio-fonts";
-import { BioRenderer } from "@/components/bio/bio-renderer";
+import { BioRenderer, coverImgStyle } from "@/components/bio/bio-renderer";
 import { UploadButton } from "@/components/bio/upload-button";
 import { saveBio } from "@/lib/actions/bio";
 import { cn } from "@/lib/utils";
@@ -145,12 +145,23 @@ export function BioEditor({
           <Section title="Perfil">
             <Field label="Foto de capa">
               <div className="flex gap-2">
-                <input className={input} value={config.cover_url ?? ""} onChange={(e) => set({ cover_url: e.target.value })} placeholder="Cole uma URL ou envie um arquivo" />
-                <UploadButton onUploaded={(url) => set({ cover_url: url })} />
+                <input
+                  className={input}
+                  value={config.cover_url?.startsWith("data:") ? "" : config.cover_url ?? ""}
+                  onChange={(e) => set({ cover_url: e.target.value, cover_x: 50, cover_y: 50, cover_zoom: 1 })}
+                  placeholder={config.cover_url?.startsWith("data:") ? "Imagem enviada do computador ✓" : "Cole uma URL ou envie um arquivo"}
+                />
+                <UploadButton onUploaded={(url) => set({ cover_url: url, cover_x: 50, cover_y: 50, cover_zoom: 1 })} />
               </div>
               {config.cover_url && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={config.cover_url} alt="" className={cn("mt-2 border object-cover", (config.cover_shape ?? "cover") === "circle" ? "h-16 w-16 rounded-full" : "h-16 w-full rounded-lg")} />
+                <CoverAdjuster
+                  url={config.cover_url}
+                  circle={(config.cover_shape ?? "cover") === "circle"}
+                  x={config.cover_x ?? 50}
+                  y={config.cover_y ?? 50}
+                  zoom={config.cover_zoom ?? 1}
+                  onChange={set}
+                />
               )}
             </Field>
             <div className="mb-2.5 grid grid-cols-2 gap-2">
@@ -397,6 +408,99 @@ function FontPicker({ value, onChange }: { value: string; onChange: (v: string) 
           <span className="mt-0.5 block text-[10px] text-slate-500">{f.label}</span>
         </button>
       ))}
+    </div>
+  );
+}
+
+// Ajuste da foto de capa: arraste para enquadrar e use o zoom. O quadro tem a
+// mesma proporção da capa no celular, então o que aparece aqui é o que sai na bio.
+function CoverAdjuster({
+  url, circle, x, y, zoom, onChange,
+}: {
+  url: string;
+  circle: boolean;
+  x: number;
+  y: number;
+  zoom: number;
+  onChange: (patch: Partial<BioConfig>) => void;
+}) {
+  const frame = useRef<HTMLDivElement>(null);
+  const natural = useRef<{ w: number; h: number } | null>(null);
+  const drag = useRef<{ px: number; py: number; x: number; y: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const clamp = (v: number) => Math.max(0, Math.min(100, v));
+
+  const onDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = { px: e.clientX, py: e.clientY, x, y };
+    setDragging(true);
+  };
+  const onMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    const el = frame.current;
+    if (!d || !el) return;
+    const r = el.getBoundingClientRect();
+    const n = natural.current ?? { w: r.width, h: r.height };
+    // Quanto a foto (já com zoom) sobra para além do quadro em cada eixo.
+    const s = Math.max(r.width / n.w, r.height / n.h);
+    const overX = zoom * n.w * s - r.width;
+    const overY = zoom * n.h * s - r.height;
+    const dx = e.clientX - d.px;
+    const dy = e.clientY - d.py;
+    onChange({
+      cover_x: overX > 1 ? Math.round(clamp(d.x - (dx / overX) * 100)) : d.x,
+      cover_y: overY > 1 ? Math.round(clamp(d.y - (dy / overY) * 100)) : d.y,
+    });
+  };
+  const onUp = () => { drag.current = null; setDragging(false); };
+
+  return (
+    <div className="mt-2">
+      <div
+        ref={frame}
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
+        className={cn(
+          "relative mx-auto touch-none select-none overflow-hidden border bg-slate-100",
+          dragging ? "cursor-grabbing" : "cursor-grab",
+          circle ? "h-40 w-40 rounded-full" : "w-full rounded-xl",
+        )}
+        style={circle ? undefined : { aspectRatio: "390 / 256" }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={url}
+          alt=""
+          draggable={false}
+          onLoad={(e) => { natural.current = { w: e.currentTarget.naturalWidth || 1, h: e.currentTarget.naturalHeight || 1 }; }}
+          className="pointer-events-none h-full w-full object-cover"
+          style={coverImgStyle(x, y, zoom)}
+        />
+        {dragging && !circle && (
+          <div className="pointer-events-none absolute inset-0 grid grid-cols-3 grid-rows-3">
+            {Array.from({ length: 9 }).map((_, i) => <span key={i} className="border border-white/40" />)}
+          </div>
+        )}
+        {!dragging && (
+          <span className="pointer-events-none absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-medium text-white">
+            <Move className="h-3 w-3" /> Arraste para ajustar
+          </span>
+        )}
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <button type="button" onClick={() => onChange({ cover_zoom: Math.max(1, Math.round((zoom - 0.1) * 100) / 100) })} className="rounded-md p-1 text-slate-400 hover:bg-slate-100" aria-label="Diminuir zoom">
+          <ZoomOut className="h-4 w-4" />
+        </button>
+        <input type="range" min={1} max={3} step={0.01} value={zoom} onChange={(e) => onChange({ cover_zoom: Number(e.target.value) })} className="w-full accent-emerald-500" aria-label="Zoom da foto" />
+        <button type="button" onClick={() => onChange({ cover_zoom: Math.min(3, Math.round((zoom + 0.1) * 100) / 100) })} className="rounded-md p-1 text-slate-400 hover:bg-slate-100" aria-label="Aumentar zoom">
+          <ZoomIn className="h-4 w-4" />
+        </button>
+        <button type="button" onClick={() => onChange({ cover_x: 50, cover_y: 50, cover_zoom: 1 })} className="shrink-0 rounded-lg border px-2 py-1 text-xs text-slate-600 hover:bg-slate-50">
+          Centralizar
+        </button>
+      </div>
     </div>
   );
 }

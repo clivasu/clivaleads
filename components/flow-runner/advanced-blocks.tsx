@@ -462,21 +462,34 @@ function Pulse({ x, y, color }: { x: number; y: number; color: string }) {
   );
 }
 
-function Boxes({ warning, message, accent }: { warning?: string; message?: string; accent: string }) {
+// Alerta e mensagem final só aparecem depois que a animação termina
+// (e continuam visíveis se o gráfico repetir em loop).
+function Boxes({ warning, message, accent, ready }: { warning?: string; message?: string; accent: string; ready: boolean }) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => { if (ready) setShown(true); }, [ready]);
+  if (!shown) return null;
   return (
     <>
       {warning && (
-        <div className="mt-5 rounded-2xl border border-rose-300 bg-rose-50 px-4 py-3 text-center text-sm leading-relaxed text-rose-800">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: "easeOut" }}
+          className="mt-5 rounded-2xl border border-rose-300 bg-rose-50 px-4 py-3 text-center text-sm leading-relaxed text-rose-800"
+        >
           <Rich text={warning} />
-        </div>
+        </motion.div>
       )}
       {message && (
-        <div
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: "easeOut", delay: warning ? 0.35 : 0 }}
           className="mt-4 rounded-2xl px-4 py-4 text-center text-base font-medium leading-relaxed text-slate-800"
           style={{ background: `color-mix(in srgb, ${accent} 10%, #fff)` }}
         >
           <Rich text={message} />
-        </div>
+        </motion.div>
       )}
     </>
   );
@@ -527,7 +540,7 @@ function GrowthCurve({ step }: { step: FlowStep }) {
 
   return (
     <div ref={ref}>
-      {c.title && <h1 className="mb-4 text-center text-2xl font-extrabold leading-tight tracking-tight" style={{ color: accent }}>{c.title}</h1>}
+      {c.title && <h1 className="mb-4 text-center text-2xl font-extrabold leading-tight tracking-tight" style={{ color: c.chart_title_color || accent }}>{c.title}</h1>}
       {c.subtitle && <p className="-mt-2 mb-4 text-center text-slate-500">{c.subtitle}</p>}
       {c.chart_callout && (
         <div className="mb-5 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-center text-sm leading-relaxed text-amber-900">
@@ -596,7 +609,7 @@ function GrowthCurve({ step }: { step: FlowStep }) {
         })}
       </div>
 
-      <Boxes warning={c.chart_warning} message={c.chart_message} accent={accent} />
+      <Boxes warning={c.chart_warning} message={c.chart_message} accent={accent} ready={done} />
     </div>
   );
 }
@@ -647,7 +660,7 @@ function GrowthPoints({ step }: { step: FlowStep }) {
 
   return (
     <div ref={ref}>
-      {c.title && <h1 className="mb-3 text-center text-[28px] font-extrabold leading-tight tracking-tight text-slate-900">{c.title}</h1>}
+      {c.title && <h1 className="mb-3 text-center text-[28px] font-extrabold leading-tight tracking-tight text-slate-900" style={c.chart_title_color ? { color: c.chart_title_color } : undefined}>{c.title}</h1>}
       {c.subtitle && <p className="mb-3 text-center text-slate-500">{c.subtitle}</p>}
       {c.chart_callout && (
         <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-center text-sm leading-relaxed text-amber-900">
@@ -723,7 +736,7 @@ function GrowthPoints({ step }: { step: FlowStep }) {
         ))}
       </div>
 
-      <Boxes warning={c.chart_warning} message={c.chart_message} accent={accent} />
+      <Boxes warning={c.chart_warning} message={c.chart_message} accent={accent} ready={done} />
     </div>
   );
 }

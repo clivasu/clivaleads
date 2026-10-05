@@ -20,6 +20,17 @@ const SOCIAL_ICONS: Record<BioSocialType, React.ElementType> = {
   tiktok: Music2, linkedin: Linkedin, map: MapPin, site: Globe, email: Mail,
 };
 
+// Enquadramento da foto de capa: posição (x/y em % da sobra) + zoom.
+// object-position e transform-origin no mesmo ponto = arrastar/zoom consistentes
+// em qualquer largura de tela.
+export function coverImgStyle(x = 50, y = 50, zoom = 1): React.CSSProperties {
+  return {
+    objectPosition: `${x}% ${y}%`,
+    transform: zoom !== 1 ? `scale(${zoom})` : undefined,
+    transformOrigin: `${x}% ${y}%`,
+  };
+}
+
 // Fundo da página conforme o "papel de parede" escolhido.
 function wallpaperBg(t: BioConfig["theme"]): React.CSSProperties {
   const w = t.wallpaper ?? "fill";
@@ -95,13 +106,13 @@ export function BioRenderer({
               }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={config.cover_url} alt={config.name} className="h-full w-full object-cover" />
+              <img src={config.cover_url} alt={config.name} className="h-full w-full object-cover" style={coverImgStyle(config.cover_x, config.cover_y, config.cover_zoom)} />
             </span>
           </div>
         ) : config.cover_url ? (
-          <div className="relative">
+          <div className="relative overflow-hidden">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={config.cover_url} alt={config.name} className="h-64 w-full object-cover" />
+            <img src={config.cover_url} alt={config.name} className="h-64 w-full object-cover" style={coverImgStyle(config.cover_x, config.cover_y, config.cover_zoom)} />
             {(config.cover_fade ?? 0) > 0 && (
               <div
                 className="pointer-events-none absolute inset-x-0 bottom-0"

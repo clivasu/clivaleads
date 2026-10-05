@@ -1129,7 +1129,12 @@ function ChartGrowthEditor({ c, onChange }: { c: FlowStep["config"]; onChange: (
           <ColorRow label="Início da linha" value={three[0]} onChange={(v) => setColor(0, v)} />
           <ColorRow label="Meio da linha" value={three[1]} onChange={(v) => setColor(1, v)} />
           <ColorRow label="Fim da linha" value={three[2]} onChange={(v) => setColor(2, v)} />
-          <ColorRow label="Destaque (título / Ideal)" value={c.chart_accent ?? "#e573b5"} onChange={(v) => onChange({ chart_accent: v })} />
+          <ColorRow
+            label="Cor do título"
+            value={c.chart_title_color ?? (style === "curve" ? c.chart_accent ?? "#e573b5" : "#0f172a")}
+            onChange={(v) => onChange({ chart_title_color: v })}
+          />
+          <ColorRow label="Cor de destaque (Ideal / mensagem final)" value={c.chart_accent ?? "#e573b5"} onChange={(v) => onChange({ chart_accent: v })} />
         </>
       )}
 

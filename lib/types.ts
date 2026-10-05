@@ -262,7 +262,8 @@ export interface StepConfig {
   chart_you_index?: number; // em qual ponto fica o "Você"
   chart_y_max?: number; // topo do eixo Y (estilo pontos)
   chart_colors?: string[]; // degradê da linha (início → fim)
-  chart_accent?: string; // cor de destaque (título / Ideal)
+  chart_accent?: string; // cor de destaque (marcador Ideal / mensagem final)
+  chart_title_color?: string; // cor do título do gráfico
   chart_speed?: number; // segundos da animação de desenho
   chart_live?: boolean; // mostra a análise acontecendo em tempo real
   chart_loop?: boolean; // repete a animação
@@ -406,6 +407,9 @@ export interface BioConfig {
   cover_shape?: "cover" | "circle"; // capa cheia ou avatar circular
   cover_fade?: number; // 0-100: degradê da capa fundindo no fundo do site
   cover_size?: number; // diâmetro do círculo (px) quando cover_shape = "circle"
+  cover_x?: number; // enquadramento horizontal da foto (0-100, padrão 50)
+  cover_y?: number; // enquadramento vertical da foto (0-100, padrão 50)
+  cover_zoom?: number; // zoom da foto (1-3, padrão 1)
   avatar_url?: string;
   name: string;
   tagline?: string; // frase curta
