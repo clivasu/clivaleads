@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { motion, useInView } from "framer-motion";
 import { Play, Clock, ArrowRight } from "lucide-react";
 import type { FlowStep, ShareLinks } from "@/lib/types";
@@ -370,15 +370,373 @@ export function NewsStep({ step, onNext }: { step: FlowStep; onNext: () => void 
   );
 }
 
+type Pt = { x: number; y: number };
+
+const CURVE_COLORS = ["#d23c2f", "#e8893a", "#efcb45", "#8bc34a", "#4db6a0"];
+const POINTS_COLORS = ["#c0392b", "#f0b23a", "#4caf50"];
+
+// Progresso 0→1 da animação de desenho, com velocidade e repetição opcional.
+function useDrawProgress(active: boolean, seconds: number, loop: boolean) {
+  const [p, setP] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    let raf = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const dur = Math.max(0.5, seconds) * 1000;
+    const run = () => {
+      const start = performance.now();
+      const tick = (now: number) => {
+        const t = Math.min(1, (now - start) / dur);
+        setP(t);
+        if (t < 1) raf = requestAnimationFrame(tick);
+        else if (loop) timer = setTimeout(() => { setP(0); run(); }, 2200);
+      };
+      raf = requestAnimationFrame(tick);
+    };
+    setP(0);
+    run();
+    return () => { cancelAnimationFrame(raf); if (timer) clearTimeout(timer); };
+  }, [active, seconds, loop]);
+  return p;
+}
+
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+
+function hexToRgb(h: string): number[] {
+  const s = h.replace("#", "");
+  const full = s.length === 3 ? s.split("").map((ch) => ch + ch).join("") : s;
+  const n = parseInt(full, 16);
+  return Number.isNaN(n) ? [100, 116, 139] : [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+// Cor interpolada ao longo do degradê (0 = início, 1 = fim).
+function colorAt(stops: string[], f: number): string {
+  if (stops.length === 1) return stops[0];
+  const pos = Math.max(0, Math.min(1, f)) * (stops.length - 1);
+  const i = Math.min(stops.length - 2, Math.floor(pos));
+  const t = pos - i;
+  const a = hexToRgb(stops[i]), b = hexToRgb(stops[i + 1]);
+  const m = a.map((v, k) => Math.round(v + (b[k] - v) * t));
+  return `rgb(${m[0]}, ${m[1]}, ${m[2]})`;
+}
+
+// Texto com **negrito**.
+function Rich({ text }: { text: string }) {
+  return <>{text.split("**").map((s, i) => (i % 2 === 1 ? <strong key={i}>{s}</strong> : <span key={i}>{s}</span>))}</>;
+}
+
+// Marcador que "aparece" quando a análise passa por ele.
+function popStyle(on: boolean, x: number, y: number): React.CSSProperties {
+  return {
+    opacity: on ? 1 : 0,
+    transform: on ? "scale(1)" : "scale(0.55)",
+    transformOrigin: `${x}px ${y}px`,
+    transition: "opacity .35s ease, transform .45s cubic-bezier(.34,1.56,.64,1)",
+  };
+}
+
+function LiveStatus({ p }: { p: number }) {
+  return (
+    <div className="mb-3 flex items-center justify-center gap-2 text-xs font-medium">
+      {p < 1 ? (
+        <>
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+          </span>
+          <span className="text-slate-500">Analisando suas respostas… {Math.round(p * 100)}%</span>
+        </>
+      ) : (
+        <span className="text-emerald-600">✓ Análise concluída</span>
+      )}
+    </div>
+  );
+}
+
+function Pulse({ x, y, color }: { x: number; y: number; color: string }) {
+  return (
+    <circle cx={x} cy={y} r="8" fill={color} opacity="0.4">
+      <animate attributeName="r" values="8;16;8" dur="1.8s" repeatCount="indefinite" />
+      <animate attributeName="opacity" values="0.45;0;0.45" dur="1.8s" repeatCount="indefinite" />
+    </circle>
+  );
+}
+
+function Boxes({ warning, message, accent }: { warning?: string; message?: string; accent: string }) {
+  return (
+    <>
+      {warning && (
+        <div className="mt-5 rounded-2xl border border-rose-300 bg-rose-50 px-4 py-3 text-center text-sm leading-relaxed text-rose-800">
+          <Rich text={warning} />
+        </div>
+      )}
+      {message && (
+        <div
+          className="mt-4 rounded-2xl px-4 py-4 text-center text-base font-medium leading-relaxed text-slate-800"
+          style={{ background: `color-mix(in srgb, ${accent} 10%, #fff)` }}
+        >
+          <Rich text={message} />
+        </div>
+      )}
+    </>
+  );
+}
+
 /* ============================ GRÁFICO CRESCIMENTO ============================ */
 
 export function ChartGrowthStep({ step }: { step: FlowStep }) {
+  const style = step.config.growth_style ?? "compare";
+  if (style === "curve") return <GrowthCurve step={step} />;
+  if (style === "points") return <GrowthPoints step={step} />;
+  return <GrowthCompare step={step} />;
+}
+
+// Diagnóstico: curva em S com marcadores "Você" e "Ideal".
+function GrowthCurve({ step }: { step: FlowStep }) {
+  const c = step.config;
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, amount: 0.3 });
+  const raw = useDrawProgress(inView, c.chart_speed ?? 4, !!c.chart_loop);
+  const p = easeInOut(raw);
+  const live = c.chart_live ?? true;
+  const done = raw >= 1;
+  const accent = c.chart_accent || "var(--brand)";
+  const stops = c.chart_colors && c.chart_colors.length >= 2 ? c.chart_colors : CURVE_COLORS;
+
+  const W = 360, H = 232, L = 10, R = 350, T = 18, B = 216;
+  const PW = R - L, PH = B - T;
+  const k = 9, t0 = 0.45;
+  const lg = (t: number) => 1 / (1 + Math.exp(-k * (t - t0)));
+  const l0 = lg(0), l1 = lg(1);
+  const val = (t: number) => 2 + 95 * ((lg(t) - l0) / (l1 - l0));
+  const at = (t: number): Pt => ({ x: L + t * PW, y: B - (val(t) / 100) * PH });
+
+  const N = 64;
+  const line = Array.from({ length: N + 1 }, (_, i) => at(i / N))
+    .map((q, i) => `${i ? "L" : "M"} ${q.x.toFixed(1)} ${q.y.toFixed(1)}`).join(" ");
+  const area = `${line} L ${R} ${B} L ${L} ${B} Z`;
+
+  const youT = Math.max(0, Math.min(100, c.chart_you_value ?? 33)) / 100;
+  const idealT = Math.max(0, Math.min(100, c.chart_ideal_value ?? 66)) / 100;
+  const you = at(youT), ideal = at(idealT), head = at(p);
+  const labels = c.chart_axis_labels ?? ["0%", "Precisa começar", "> 75%", "100%"];
+  const labelPos = [0, youT, idealT, 1];
+  const pillX = (x: number, hw: number) => Math.max(L + hw, Math.min(R - hw, x));
+  const pillY = (y: number, h: number) => (y - h - 18 < 0 ? y + 16 : y - h - 16);
+
+  return (
+    <div ref={ref}>
+      {c.title && <h1 className="mb-4 text-center text-2xl font-extrabold leading-tight tracking-tight" style={{ color: accent }}>{c.title}</h1>}
+      {c.subtitle && <p className="-mt-2 mb-4 text-center text-slate-500">{c.subtitle}</p>}
+      {c.chart_callout && (
+        <div className="mb-5 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-center text-sm leading-relaxed text-amber-900">
+          <Rich text={c.chart_callout} />
+        </div>
+      )}
+      {live && <LiveStatus p={raw} />}
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible">
+        <defs>
+          <pattern id={`dots${uid}`} width="16" height="16" patternUnits="userSpaceOnUse">
+            <circle cx="2" cy="2" r="1.1" fill="#cbd5e1" />
+          </pattern>
+          <linearGradient id={`st${uid}`} gradientUnits="userSpaceOnUse" x1={L} y1="0" x2={R} y2="0">
+            {stops.map((s, i) => <stop key={i} offset={`${(i / (stops.length - 1)) * 100}%`} stopColor={s} />)}
+          </linearGradient>
+          <linearGradient id={`ar${uid}`} gradientUnits="userSpaceOnUse" x1={L} y1="0" x2={R} y2="0">
+            {stops.map((s, i) => <stop key={i} offset={`${(i / (stops.length - 1)) * 100}%`} stopColor={s} stopOpacity="0.16" />)}
+          </linearGradient>
+          <clipPath id={`rv${uid}`}>
+            <rect x={L - 12} y="0" width={p * PW + 12} height={H} />
+          </clipPath>
+        </defs>
+
+        <rect x={L} y={T - 6} width={PW} height={PH + 6} fill={`url(#dots${uid})`} />
+        <g clipPath={`url(#rv${uid})`}>
+          <path d={area} fill={`url(#ar${uid})`} />
+          <path d={line} fill="none" stroke={`url(#st${uid})`} strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
+        </g>
+
+        {/* análise em tempo real: varredura + ponto correndo na curva */}
+        {live && !done && raw > 0 && (
+          <g>
+            <line x1={head.x} y1={T - 6} x2={head.x} y2={B} stroke="#94a3b8" strokeWidth="1" strokeDasharray="3 4" opacity="0.7" />
+            <circle cx={head.x} cy={head.y} r="11" fill={colorAt(stops, p)} opacity="0.22" />
+            <circle cx={head.x} cy={head.y} r="5" fill="#fff" stroke={colorAt(stops, p)} strokeWidth="3" />
+          </g>
+        )}
+
+        {/* Ideal */}
+        <g style={popStyle(p >= idealT - 0.001, ideal.x, ideal.y)}>
+          {done && live && <Pulse x={ideal.x} y={ideal.y} color={accent} />}
+          <rect x={pillX(ideal.x, 34) - 34} y={pillY(ideal.y, 28)} width="68" height="28" rx="14" fill={accent} />
+          <text x={pillX(ideal.x, 34)} y={pillY(ideal.y, 28) + 19} textAnchor="middle" fontSize="12" fontWeight="800" fill="rgba(35,15,30,.85)" letterSpacing="0.5">
+            {c.chart_ideal_text ?? "IDEAL"}
+          </text>
+          <circle cx={ideal.x} cy={ideal.y} r="7" fill={accent} stroke="#fff" strokeWidth="3" />
+        </g>
+
+        {/* Você */}
+        <g style={popStyle(p >= youT - 0.001, you.x, you.y)}>
+          {done && live && <Pulse x={you.x} y={you.y} color="#a8a2b8" />}
+          <rect x={pillX(you.x, 36) - 36} y={pillY(you.y, 30)} width="72" height="30" rx="15" fill="#fff" stroke="#cdbfca" strokeWidth="1.5" />
+          <text x={pillX(you.x, 36)} y={pillY(you.y, 30) + 20} textAnchor="middle" fontSize="12" fontWeight="800" fill="#1f1d2b" letterSpacing="0.5">
+            {c.chart_you_text ?? "VOCÊ"}
+          </text>
+          <circle cx={you.x} cy={you.y} r="8" fill="#fff" stroke="#cbbcc6" strokeWidth="3.5" />
+        </g>
+      </svg>
+
+      <div className="relative mt-2 h-5 text-[13px] text-slate-700">
+        {labels.slice(0, 4).map((lbl, i) => {
+          if (!lbl) return null;
+          const x = ((L + labelPos[i] * PW) / W) * 100;
+          const tr = i === 0 ? "none" : i === 3 ? "translateX(-100%)" : "translateX(-50%)";
+          return <span key={i} className="absolute whitespace-nowrap" style={{ left: `${x}%`, transform: tr }}>{lbl}</span>;
+        })}
+      </div>
+
+      <Boxes warning={c.chart_warning} message={c.chart_message} accent={accent} />
+    </div>
+  );
+}
+
+// Evolução: linha por pontos (Ontem / Hoje / Amanhã) com o "Você" num ponto.
+function GrowthPoints({ step }: { step: FlowStep }) {
+  const c = step.config;
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, amount: 0.3 });
+  const raw = useDrawProgress(inView, c.chart_speed ?? 4, !!c.chart_loop);
+  const p = easeInOut(raw);
+  const live = c.chart_live ?? true;
+  const done = raw >= 1;
+  const accent = c.chart_accent || "var(--brand)";
+  const stops = c.chart_colors && c.chart_colors.length >= 2 ? c.chart_colors : POINTS_COLORS;
+  const data = c.chart_points && c.chart_points.length >= 2
+    ? c.chart_points
+    : [{ label: "Ontem", value: 75 }, { label: "Hoje", value: 60 }, { label: "Amanhã", value: 40 }];
+
+  const maxVal = Math.max(...data.map((d) => d.value));
+  const yMax = c.chart_y_max && c.chart_y_max > 0 ? c.chart_y_max : Math.max(20, Math.ceil(maxVal / 20) * 20);
+  const W = 360, H = 236, L = 40, R = 336, T = 26, B = 216;
+  const PW = R - L, PH = B - T;
+  const n = data.length;
+  const pts = data.map((d, i) => ({
+    ...d,
+    x: L + (i / (n - 1)) * PW,
+    y: B - (Math.max(0, Math.min(yMax, d.value)) / yMax) * PH,
+  }));
+  const line = pts.map((q, i) => `${i ? "L" : "M"} ${q.x} ${q.y}`).join(" ");
+  const area = `${line} L ${R} ${B} L ${L} ${B} Z`;
+  const ticks = [0, 1, 2, 3, 4].map((i) => (yMax / 4) * i);
+
+  // posição do "cursor" da análise ao longo da linha
+  const hx = L + p * PW;
+  let hy = pts[0].y;
+  for (let i = 0; i < n - 1; i++) {
+    if (hx >= pts[i].x && hx <= pts[i + 1].x) {
+      const t = (hx - pts[i].x) / (pts[i + 1].x - pts[i].x || 1);
+      hy = pts[i].y + (pts[i + 1].y - pts[i].y) * t;
+      break;
+    }
+  }
+  const hv = Math.round(((B - hy) / PH) * yMax);
+  const youIdx = Math.max(0, Math.min(n - 1, c.chart_you_index ?? Math.floor((n - 1) / 2)));
+  const yq = pts[youIdx];
+
+  return (
+    <div ref={ref}>
+      {c.title && <h1 className="mb-3 text-center text-[28px] font-extrabold leading-tight tracking-tight text-slate-900">{c.title}</h1>}
+      {c.subtitle && <p className="mb-3 text-center text-slate-500">{c.subtitle}</p>}
+      {c.chart_callout && (
+        <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-center text-sm leading-relaxed text-amber-900">
+          <Rich text={c.chart_callout} />
+        </div>
+      )}
+      {live && <LiveStatus p={raw} />}
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible">
+        <defs>
+          <linearGradient id={`st${uid}`} gradientUnits="userSpaceOnUse" x1={L} y1="0" x2={R} y2="0">
+            {stops.map((s, i) => <stop key={i} offset={`${(i / (stops.length - 1)) * 100}%`} stopColor={s} />)}
+          </linearGradient>
+          <linearGradient id={`ar${uid}`} gradientUnits="userSpaceOnUse" x1={L} y1="0" x2={R} y2="0">
+            {stops.map((s, i) => <stop key={i} offset={`${(i / (stops.length - 1)) * 100}%`} stopColor={s} stopOpacity="0.5" />)}
+          </linearGradient>
+          <clipPath id={`rv${uid}`}>
+            <rect x={L - 2} y="0" width={p * PW + 2} height={H} />
+          </clipPath>
+        </defs>
+
+        {/* grade tracejada + eixo Y */}
+        {ticks.map((v) => {
+          const y = B - (v / yMax) * PH;
+          return (
+            <g key={v}>
+              <line x1={L} y1={y} x2={R} y2={y} stroke="#cbd5e1" strokeDasharray="4 4" />
+              <text x={L - 12} y={y + 4} textAnchor="end" fontSize="12" fill="#64748b">{Math.round(v)}</text>
+            </g>
+          );
+        })}
+        {pts.map((q, i) => <line key={i} x1={q.x} y1={T - 8} x2={q.x} y2={B} stroke="#cbd5e1" strokeDasharray="4 4" />)}
+
+        <g clipPath={`url(#rv${uid})`}>
+          <path d={area} fill={`url(#ar${uid})`} />
+          <path d={line} fill="none" stroke={`url(#st${uid})`} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+        </g>
+
+        {/* pontos com halo */}
+        {pts.map((q, i) => {
+          const f = (q.x - L) / PW;
+          return (
+            <g key={i} style={popStyle(p >= f - 0.001, q.x, q.y)}>
+              <circle cx={q.x} cy={q.y} r="14" fill="#9ca3af" opacity="0.28" />
+              <circle cx={q.x} cy={q.y} r="8" fill={colorAt(stops, f)} />
+            </g>
+          );
+        })}
+
+        {/* Você */}
+        <g style={popStyle(p >= (yq.x - L) / PW - 0.001, yq.x, yq.y)}>
+          {done && live && <Pulse x={yq.x} y={yq.y} color={colorAt(stops, (yq.x - L) / PW)} />}
+          <rect x={Math.max(L, Math.min(R - 68, yq.x - 34))} y={yq.y - 60} width="68" height="32" rx="9" fill="#f2c14e" />
+          <text x={Math.max(L, Math.min(R - 68, yq.x - 34)) + 34} y={yq.y - 38} textAnchor="middle" fontSize="15" fontWeight="800" fill="#1f1d2b">
+            {c.chart_you_text ?? "Você"}
+          </text>
+        </g>
+
+        {/* análise em tempo real */}
+        {live && !done && raw > 0 && (
+          <g>
+            <line x1={hx} y1={T - 8} x2={hx} y2={B} stroke="#64748b" strokeWidth="1" strokeDasharray="3 4" opacity="0.6" />
+            <circle cx={hx} cy={hy} r="11" fill={colorAt(stops, p)} opacity="0.25" />
+            <circle cx={hx} cy={hy} r="5" fill="#fff" stroke={colorAt(stops, p)} strokeWidth="3" />
+            <rect x={hx - 18} y={hy - 34} width="36" height="20" rx="10" fill="#1f2937" opacity="0.85" />
+            <text x={hx} y={hy - 20} textAnchor="middle" fontSize="11" fontWeight="700" fill="#fff">{hv}</text>
+          </g>
+        )}
+      </svg>
+
+      <div className="relative mt-2 h-5 text-[13px] text-slate-500">
+        {pts.map((q, i) => (
+          <span key={i} className="absolute whitespace-nowrap" style={{ left: `${(q.x / W) * 100}%`, transform: "translateX(-50%)" }}>{q.label}</span>
+        ))}
+      </div>
+
+      <Boxes warning={c.chart_warning} message={c.chart_message} accent={accent} />
+    </div>
+  );
+}
+
+// Comparação "Você vs Concorrência" (modelo original), agora com velocidade ajustável.
+function GrowthCompare({ step }: { step: FlowStep }) {
   const c = step.config;
   const you = c.you_series ?? [20, 45, 92];
   const comp = c.competitor_series ?? [25, 30, 34];
   const labels = c.x_labels ?? ["Ontem", "Hoje", "Amanhã"];
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, amount: 0.4 });
+  const sp = Math.max(0.5, c.chart_speed ?? 1.2) / 1.2; // multiplicador de duração
 
   const W = 320, H = 200, PADX = 20, PADY = 20;
   const maxV = 100;
@@ -406,48 +764,23 @@ export function ChartGrowthStep({ step }: { step: FlowStep }) {
               <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
             </linearGradient>
           </defs>
-          {/* competidor */}
           <motion.path
-            d={path(comp)}
-            fill="none"
-            stroke="#cbd5e1"
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeDasharray="6 6"
-            initial={{ pathLength: 0 }}
-            animate={inView ? { pathLength: 1 } : {}}
-            transition={{ duration: 1 }}
-          />
-          {/* você (área + linha) */}
-          <motion.path
-            d={area}
-            fill="url(#youArea)"
-            initial={{ opacity: 0 }}
-            animate={inView ? { opacity: 1 } : {}}
-            transition={{ duration: 1, delay: 0.6 }}
+            d={path(comp)} fill="none" stroke="#cbd5e1" strokeWidth="3" strokeLinecap="round" strokeDasharray="6 6"
+            initial={{ pathLength: 0 }} animate={inView ? { pathLength: 1 } : {}} transition={{ duration: 1 * sp }}
           />
           <motion.path
-            d={youPath}
-            fill="none"
-            stroke="#22c55e"
-            strokeWidth="4"
-            strokeLinecap="round"
-            initial={{ pathLength: 0 }}
-            animate={inView ? { pathLength: 1 } : {}}
-            transition={{ duration: 1.2 }}
+            d={area} fill="url(#youArea)"
+            initial={{ opacity: 0 }} animate={inView ? { opacity: 1 } : {}} transition={{ duration: 1 * sp, delay: 0.6 * sp }}
+          />
+          <motion.path
+            d={youPath} fill="none" stroke="#22c55e" strokeWidth="4" strokeLinecap="round"
+            initial={{ pathLength: 0 }} animate={inView ? { pathLength: 1 } : {}} transition={{ duration: 1.2 * sp }}
           />
           <motion.circle
-            cx={youEnd.x}
-            cy={youEnd.y}
-            r="6"
-            fill="#22c55e"
-            stroke="#fff"
-            strokeWidth="2"
-            initial={{ scale: 0 }}
-            animate={inView ? { scale: 1 } : {}}
-            transition={{ delay: 1.2 }}
+            cx={youEnd.x} cy={youEnd.y} r="6" fill="#22c55e" stroke="#fff" strokeWidth="2"
+            initial={{ scale: 0 }} animate={inView ? { scale: 1 } : {}} transition={{ delay: 1.2 * sp }}
           />
-          <motion.g initial={{ opacity: 0 }} animate={inView ? { opacity: 1 } : {}} transition={{ delay: 1.3 }}>
+          <motion.g initial={{ opacity: 0 }} animate={inView ? { opacity: 1 } : {}} transition={{ delay: 1.3 * sp }}>
             <rect x={youEnd.x - 46} y={youEnd.y - 26} width="42" height="18" rx="9" fill="#22c55e" />
             <text x={youEnd.x - 25} y={youEnd.y - 13} textAnchor="middle" fontSize="10" fontWeight="700" fill="#fff">
               {c.you_label ?? "Você"}

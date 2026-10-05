@@ -248,6 +248,24 @@ export interface StepConfig {
   x_labels?: string[];
   you_series?: number[];
   competitor_series?: number[];
+  // chart_growth — estilos novos (diagnóstico em curva / evolução por pontos)
+  growth_style?: "curve" | "points" | "compare";
+  chart_you_value?: number; // posição do "Você" na curva (0-100)
+  chart_ideal_value?: number; // posição do "Ideal" na curva (0-100)
+  chart_you_text?: string; // texto do marcador "Você"
+  chart_ideal_text?: string; // texto do marcador "Ideal"
+  chart_axis_labels?: string[]; // [início, sob o Você, sob o Ideal, fim]
+  chart_callout?: string; // caixa de atenção acima do gráfico (**negrito**)
+  chart_warning?: string; // caixa de alerta abaixo (**negrito**)
+  chart_message?: string; // mensagem final abaixo
+  chart_points?: { label: string; value: number }[]; // estilo "pontos"
+  chart_you_index?: number; // em qual ponto fica o "Você"
+  chart_y_max?: number; // topo do eixo Y (estilo pontos)
+  chart_colors?: string[]; // degradê da linha (início → fim)
+  chart_accent?: string; // cor de destaque (título / Ideal)
+  chart_speed?: number; // segundos da animação de desenho
+  chart_live?: boolean; // mostra a análise acontecendo em tempo real
+  chart_loop?: boolean; // repete a animação
   // chart_gauge (circular %)
   gauge_value?: number; // 0-100
   gauge_caption?: string;

@@ -761,26 +761,7 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
       )}
 
       {/* Growth — séries que animam o preview */}
-      {t === "chart_growth" && (
-        <>
-          <p className="mb-1 text-xs font-medium text-slate-500">Série "Você"</p>
-          <div className="mb-3 grid grid-cols-3 gap-2">
-            {(c.you_series ?? [0, 0, 0]).map((v, i) => (
-              <input key={i} type="number" className={inputCls} value={v} onChange={(e) => {
-                const arr = [...(c.you_series ?? [0, 0, 0])]; arr[i] = Number(e.target.value); onChange({ you_series: arr });
-              }} />
-            ))}
-          </div>
-          <p className="mb-1 text-xs font-medium text-slate-500">Série "Concorrência"</p>
-          <div className="grid grid-cols-3 gap-2">
-            {(c.competitor_series ?? [0, 0, 0]).map((v, i) => (
-              <input key={i} type="number" className={inputCls} value={v} onChange={(e) => {
-                const arr = [...(c.competitor_series ?? [0, 0, 0])]; arr[i] = Number(e.target.value); onChange({ competitor_series: arr });
-              }} />
-            ))}
-          </div>
-        </>
-      )}
+      {t === "chart_growth" && <ChartGrowthEditor c={c} onChange={onChange} />}
 
       {/* News */}
       {t === "news" && (
@@ -1034,6 +1015,145 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
         </div>
       )}
     </div>
+  );
+}
+
+// Editor do "Gráfico crescimento": estilo, animação em tempo real, marcadores,
+// pontos, textos e cores.
+function ChartGrowthEditor({ c, onChange }: { c: FlowStep["config"]; onChange: (p: Partial<FlowStep["config"]>) => void }) {
+  const style = c.growth_style ?? "compare";
+  const speed = c.chart_speed ?? (style === "compare" ? 1.2 : 4);
+  const base = c.chart_colors && c.chart_colors.length >= 2
+    ? c.chart_colors
+    : style === "points" ? ["#c0392b", "#f0b23a", "#4caf50"] : ["#d23c2f", "#efcb45", "#4db6a0"];
+  const three = [base[0], base[Math.floor(base.length / 2)], base[base.length - 1]];
+  const setColor = (i: number, v: string) => { const next = [...three]; next[i] = v; onChange({ chart_colors: next }); };
+  const pts = c.chart_points ?? [{ label: "Ontem", value: 75 }, { label: "Hoje", value: 60 }, { label: "Amanhã", value: 40 }];
+  const setPt = (i: number, patch: Partial<{ label: string; value: number }>) =>
+    onChange({ chart_points: pts.map((q, k) => (k === i ? { ...q, ...patch } : q)) });
+  const axis = c.chart_axis_labels ?? ["0%", "Precisa começar", "> 75%", "100%"];
+  const setAxis = (i: number, v: string) => { const next = [...axis]; while (next.length < 4) next.push(""); next[i] = v; onChange({ chart_axis_labels: next }); };
+
+  // Ao trocar de estilo, completa os campos que ainda não existem com os padrões.
+  const pickStyle = (v: "curve" | "points" | "compare") => {
+    const d = defaultConfig("chart_growth") as Record<string, unknown>;
+    const cur = c as Record<string, unknown>;
+    const patch: Record<string, unknown> = {};
+    for (const k of Object.keys(d)) if (cur[k] === undefined && k !== "title") patch[k] = d[k];
+    onChange({ ...patch, growth_style: v } as Partial<FlowStep["config"]>);
+  };
+  const section = "mb-2 mt-4 border-t pt-3 text-sm font-semibold text-slate-700";
+
+  return (
+    <>
+      <Field label="Estilo do gráfico">
+        <div className="grid grid-cols-3 gap-1.5">
+          {([["curve", "Diagnóstico"], ["points", "Evolução"], ["compare", "Comparação"]] as const).map(([v, lbl]) => (
+            <button key={v} onClick={() => pickStyle(v)}
+              className={cn("rounded-lg border py-1.5 text-xs font-medium", style === v ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-600")}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+      </Field>
+
+      <p className={section}>Animação em tempo real</p>
+      <Field label={`Velocidade: ${speed}s${speed <= 2 ? " (rápida)" : speed >= 7 ? " (lenta)" : ""}`}>
+        <input type="range" min={1} max={12} step={0.5} value={speed} onChange={(e) => onChange({ chart_speed: Number(e.target.value) })} className="w-full accent-emerald-500" />
+        <p className="mt-1 text-[11px] text-slate-400">Tempo que o gráfico leva para ser desenhado na tela.</p>
+      </Field>
+      {style !== "compare" && (
+        <ToggleRow label="Mostrar a análise acontecendo" desc="“Analisando suas respostas…” com uma varredura correndo pelo gráfico e o valor subindo ao vivo." on={c.chart_live ?? true} onChange={(v) => onChange({ chart_live: v })} />
+      )}
+      <ToggleRow label="Repetir animação" desc="O gráfico se redesenha em loop enquanto a pessoa está na tela." on={!!c.chart_loop} onChange={(v) => onChange({ chart_loop: v })} />
+
+      {style === "curve" && (
+        <>
+          <p className={section}>Marcadores</p>
+          <Field label={`Posição do “Você”: ${c.chart_you_value ?? 33}%`}>
+            <input type="range" min={0} max={100} value={c.chart_you_value ?? 33} onChange={(e) => onChange({ chart_you_value: Number(e.target.value) })} className="w-full accent-emerald-500" />
+          </Field>
+          <Field label="Texto do “Você”"><input className={inputCls} value={c.chart_you_text ?? "VOCÊ"} onChange={(e) => onChange({ chart_you_text: e.target.value })} /></Field>
+          <Field label={`Posição do “Ideal”: ${c.chart_ideal_value ?? 66}%`}>
+            <input type="range" min={0} max={100} value={c.chart_ideal_value ?? 66} onChange={(e) => onChange({ chart_ideal_value: Number(e.target.value) })} className="w-full accent-emerald-500" />
+          </Field>
+          <Field label="Texto do “Ideal”"><input className={inputCls} value={c.chart_ideal_text ?? "IDEAL"} onChange={(e) => onChange({ chart_ideal_text: e.target.value })} /></Field>
+          <p className="mb-1 text-xs font-medium text-slate-500">Legendas do eixo</p>
+          <div className="mb-3 grid grid-cols-2 gap-2">
+            {["Início", "Sob o Você", "Sob o Ideal", "Fim"].map((ph, i) => (
+              <input key={ph} className={inputCls} placeholder={ph} value={axis[i] ?? ""} onChange={(e) => setAxis(i, e.target.value)} />
+            ))}
+          </div>
+        </>
+      )}
+
+      {style === "points" && (
+        <>
+          <p className={section}>Pontos do gráfico</p>
+          <div className="mb-2 flex flex-col gap-2">
+            {pts.map((q, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input className={inputCls} placeholder="Rótulo" value={q.label} onChange={(e) => setPt(i, { label: e.target.value })} />
+                <input type="number" className={cn(inputCls, "w-20")} value={q.value} onChange={(e) => setPt(i, { value: Number(e.target.value) })} />
+                <button onClick={() => pts.length > 2 && onChange({ chart_points: pts.filter((_, k) => k !== i) })} disabled={pts.length <= 2} className="text-slate-400 hover:text-rose-500 disabled:opacity-30" aria-label="Remover ponto">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+          {pts.length < 6 && (
+            <button onClick={() => onChange({ chart_points: [...pts, { label: "Novo", value: 50 }] })} className="mb-3 flex items-center gap-1 text-sm font-medium text-emerald-600">
+              <Plus className="h-4 w-4" /> Adicionar ponto
+            </button>
+          )}
+          <Field label="“Você” fica no ponto">
+            <select className={inputCls} value={c.chart_you_index ?? Math.floor((pts.length - 1) / 2)} onChange={(e) => onChange({ chart_you_index: Number(e.target.value) })}>
+              {pts.map((q, i) => <option key={i} value={i}>{q.label || `Ponto ${i + 1}`}</option>)}
+            </select>
+          </Field>
+          <Field label="Texto do marcador"><input className={inputCls} value={c.chart_you_text ?? "Você"} onChange={(e) => onChange({ chart_you_text: e.target.value })} /></Field>
+          <Field label="Topo do eixo (vazio = automático)">
+            <input type="number" className={inputCls} value={c.chart_y_max ?? ""} placeholder="80" onChange={(e) => onChange({ chart_y_max: e.target.value === "" ? undefined : Number(e.target.value) })} />
+          </Field>
+        </>
+      )}
+
+      {style !== "compare" && (
+        <>
+          <p className={section}>Textos (use **negrito**)</p>
+          <Field label="Caixa de atenção (acima do gráfico)"><textarea className={inputCls} rows={2} value={c.chart_callout ?? ""} onChange={(e) => onChange({ chart_callout: e.target.value })} /></Field>
+          <Field label="Caixa de alerta (abaixo)"><textarea className={inputCls} rows={2} value={c.chart_warning ?? ""} onChange={(e) => onChange({ chart_warning: e.target.value })} /></Field>
+          <Field label="Mensagem final"><textarea className={inputCls} rows={2} value={c.chart_message ?? ""} onChange={(e) => onChange({ chart_message: e.target.value })} /></Field>
+
+          <p className={section}>Cores</p>
+          <ColorRow label="Início da linha" value={three[0]} onChange={(v) => setColor(0, v)} />
+          <ColorRow label="Meio da linha" value={three[1]} onChange={(v) => setColor(1, v)} />
+          <ColorRow label="Fim da linha" value={three[2]} onChange={(v) => setColor(2, v)} />
+          <ColorRow label="Destaque (título / Ideal)" value={c.chart_accent ?? "#e573b5"} onChange={(v) => onChange({ chart_accent: v })} />
+        </>
+      )}
+
+      {style === "compare" && (
+        <>
+          <p className="mb-1 mt-3 text-xs font-medium text-slate-500">Série "Você"</p>
+          <div className="mb-3 grid grid-cols-3 gap-2">
+            {(c.you_series ?? [0, 0, 0]).map((v, i) => (
+              <input key={i} type="number" className={inputCls} value={v} onChange={(e) => {
+                const arr = [...(c.you_series ?? [0, 0, 0])]; arr[i] = Number(e.target.value); onChange({ you_series: arr });
+              }} />
+            ))}
+          </div>
+          <p className="mb-1 text-xs font-medium text-slate-500">Série "Concorrência"</p>
+          <div className="grid grid-cols-3 gap-2">
+            {(c.competitor_series ?? [0, 0, 0]).map((v, i) => (
+              <input key={i} type="number" className={inputCls} value={v} onChange={(e) => {
+                const arr = [...(c.competitor_series ?? [0, 0, 0])]; arr[i] = Number(e.target.value); onChange({ competitor_series: arr });
+              }} />
+            ))}
+          </div>
+        </>
+      )}
+    </>
   );
 }
 

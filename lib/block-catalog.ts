@@ -169,7 +169,26 @@ export function defaultConfig(type: StepType): StepConfig {
     case "level":
       return { title: "Seu nível", subtitle: "Com base nas respostas.", value: 75, level_label: "Alto" };
     case "chart_growth":
-      return { title: "Sua evolução", subtitle: "Comparado à média.", you_label: "Você", competitor_label: "Média", x_labels: ["Antes", "Agora", "Depois"], you_series: [18, 48, 92], competitor_series: [22, 28, 32] };
+      return {
+        title: "Seu diagnóstico está pronto",
+        growth_style: "curve",
+        chart_you_value: 33,
+        chart_ideal_value: 66,
+        chart_you_text: "VOCÊ",
+        chart_ideal_text: "IDEAL",
+        chart_axis_labels: ["0%", "Precisa começar", "> 75%", "100%"],
+        chart_callout: "**Atenção:** o nível ideal de **preparação** é a partir de 75%",
+        chart_warning: "⭕ **Falta de preparação:** pode aumentar a tensão e deixar o resultado mais difícil.",
+        chart_message: "Você está no início, e é exatamente agora que dá para montar uma rotina de preparo.",
+        chart_accent: "#e573b5",
+        chart_speed: 4,
+        chart_live: true,
+        chart_loop: false,
+        chart_points: [{ label: "Ontem", value: 75 }, { label: "Hoje", value: 60 }, { label: "Amanhã", value: 40 }],
+        chart_you_index: 1,
+        chart_y_max: 80,
+        you_label: "Você", competitor_label: "Média", x_labels: ["Antes", "Agora", "Depois"], you_series: [18, 48, 92], competitor_series: [22, 28, 32],
+      };
     case "chart_gauge":
       return { title: "Índice", subtitle: "Resultado da pesquisa.", gauge_value: 76, gauge_caption: "de satisfação" };
     case "faq":
