@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -18,6 +18,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [error, setError] = useState<string | null>(null);
+
+  // Vindo da landing: abre em "Criar conta" e preenche o e-mail digitado no hero.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("cadastro")) setMode("signup");
+    try {
+      const saved = sessionStorage.getItem("cliva_signup_email");
+      if (saved) { setEmail(saved); sessionStorage.removeItem("cliva_signup_email"); }
+    } catch { /* noop */ }
+  }, []);
   const [loading, setLoading] = useState(false);
 
   async function submit(e: React.FormEvent) {

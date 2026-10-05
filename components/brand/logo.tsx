@@ -1,34 +1,19 @@
 import { cn } from "@/lib/utils";
 
-// Marca da Cliva: quadrado arredondado com degradê verde→teal e um "C"
-// aberto (arco) com um ponto — remete a cuidado/vitalidade clínica.
+// Marca oficial da Cliva: squircle esmeralda→teal com o "C" de traço contínuo,
+// a ponta que sobe como broto e o ponto de vitalidade (public/brand/cliva-mark.png).
 export function ClivaMark({ size = 32, className }: { size?: number; className?: string }) {
-  const gid = "cliva-grad";
   return (
-    <svg
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/brand/cliva-mark.png"
       width={size}
       height={size}
-      viewBox="0 0 32 32"
-      className={className}
-      role="img"
-      aria-label="Cliva"
-    >
-      <defs>
-        <linearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#34d399" />
-          <stop offset="1" stopColor="#0d9488" />
-        </linearGradient>
-      </defs>
-      <rect width="32" height="32" rx="9" fill={`url(#${gid})`} />
-      <path
-        d="M20.7 10.8 A7 7 0 1 0 20.7 21.2"
-        fill="none"
-        stroke="#fff"
-        strokeWidth="3.1"
-        strokeLinecap="round"
-      />
-      <circle cx="22.1" cy="16" r="1.75" fill="#fff" />
-    </svg>
+      alt="Cliva"
+      className={cn("shrink-0 select-none", className)}
+      style={{ width: size, height: size }}
+      draggable={false}
+    />
   );
 }
 

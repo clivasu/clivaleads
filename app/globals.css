@@ -82,3 +82,32 @@
   color: var(--btn-fg, #fff);
   border-radius: var(--btn-radius, 0.75rem);
 }
+
+/* ===================== Landing: movimento ===================== */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+
+@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.animate-marquee { animation: marquee var(--marquee-dur, 40s) linear infinite; }
+.marquee-pause:hover .animate-marquee { animation-play-state: paused; }
+
+@keyframes floaty { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+.animate-floaty { animation: floaty 6s ease-in-out infinite; }
+
+@keyframes shimmer { from { background-position: -200% 0; } to { background-position: 200% 0; } }
+.animate-shimmer {
+  background: linear-gradient(90deg, rgba(226,232,240,.6) 25%, rgba(241,245,249,1) 50%, rgba(226,232,240,.6) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 2.2s linear infinite;
+}
+
+@keyframes spin-slow { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee, .animate-floaty, .animate-shimmer { animation: none !important; }
+}
+
+/* borda em degradê girando (plano em destaque) */
+@property --a { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
+@keyframes spin-border { to { --a: 360deg; } }
