@@ -15,6 +15,7 @@ interface Body {
   browser?: string;
   entry_page?: string;
   whatsapp_clicked?: boolean;
+  disqualified?: boolean; // caiu no final "sem interesse"
 }
 
 export async function POST(request: NextRequest) {
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
       email: body.contact?.email ?? null,
       procedure: procedure ?? null,
       score,
-      status: body.whatsapp_clicked ? "whatsapp" : "new",
+      status: body.disqualified ? "lost" : body.whatsapp_clicked ? "whatsapp" : "new",
       whatsapp_clicked: body.whatsapp_clicked ?? false,
       device: body.device ?? null,
       browser: body.browser ?? null,

@@ -5,6 +5,7 @@ import { Plus, Sparkles, Minus, Maximize2, Play, Pause, BarChart3, X, Users } fr
 import type { FlowStep, StepType } from "@/lib/types";
 import { BLOCK_CATALOG } from "@/lib/block-catalog";
 import { computeFlowMetrics, type JourneyLead, buildJourneys } from "@/lib/flow-journeys";
+import { GOTO_EXIT, resolveGoto } from "@/lib/flow-logic";
 import { cn } from "@/lib/utils";
 
 const LABELS = Object.fromEntries(BLOCK_CATALOG.map((b) => [b.type, b.label])) as Record<StepType, string>;
@@ -206,11 +207,16 @@ export function FlowCanvas({
   }, [playing, animBalls, cycle, runId]);
 
   const branches = useMemo(() => {
-    const out: { fromId: string; optIndex: number; sx: number; sy: number; tx: number; ty: number }[] = [];
+    const out: { fromId: string; optIndex: number; sx: number; sy: number; tx: number; ty: number; exit: boolean }[] = [];
+    const list = nodes.map((n) => n.step);
     nodes.forEach((n) => {
       (n.step.config.options ?? []).slice(0, 5).forEach((o, k) => {
-        const target = typeof o.next === "number" ? nodes[o.next] : undefined;
-        if (target) out.push({ fromId: n.step.id, optIndex: k, sx: n.x + NODE_W, sy: handleY(n, k), tx: target.x, ty: target.y + target.h / 2 });
+        const r = resolveGoto(list, o.goto, o.next);
+        const target = typeof r === "number" ? nodes[r] : undefined;
+        if (target && target !== n) out.push({
+          fromId: n.step.id, optIndex: k, sx: n.x + NODE_W, sy: handleY(n, k), tx: target.x, ty: target.y + target.h / 2,
+          exit: o.goto === GOTO_EXIT || target.step.type === "exit",
+        });
       });
     });
     return out;
@@ -348,13 +354,13 @@ export function FlowCanvas({
       >
         <div style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "0 0" }}>
           <svg width={bounds.w} height={bounds.h} className="absolute left-0 top-0 overflow-visible">
-            {nodes.slice(0, -1).map((n, i) => (
+            {nodes.slice(0, -1).map((n, i) => (n.step.type === "exit" || nodes[i + 1].step.type === "exit" ? null : (
               <path key={"e" + i} d={seqPath(n, nodes[i + 1])} fill="none" stroke="#cbd5e1" strokeWidth={1.5} strokeDasharray="5 5" />
-            ))}
+            )))}
             {branches.map((b, i) => (
               <g key={"b" + i} className="cursor-pointer" onClick={() => onSetBranch(b.fromId, b.optIndex, undefined)}>
                 <path d={curve(b.sx, b.sy, b.tx, b.ty)} fill="none" stroke="transparent" strokeWidth={12} />
-                <path d={curve(b.sx, b.sy, b.tx, b.ty)} fill="none" stroke="#10b981" strokeWidth={2} strokeDasharray="5 4" />
+                <path d={curve(b.sx, b.sy, b.tx, b.ty)} fill="none" stroke={b.exit ? "#f43f5e" : "#10b981"} strokeWidth={2} strokeDasharray="5 4" />
               </g>
             ))}
             {connect && (
@@ -385,11 +391,14 @@ export function FlowCanvas({
                 title="Duplo-clique para editar este bloco"
                 className={cn(
                   "relative select-none rounded-xl border bg-white shadow-sm transition-shadow hover:shadow-md",
-                  metrics.worstExit?.i === n.i ? "border-rose-300 ring-2 ring-rose-200" : n.step.id === selectedId ? "border-emerald-400 ring-2 ring-emerald-200" : "border-slate-200",
+                  n.step.type === "exit" ? cn("border-rose-200 bg-rose-50/60", n.step.id === selectedId && "ring-2 ring-rose-200")
+                    : metrics.worstExit?.i === n.i ? "border-rose-300 ring-2 ring-rose-200" : n.step.id === selectedId ? "border-emerald-400 ring-2 ring-emerald-200" : "border-slate-200",
                 )}
                 style={{ width: NODE_W, cursor: "grab" }}
               >
-                {metrics.worstExit?.i === n.i && (
+                {n.step.type === "exit" ? (
+                  <span className="absolute -top-2.5 left-3 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700 ring-1 ring-rose-200">Só por desvio</span>
+                ) : metrics.worstExit?.i === n.i && (
                   <span className="absolute -top-2.5 left-3 rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white shadow">Maior saída</span>
                 )}
                 <div className="flex items-center justify-between border-b px-3 py-2">

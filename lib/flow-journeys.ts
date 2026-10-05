@@ -1,4 +1,5 @@
 import type { FlowStep } from "@/lib/types";
+import { lastMainIndex } from "@/lib/flow-logic";
 
 // Formato mínimo de lead usado para reconstruir a jornada no fluxo.
 export interface JourneyLead {
@@ -52,7 +53,9 @@ function questionSteps(steps: FlowStep[]): { i: number; title: string }[] {
 // Reconstrói a jornada de cada lead a partir das respostas capturadas.
 export function buildJourneys(steps: FlowStep[], leads: JourneyLead[]): LeadJourney[] {
   if (steps.length === 0) return [];
-  const lastIdx = steps.length - 1;
+  // Fim do caminho principal (finais alternativos ficam de fora).
+  const lastIdx = lastMainIndex(steps);
+  const exitIdx = steps.findIndex((s) => s.type === "exit");
   const qSteps = questionSteps(steps);
 
   return leads.map((lead) => {
@@ -62,6 +65,13 @@ export function buildJourneys(steps: FlowStep[], leads: JourneyLead[]): LeadJour
     for (const q of qSteps) if (answered.has(q.title)) lastAnswered = Math.max(lastAnswered, q.i);
 
     const completed = Boolean(lead.whatsapp_clicked) || COMPLETED_STATUS.has(lead.status ?? "");
+
+    // Desqualificado pela lógica: sai do caminho e termina no final "sem interesse".
+    if (!completed && lead.status === "lost" && exitIdx >= 0) {
+      const upTo = Math.max(0, lastAnswered);
+      const path = [...Array.from({ length: upTo + 1 }, (_, k) => k).filter((k) => k !== exitIdx), exitIdx];
+      return { id: lead.id, name: firstName(lead.name), path, stop: exitIdx, completed: false };
+    }
 
     let stop: number;
     if (completed) {
@@ -73,7 +83,7 @@ export function buildJourneys(steps: FlowStep[], leads: JourneyLead[]): LeadJour
       stop = 0; // iniciou e não respondeu nada
     }
 
-    const path = Array.from({ length: stop + 1 }, (_, k) => k);
+    const path = Array.from({ length: stop + 1 }, (_, k) => k).filter((k) => !(steps[k]?.type === "exit"));
     return { id: lead.id, name: firstName(lead.name), path, stop, completed };
   });
 }
@@ -89,7 +99,7 @@ export function computeFlowMetrics(steps: FlowStep[], leads: JourneyLead[]): Flo
   const total = journeys.length;
 
   const perStep: StepJourneyStat[] = steps.map((s, i) => {
-    const reached = journeys.filter((j) => j.stop >= i).length;
+    const reached = journeys.filter((j) => j.path.includes(i)).length;
     const stoppedHere = journeys.filter((j) => j.stop === i);
     const exits = stoppedHere.filter((j) => !j.completed).map((j) => ({ id: j.id, name: j.name }));
     const completed = stoppedHere.filter((j) => j.completed).map((j) => ({ id: j.id, name: j.name }));

@@ -21,6 +21,7 @@ import {
   Play,
   Pause,
   Volume2,
+  Heart,
 } from "lucide-react";
 import type {
   PublicFlow,
@@ -37,6 +38,7 @@ import { themeVars, type FlowTheme } from "@/lib/theme";
 import { totalScore, tierFromScore } from "@/lib/scoring";
 import { track, detectBrowser, detectDevice } from "@/lib/tracking";
 import { cn } from "@/lib/utils";
+import { EXIT_DEFAULTS, GOTO_EXIT, lastMainIndex, nextLinear, resolveGoto } from "@/lib/flow-logic";
 
 export function FlowRunner({
   flow,
@@ -58,7 +60,12 @@ export function FlowRunner({
   const steps = flow.steps;
   const step = steps[index];
   const total = steps.length;
-  const progress = Math.round(((index + 1) / total) * 100);
+  const mainLast = lastMainIndex(steps);
+  const mainTotal = mainLast + 1;
+  // Final "sem interesse" chamado sem existir um bloco desses: mostra o padrão.
+  const [forcedExit, setForcedExit] = useState(false);
+  const onExit = forcedExit || step?.type === "exit";
+  const progress = onExit ? 100 : Math.min(100, Math.round(((index + 1) / mainTotal) * 100));
   const brand = theme?.primaryColor || flow.organization.primary_color || "#0F172A";
   const showProgress = theme?.progressBar ?? true;
   const logo = theme?.logoUrl ?? flow.organization.logo_url;
@@ -104,7 +111,7 @@ export function FlowRunner({
   // Registra a sessão do lead. Insere uma única vez; se `converted`, marca o
   // clique no botão final (whatsapp_clicked) — mesmo que a inserção já tenha
   // acontecido ao chegar no último bloco.
-  const persistSession = (finalAnswers: LeadAnswer[], finalContact: ContactInfo, converted = false) => {
+  const persistSession = (finalAnswers: LeadAnswer[], finalContact: ContactInfo, converted = false, disqualified = false) => {
     if (preview) return;
     if (converted) convertedRef.current = true;
     if (completedRef.current) {
@@ -121,6 +128,7 @@ export function FlowRunner({
       answers: finalAnswers,
       contact: finalContact,
       whatsapp_clicked: wantConvert,
+      disqualified,
       device: detectDevice(),
       browser: detectBrowser(),
       entry_page: typeof window !== "undefined" ? window.location.pathname : null,
@@ -141,23 +149,52 @@ export function FlowRunner({
     })();
   };
 
-  const goTo = (i: number) => setIndex(Math.max(0, Math.min(i, total - 1)));
-  const advance = (next?: number) =>
-    typeof next === "number" ? goTo(next) : goTo(index + 1);
+  // Vai para uma etapa aplicando o portão de qualificação dela: se a
+  // pontuação atual não alcança o mínimo, desvia para o destino do portão.
+  const navigate = (target: number, currentScore: number) => {
+    let i = Math.max(0, Math.min(target, total - 1));
+    const cfg = steps[i]?.config;
+    if (cfg && typeof cfg.score_gate_min === "number" && currentScore < cfg.score_gate_min) {
+      const r = resolveGoto(steps, cfg.score_gate_goto || GOTO_EXIT);
+      if (r === "missing-exit") { setForcedExit(true); return; }
+      if (typeof r === "number") i = r;
+    }
+    setIndex(i);
+  };
+  // Destino: id/atalho ("@exit", "@whatsapp"), índice legado ou, sem nada,
+  // a próxima etapa do caminho principal (pulando finais alternativos).
+  const go = (dest?: string | number, currentScore = score) => {
+    if (typeof dest === "string" && dest) {
+      const r = resolveGoto(steps, dest);
+      if (r === "missing-exit") { setForcedExit(true); return; }
+      if (typeof r === "number") { navigate(r, currentScore); return; }
+    } else if (typeof dest === "number") {
+      navigate(dest, currentScore);
+      return;
+    }
+    navigate(nextLinear(steps, index), currentScore);
+  };
+  const advance = (dest?: string | number) => go(dest);
 
   // Registra a sessão ao chegar no ÚLTIMO bloco (qualquer tipo) ou no WhatsApp.
   // O formulário é a exceção: ele registra no envio, com o contato preenchido.
   useEffect(() => {
-    const isLast = index >= total - 1;
+    if (onExit) {
+      if (!preview) track("flow_disqualified", { flow_id: flow.id, organization_id: flow.organization_id });
+      persistSession(answers, contact, false, true);
+      return;
+    }
+    const isLast = index >= mainLast;
     if (step?.type === "whatsapp" || (isLast && step?.type !== "form")) {
       persistSession(answers, contact);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index]);
+  }, [index, forcedExit]);
 
-  const pushAnswer = (a: LeadAnswer, next?: number) => {
-    setAnswers((prev) => [...prev, a]);
-    advance(next);
+  const pushAnswer = (a: LeadAnswer, dest?: string | number) => {
+    const all = [...answers, a];
+    setAnswers(all);
+    go(dest, totalScore(all));
   };
 
   const pickOption = (blk: FlowStep, opt: QuestionOption) => {
@@ -171,7 +208,7 @@ export function FlowRunner({
     }
     pushAnswer(
       { question_title: blk.config.title || "", answer_value: opt.value, answer_label: opt.label, score: opt.score || 0, phrase: opt.phrase },
-      opt.next,
+      opt.goto || opt.next,
     );
   };
 
@@ -208,12 +245,13 @@ export function FlowRunner({
             if (b.href) { try { window.open(b.href, "_blank", "noopener"); } catch { /* noop */ } }
             const ans: LeadAnswer = { question_title: blk.config.title || "", answer_value: b.label, answer_label: b.label, score: 0 };
             // Bloco de botões como etapa final: registra o clique no botão.
-            if (index >= total - 1) { persistSession([...answers, ans], contact, true); setAnswers((prev) => [...prev, ans]); }
-            else pushAnswer(ans, b.next);
+            const dest = b.goto || b.next;
+            if (index >= mainLast && dest === undefined) { persistSession([...answers, ans], contact, true); setAnswers((prev) => [...prev, ans]); }
+            else pushAnswer(ans, dest);
           }} />
         );
       case "spin_wheel": {
-        const isLast = index >= total - 1;
+        const isLast = index >= mainLast;
         return (
           <SpinWheelBlock step={blk} onCapture={(cc) => setContact((prev) => ({ ...prev, ...cc }))} onFinish={(prize) => {
             const a: LeadAnswer = { question_title: blk.config.title || "Roleta", answer_value: "wheel", answer_label: prize, score: 0, phrase: `Girei a roleta e ganhei: ${prize}` };
@@ -243,10 +281,11 @@ export function FlowRunner({
         const merged = { ...contact, ...cc };
         setContact(merged);
         // Formulário como etapa final: registra o lead com o contato preenchido.
-        if (index >= total - 1) persistSession(answers, merged, true);
+        if (index >= mainLast) persistSession(answers, merged, true);
         else advance();
       }} />;
       case "whatsapp": return <WhatsappStep step={blk} message={message} href={waUrl} onClick={onWhatsappClick} />;
+      case "exit": return <ExitStep step={blk} />;
       default: return null;
     }
   };
@@ -308,7 +347,7 @@ export function FlowRunner({
             </span>
           )}
           <span className="text-xs text-slate-400">
-            {index + 1}/{total}
+            {onExit ? mainTotal : Math.min(index + 1, mainTotal)}/{mainTotal}
           </span>
         </div>
         {showProgress && (
@@ -327,13 +366,13 @@ export function FlowRunner({
       <main className={cn("flex flex-1 flex-col", flushTop ? "justify-start" : "justify-center")}>
         <AnimatePresence mode="wait">
           <motion.div
-            key={step?.id ?? index}
+            key={forcedExit ? "forced-exit" : step?.id ?? index}
             initial={{ opacity: 0, x: 24 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -24 }}
             transition={{ duration: 0.28, ease: "easeOut" }}
           >
-            {step && renderBlock(step)}
+            {forcedExit ? <ExitStep /> : step && renderBlock(step)}
           </motion.div>
         </AnimatePresence>
       </main>
@@ -343,7 +382,7 @@ export function FlowRunner({
           <button
             onClick={() => {
               // No último bloco, o "Continuar" é o botão final: registra a conversão.
-              if (index >= total - 1) persistSession(answers, contact, true);
+              if (index >= mainLast) persistSession(answers, contact, true);
               else advance();
             }}
             className="brand-btn flex w-full items-center justify-center gap-2 rounded-xl py-4 text-base font-semibold shadow-sm transition-transform active:scale-[0.99]"
@@ -497,7 +536,7 @@ function MultiChoiceStep({
   onSubmit,
 }: {
   step: FlowStep;
-  onSubmit: (a: LeadAnswer, next?: number) => void;
+  onSubmit: (a: LeadAnswer, dest?: string | number) => void;
 }) {
   const c = step.config;
   const options = c.options ?? [];
@@ -518,7 +557,7 @@ function MultiChoiceStep({
       answer_label: chosen.map((o) => o.label).join(", "),
       score: chosen.reduce((s, o) => s + (o.score || 0), 0),
       phrase: chosen.map((o) => o.phrase).filter(Boolean).join(" "),
-    });
+    }, (() => { const o = chosen.find((x) => x.goto || typeof x.next === "number"); return o ? o.goto || o.next : undefined; })());
   };
 
   return (
@@ -562,7 +601,7 @@ function RatingStep({
   onSubmit,
 }: {
   step: FlowStep;
-  onSubmit: (a: LeadAnswer, next?: number) => void;
+  onSubmit: (a: LeadAnswer, dest?: string | number) => void;
 }) {
   const c = step.config;
   const mode = c.mode ?? "scale";
@@ -581,7 +620,7 @@ function RatingStep({
         mode === "scale"
           ? `Avaliei esse ponto em ${val} de ${max}.`
           : undefined,
-    });
+    }, (c.rating_rules ?? []).find((r) => r.goto && (r.op === "lte" ? val <= r.value : val >= r.value))?.goto);
   };
 
   return (
@@ -1273,6 +1312,31 @@ function FormStep({ step, onSubmit }: { step: FlowStep; onSubmit: (c: ContactInf
       <PrimaryButton onClick={submit} disabled={!valid}>
         Continuar <ArrowRight className="h-4 w-4" />
       </PrimaryButton>
+    </div>
+  );
+}
+
+// Final alternativo: encerra com carinho quem não tem interesse ou não é o
+// perfil, sem empurrar para o WhatsApp. O lead é registrado como "perdido".
+function ExitStep({ step }: { step?: FlowStep }) {
+  const c = { ...EXIT_DEFAULTS, ...(step?.config ?? {}) };
+  return (
+    <div className="text-center">
+      <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[color:var(--brand)]/10">
+        <Heart className="h-8 w-8 text-[color:var(--brand)]" />
+      </div>
+      <StepTitle title={c.title} center />
+      {c.body && <p className="leading-relaxed text-slate-600">{c.body}</p>}
+      {c.button_label && c.cta_href && (
+        <a
+          href={c.cta_href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="brand-btn mt-8 flex w-full items-center justify-center gap-2 rounded-xl py-4 text-base font-semibold shadow-sm"
+        >
+          {c.button_label} <ArrowRight className="h-4 w-4" />
+        </a>
+      )}
     </div>
   );
 }

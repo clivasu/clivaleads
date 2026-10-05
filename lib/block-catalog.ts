@@ -1,4 +1,5 @@
 import type { StepType, StepConfig } from "@/lib/types";
+import { EXIT_DEFAULTS } from "@/lib/flow-logic";
 
 export interface BlockDef {
   type: StepType;
@@ -84,6 +85,7 @@ export const BLOCK_CATALOG: BlockDef[] = [
   { type: "result", label: "Resultado", group: "Conversão" },
   { type: "cta", label: "CTA", group: "Conversão" },
   { type: "whatsapp", label: "WhatsApp", group: "Conversão" },
+  { type: "exit", label: "Final: sem interesse", group: "Conversão", isNew: true },
 ];
 
 // Config inicial de cada bloco ao ser adicionado (para o preview não ficar vazio).
@@ -229,6 +231,8 @@ export function defaultConfig(type: StepType): StepConfig {
       ] };
     case "cta":
       return { title: "Chamada para ação", body: "Texto de apoio da CTA." };
+    case "exit":
+      return { ...EXIT_DEFAULTS };
     case "whatsapp":
       return { title: "Tudo certo!", body: "Vamos te encaminhar para um especialista.", button_label: "Falar no WhatsApp" };
     default:

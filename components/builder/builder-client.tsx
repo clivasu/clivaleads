@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { createContext, useContext, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Flag, Type, Image as ImageIcon, Video, GalleryHorizontal, Images,
@@ -9,13 +9,14 @@ import {
   Timer as TimerIcon, Sparkles, MousePointerClick, MessageCircle, Gift,
   Volume2, SquareStack, LayoutGrid, LayoutTemplate,
   GripVertical, Trash2, Copy, Plus, ArrowLeft, ExternalLink, Check, ChevronDown,
-  Layers, GitBranch, Palette, Users, Settings,
+  Layers, GitBranch, Palette, Users, Settings, HeartOff, Wand2, Route,
 } from "lucide-react";
-import type { FlowStep, PublicFlow, StepType, QuestionOption, ButtonItem, FormField } from "@/lib/types";
+import type { FlowStep, PublicFlow, StepType, QuestionOption, ButtonItem, FormField, RatingRule } from "@/lib/types";
 import { BLOCK_CATALOG, defaultConfig, type BlockDef } from "@/lib/block-catalog";
 import { FlowRunner } from "@/components/flow-runner/flow-runner";
 import { FlowCanvas } from "@/components/builder/flow-canvas";
 import type { JourneyLead } from "@/lib/flow-journeys";
+import { GOTO_EXIT, GOTO_WHATSAPP, applySmartLogic, isNegativeAnswer } from "@/lib/flow-logic";
 import { DEFAULT_THEME, type FlowTheme, type FontChoice } from "@/lib/theme";
 import { saveFlow } from "@/lib/actions/flows";
 import { UploadButton } from "@/components/bio/upload-button";
@@ -31,7 +32,7 @@ const ICONS: Record<StepType, React.ElementType> = {
   stats: BarChart3, level: Gauge, chart_growth: TrendingUp, chart_gauge: PieChart,
   faq: HelpCircle, loading: Loader, timer: TimerIcon, result: Sparkles,
   cta: MousePointerClick, whatsapp: MessageCircle, spin_wheel: Gift,
-  buttons: SquareStack, audio: Volume2, container: LayoutGrid, hero: LayoutTemplate,
+  buttons: SquareStack, audio: Volume2, container: LayoutGrid, hero: LayoutTemplate, exit: HeartOff,
 };
 const ACCEPTS_CHILDREN = (t: StepType) => t === "container" || t === "hero";
 // Rótulo canônico por type (ignora presets, que compartilham o mesmo type).
@@ -189,10 +190,31 @@ export function BuilderClient({ flow, leads = [] }: { flow: PublicFlow; leads?: 
     setSaved(false);
   };
 
+  // Ligação feita no canvas (arrastando a bolinha da opção): guarda o id da
+  // etapa de destino, que não quebra quando as etapas são reordenadas.
   const setBranch = (stepId: string, optIndex: number, next: number | undefined) => {
     const node = findNode(steps, stepId);
     if (!node) return;
-    update(updateNode(steps, stepId, { config: { ...node.config, options: (node.config.options ?? []).map((o, i) => (i === optIndex ? { ...o, next } : o)) } }));
+    const goto = typeof next === "number" ? steps[next]?.id : undefined;
+    update(updateNode(steps, stepId, { config: { ...node.config, options: (node.config.options ?? []).map((o, i) => (i === optIndex ? { ...o, next: undefined, goto } : o)) } }));
+  };
+
+  const makeExitStep = (): FlowStep => ({ id: uid(), flow_id: flow.id, position: 0, type: "exit", config: defaultConfig("exit") });
+  // Garante que exista um final "sem interesse" (cria no fim, se faltar).
+  const ensureExit = () => {
+    setSteps((prev) => (prev.some((s) => s.type === "exit") ? prev : [...prev, makeExitStep()].map((s, i) => ({ ...s, position: i }))));
+    setSaved(false);
+  };
+  const [smartMsg, setSmartMsg] = useState<string | null>(null);
+  // Lógica inteligente: liga respostas negativas ao final "sem interesse".
+  const runSmartLogic = () => {
+    const r = applySmartLogic(steps, makeExitStep);
+    if (r.linked === 0) setSmartMsg("Nenhuma resposta negativa sem destino. Sua lógica já está em ordem ✓");
+    else {
+      update(r.steps);
+      setSmartMsg(`${r.linked} resposta${r.linked > 1 ? "s" : ""} negativa${r.linked > 1 ? "s" : ""} agora leva${r.linked > 1 ? "m" : ""} ao final “sem interesse”${r.createdExit ? ". Criei esse bloco no fim do funil para você" : ""}.`);
+    }
+    setTimeout(() => setSmartMsg(null), 7000);
   };
 
   const addBlock = (type: StepType, preset?: Partial<FlowStep["config"]>) => {
@@ -314,7 +336,17 @@ export function BuilderClient({ flow, leads = [] }: { flow: PublicFlow; leads?: 
           <>
         {/* Etapas */}
         <div className="flex w-52 shrink-0 flex-col border-r">
-          <p className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Etapas</p>
+          <div className="flex items-center justify-between px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Etapas</p>
+            <button
+              onClick={runSmartLogic}
+              title="Lógica inteligente: envia respostas negativas para o final “sem interesse”"
+              className="flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100"
+            >
+              <Wand2 className="h-3.5 w-3.5" /> Lógica
+            </button>
+          </div>
+          {smartMsg && <p className="mx-2 mb-2 rounded-lg bg-emerald-50 px-2.5 py-2 text-[11px] leading-snug text-emerald-800">{smartMsg}</p>}
           <div className="flex-1 overflow-y-auto px-2">
             <TreeRows
               list={steps}
@@ -399,7 +431,11 @@ export function BuilderClient({ flow, leads = [] }: { flow: PublicFlow; leads?: 
         {tab === "build" && (
           <div className="w-72 shrink-0 overflow-y-auto border-l p-4">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Editar bloco</p>
-            {selected ? <Inspector step={selected} onChange={patchConfig} /> : <p className="text-sm text-slate-400">Nenhum bloco selecionado.</p>}
+            {selected ? (
+              <LogicCtx.Provider value={{ steps, currentId: selected.id, ensureExit }}>
+                <Inspector step={selected} onChange={patchConfig} />
+              </LogicCtx.Provider>
+            ) : <p className="text-sm text-slate-400">Nenhum bloco selecionado.</p>}
           </div>
         )}
       </div>
@@ -585,12 +621,12 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
           <input className={inputCls} value={c.subtitle ?? ""} onChange={(e) => onChange({ subtitle: e.target.value })} />
         </Field>
       )}
-      {["text", "alert", "cta", "timer", "whatsapp"].includes(t) && (
+      {["text", "alert", "cta", "timer", "whatsapp", "exit"].includes(t) && (
         <Field label="Texto">
           <textarea className={inputCls} rows={3} value={c.body ?? ""} onChange={(e) => onChange({ body: e.target.value })} />
         </Field>
       )}
-      {["start", "cta", "whatsapp", "news", "form"].includes(t) && (
+      {["start", "cta", "whatsapp", "news", "form", "exit"].includes(t) && (
         <Field label="Texto do botão">
           <input className={inputCls} value={c.button_label ?? ""} onChange={(e) => onChange({ button_label: e.target.value })} />
         </Field>
@@ -615,7 +651,7 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
       {(t === "question" || t === "multi_choice") && (
         <>
           <SizeField label="Tamanho dos botões" value={c.option_size ?? "md"} onChange={(v) => onChange({ option_size: v })} />
-          <OptionsEditor options={c.options ?? []} onChange={(options) => onChange({ options })} />
+          <OptionsEditor options={c.options ?? []} question={c.title ?? ""} onChange={(options) => onChange({ options })} />
         </>
       )}
 
@@ -739,10 +775,28 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
 
       {/* Rating */}
       {t === "rating" && (
-        <div className="grid grid-cols-2 gap-2">
-          <Field label="Mínimo"><input type="number" className={inputCls} value={c.min ?? 0} onChange={(e) => onChange({ min: Number(e.target.value) })} /></Field>
-          <Field label="Máximo"><input type="number" className={inputCls} value={c.max ?? 10} onChange={(e) => onChange({ max: Number(e.target.value) })} /></Field>
-        </div>
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Mínimo"><input type="number" className={inputCls} value={c.min ?? 0} onChange={(e) => onChange({ min: Number(e.target.value) })} /></Field>
+            <Field label="Máximo"><input type="number" className={inputCls} value={c.max ?? 10} onChange={(e) => onChange({ max: Number(e.target.value) })} /></Field>
+          </div>
+          <RatingRulesEditor rules={c.rating_rules ?? []} max={c.max ?? 10} onChange={(rating_rules) => onChange({ rating_rules })} />
+        </>
+      )}
+
+      {/* Final "sem interesse" */}
+      {t === "exit" && (
+        <>
+          <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-[11px] leading-relaxed text-rose-800">
+            Este bloco <b>só aparece quando uma resposta, regra ou portão envia a pessoa para cá</b>. No caminho normal ele é pulado. O lead fica registrado como <b>perdido</b>.
+          </div>
+          <Field label="Link do botão (opcional)">
+            <input className={inputCls} value={c.cta_href ?? ""} onChange={(e) => onChange({ cta_href: e.target.value })} placeholder="https://instagram.com/suaclinica" />
+          </Field>
+          <Field label="Motivo (etiqueta do lead)">
+            <input className={inputCls} value={c.exit_reason ?? ""} onChange={(e) => onChange({ exit_reason: e.target.value })} placeholder="Sem interesse" />
+          </Field>
+        </>
       )}
 
       {/* Timer */}
@@ -1003,6 +1057,28 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
         </>
       )}
 
+      {/* Portão de qualificação por pontuação */}
+      {t !== "exit" && t !== "start" && t !== "hero" && (
+        <div className="mt-4 border-t pt-4">
+          <ToggleRow
+            label="Portão de qualificação"
+            desc="Só mostra este bloco para quem atingiu a pontuação mínima. Quem não atingir segue para outro destino."
+            on={typeof c.score_gate_min === "number"}
+            onChange={(v) => onChange(v ? { score_gate_min: 40, score_gate_goto: c.score_gate_goto ?? GOTO_EXIT } : { score_gate_min: undefined, score_gate_goto: undefined })}
+          />
+          {typeof c.score_gate_min === "number" && (
+            <>
+              <Field label={`Pontuação mínima: ${c.score_gate_min}`}>
+                <input type="range" min={0} max={100} step={5} value={c.score_gate_min} onChange={(e) => onChange({ score_gate_min: Number(e.target.value) })} className="w-full accent-emerald-500" />
+              </Field>
+              <Field label="Quem não atingir vai para">
+                <GotoSelect value={c.score_gate_goto ?? GOTO_EXIT} onChange={(v) => onChange({ score_gate_goto: v ?? GOTO_EXIT })} />
+              </Field>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Botão automático "Continuar" (evita 2 botões na mesma tela) */}
       {HAS_CONTINUE.has(t) && (
         <div className="mt-4 border-t pt-4">
@@ -1177,11 +1253,81 @@ function SizeField({ label, value, onChange }: { label: string; value: string; o
 }
 
 function defaultAllowed(t: StepType) {
-  const withTitle = ["start", "text", "image", "video", "carousel", "before_after", "question", "multi_choice", "rating", "stats", "level", "chart_growth", "chart_gauge", "faq", "form", "news", "cta", "whatsapp", "timer", "spin_wheel", "buttons", "audio", "container", "hero"];
+  const withTitle = ["start", "text", "image", "video", "carousel", "before_after", "question", "multi_choice", "rating", "stats", "level", "chart_growth", "chart_gauge", "faq", "form", "news", "cta", "whatsapp", "timer", "spin_wheel", "buttons", "audio", "container", "hero", "exit"];
   return withTitle.includes(t) ? { title: true } : {};
 }
 
-function OptionsEditor({ options, onChange }: { options: QuestionOption[]; onChange: (o: QuestionOption[]) => void }) {
+// Contexto da lógica: etapas disponíveis como destino e criação do final.
+const LogicCtx = createContext<{ steps: FlowStep[]; currentId: string; ensureExit: () => void }>({
+  steps: [], currentId: "", ensureExit: () => {},
+});
+
+// "Ir para…": próxima etapa, final sem interesse, WhatsApp ou qualquer etapa.
+function GotoSelect({ value, legacyNext, onChange }: { value?: string; legacyNext?: number; onChange: (v: string | undefined) => void }) {
+  const { steps, currentId, ensureExit } = useContext(LogicCtx);
+  const current = value ?? (typeof legacyNext === "number" ? steps[legacyNext]?.id : undefined) ?? "";
+  return (
+    <select
+      className={cn(
+        "w-full rounded border px-2 py-1 text-xs",
+        current === GOTO_EXIT ? "border-rose-200 bg-rose-50 text-rose-700" : current ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 text-slate-600",
+      )}
+      value={current}
+      onChange={(e) => {
+        const v = e.target.value || undefined;
+        onChange(v);
+        if (v === GOTO_EXIT) ensureExit(); // depois do onChange, para não perder a edição
+      }}
+    >
+      <option value="">→ Seguir para a próxima etapa</option>
+      <option value={GOTO_EXIT}>⛔ Final: sem interesse</option>
+      <option value={GOTO_WHATSAPP}>💬 Direto para o WhatsApp</option>
+      <optgroup label="Pular para a etapa">
+        {steps.map((st, i) => (st.id === currentId ? null : (
+          <option key={st.id} value={st.id}>
+            {i + 1}. {LABELS[st.type]}{st.config.title ? ` — ${st.config.title.slice(0, 26)}` : ""}
+          </option>
+        )))}
+      </optgroup>
+    </select>
+  );
+}
+
+function RatingRulesEditor({ rules, max, onChange }: { rules: RatingRule[]; max: number; onChange: (r: RatingRule[]) => void }) {
+  const set = (i: number, patch: Partial<RatingRule>) => onChange(rules.map((r, k) => (k === i ? { ...r, ...patch } : r)));
+  return (
+    <div className="mb-3 mt-1 rounded-lg border border-slate-200 p-2.5">
+      <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-600"><Route className="h-3.5 w-3.5 text-emerald-600" /> Regras pela nota</p>
+      {rules.length === 0 && <p className="mb-2 text-[11px] leading-snug text-slate-400">Ex.: nota até 3 → final sem interesse; a partir de 8 → direto para o WhatsApp.</p>}
+      <div className="flex flex-col gap-2">
+        {rules.map((r, i) => (
+          <div key={i} className="rounded-md bg-slate-50 p-2">
+            <div className="mb-1.5 flex items-center gap-1.5">
+              <select className="rounded border border-slate-200 px-1.5 py-1 text-xs text-slate-600" value={r.op} onChange={(e) => set(i, { op: e.target.value as "lte" | "gte" })}>
+                <option value="lte">Se a nota for até</option>
+                <option value="gte">Se a nota for a partir de</option>
+              </select>
+              <input type="number" min={0} max={max} className="w-14 rounded border border-slate-200 px-2 py-1 text-xs" value={r.value} onChange={(e) => set(i, { value: Number(e.target.value) })} />
+              <button onClick={() => onChange(rules.filter((_, k) => k !== i))} className="ml-auto text-slate-400 hover:text-rose-500" aria-label="Remover regra"><Trash2 className="h-3.5 w-3.5" /></button>
+            </div>
+            <GotoSelect value={r.goto} onChange={(v) => set(i, { goto: v ?? "" })} />
+          </div>
+        ))}
+      </div>
+      {rules.length < 3 && (
+        <button
+          onClick={() => onChange([...rules, rules.length === 0 ? { op: "lte", value: 3, goto: GOTO_EXIT } : { op: "gte", value: Math.max(1, max - 2), goto: GOTO_WHATSAPP }])}
+          className="mt-2 flex items-center gap-1 text-xs font-medium text-emerald-600"
+        >
+          <Plus className="h-3.5 w-3.5" /> Adicionar regra
+        </button>
+      )}
+    </div>
+  );
+}
+
+function OptionsEditor({ options, question = "", onChange }: { options: QuestionOption[]; question?: string; onChange: (o: QuestionOption[]) => void }) {
+  const { ensureExit } = useContext(LogicCtx);
   const setOpt = (i: number, patch: Partial<QuestionOption>) =>
     onChange(options.map((o, idx) => (idx === i ? { ...o, ...patch } : o)));
   const add = () => onChange([...options, { label: "Nova opção", value: "opt" + (options.length + 1), score: 0 }]);
@@ -1226,6 +1372,18 @@ function OptionsEditor({ options, onChange }: { options: QuestionOption[]; onCha
             )}
             {o.image_style === "float" && <p className="mb-1.5 text-[10px] text-slate-400">Dica: use um PNG com fundo transparente — ele flutua no botão, sem moldura.</p>}
             <input className="w-full rounded border border-slate-200 px-2 py-1 text-sm" placeholder="Link externo (opcional)" value={o.href ?? ""} onChange={(e) => setOpt(i, { href: e.target.value || undefined })} />
+            <div className="mt-1.5 flex items-center gap-1.5">
+              <Route className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              <GotoSelect value={o.goto} legacyNext={o.next} onChange={(v) => setOpt(i, { goto: v, next: undefined })} />
+            </div>
+            {!o.goto && typeof o.next !== "number" && isNegativeAnswer(o.label, question) && (
+              <button
+                onClick={() => { setOpt(i, { goto: GOTO_EXIT, next: undefined }); ensureExit(); }}
+                className="mt-1.5 flex w-full items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1.5 text-left text-[11px] leading-snug text-amber-800 hover:bg-amber-100"
+              >
+                <Wand2 className="h-3.5 w-3.5 shrink-0" /> Parece uma resposta negativa. Enviar para o final “sem interesse”?
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -1268,6 +1426,10 @@ function ButtonsEditor({ buttons, onChange }: { buttons: ButtonItem[]; onChange:
               </div>
             )}
             <input className="w-full rounded border border-slate-200 px-2 py-1 text-sm" placeholder="Link externo (opcional)" value={b.href ?? ""} onChange={(e) => set(i, { href: e.target.value || undefined })} />
+            <div className="mt-1.5 flex items-center gap-1.5">
+              <Route className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              <GotoSelect value={b.goto} legacyNext={b.next} onChange={(v) => set(i, { goto: v, next: undefined })} />
+            </div>
           </div>
         ))}
       </div>

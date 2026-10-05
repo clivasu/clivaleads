@@ -38,6 +38,7 @@ export type StepType =
   | "news" // notícia / advertorial (g1, Metrópoles...)
   | "spin_wheel" // roleta promocional (gamificação)
   | "chart_growth" // gráfico cartesiano animado (Você vs Concorrência)
+  | "exit" // final alternativo: sem interesse / fora do perfil (só por desvio)
   | "chart_gauge" // gráfico circular animado (%)
   | "cta" // chamada para ação
   | "result" // resultado personalizado por score
@@ -72,10 +73,17 @@ export type EventType =
   | "question_viewed"
   | "option_clicked"
   | "flow_completed"
+  | "flow_disqualified"
   | "whatsapp_clicked";
 
 export type ImageStyle = "cover" | "circle" | "float";
 export type ElementSize = "sm" | "md" | "lg";
+
+export interface RatingRule {
+  op: "lte" | "gte"; // nota até (≤) ou a partir de (≥)
+  value: number;
+  goto: string; // id da etapa, "@exit" ou "@whatsapp"
+}
 
 export interface QuestionOption {
   label: string;
@@ -88,14 +96,18 @@ export interface QuestionOption {
   href?: string; // direciona para link externo ao clicar
   // Fragmento em linguagem natural usado na mensagem do WhatsApp.
   phrase?: string;
-  // Lógica condicional: índice da etapa para onde pular ao escolher.
+  // Lógica condicional (legado): índice da etapa para onde pular ao escolher.
   next?: number;
+  // Lógica condicional: id da etapa de destino ou atalho ("@exit" = final sem
+  // interesse, "@whatsapp" = direto para o WhatsApp). Tem prioridade sobre `next`.
+  goto?: string;
 }
 
 export interface ButtonItem {
   label: string;
   href?: string; // link externo
-  next?: number; // pular para etapa
+  next?: number; // pular para etapa (legado, por índice)
+  goto?: string; // destino: id da etapa, "@exit" ou "@whatsapp"
   image_url?: string;
   image_style?: ImageStyle;
   variant?: "solid" | "outline";
@@ -234,6 +246,14 @@ export interface StepConfig {
   video_url?: string;
   audio_url?: string;
   share_links?: ShareLinks;
+  // lógica: regras da escala/nota (ex.: nota até 3 → final sem interesse)
+  rating_rules?: RatingRule[];
+  // lógica: portão de qualificação — só entra neste bloco quem tiver a
+  // pontuação mínima; os demais vão para o destino indicado
+  score_gate_min?: number;
+  score_gate_goto?: string;
+  // final "sem interesse": etiqueta registrada no lead
+  exit_reason?: string;
   // alinhamento vertical do conteúdo (título mais perto da barra = "top")
   top_align?: "center" | "top";
   // vídeo — provedor + comportamento
