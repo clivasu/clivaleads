@@ -75,27 +75,27 @@ export function NewFlowForm({ configured }: { configured: boolean }) {
         </h1>
         <p className="text-sm text-slate-500">Funis completos por especialidade, com imagens, lógica de desinteresse e captura de WhatsApp. Você edita tudo no construtor.</p>
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {SPECIALTIES.map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => applyTemplate(t.key)}
+            title={t.description}
             disabled={pending}
-            className="group overflow-hidden rounded-2xl border border-slate-200 bg-white text-left transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-60"
+            className="group flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-left transition-all hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md disabled:opacity-60"
           >
-            <div className="relative h-36 overflow-hidden bg-slate-100">
+            <div className="relative h-24 overflow-hidden bg-slate-100">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={`/templates/${t.key}/cover.webp`} alt="" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-              <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold text-slate-700">{t.specialty}</span>
+              <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-bold text-slate-700">{t.specialty}</span>
               {usingTpl === t.key && (
-                <div className="absolute inset-0 flex items-center justify-center bg-white/70"><Loader2 className="h-6 w-6 animate-spin text-emerald-600" /></div>
+                <div className="absolute inset-0 flex items-center justify-center bg-white/70"><Loader2 className="h-5 w-5 animate-spin text-emerald-600" /></div>
               )}
             </div>
-            <div className="p-4">
-              <p className="font-semibold text-slate-900">{t.name}</p>
-              <p className="mt-1 line-clamp-2 text-xs text-slate-500">{t.description}</p>
-              <span className="mt-3 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white">Usar este modelo</span>
+            <div className="flex flex-1 flex-col p-2.5">
+              <p className="line-clamp-2 text-[13px] font-semibold leading-snug text-slate-900">{t.name.split(": ")[1] ?? t.name}</p>
+              <span className="mt-auto pt-1.5 text-[11px] font-semibold text-emerald-600 group-hover:text-emerald-700">Usar modelo →</span>
             </div>
           </button>
         ))}
