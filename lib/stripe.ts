@@ -6,8 +6,10 @@ import Stripe from "stripe";
 const SECRET = process.env.STRIPE_SECRET_KEY ?? "";
 const ACCOUNT = process.env.STRIPE_ACCOUNT_ID ?? "";
 
-export const isStripeConfigured = SECRET.length > 0;
 export const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET ?? "";
+// Cobrança só liga com as duas peças: sem o webhook, um pagamento aprovado
+// não liberaria o acesso e o cliente ficaria preso na tela de planos.
+export const isStripeConfigured = SECRET.length > 0 && STRIPE_WEBHOOK_SECRET.length > 0;
 
 let client: Stripe | null = null;
 
