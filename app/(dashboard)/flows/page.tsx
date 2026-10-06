@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { ExternalLink, Pencil, Plus } from "lucide-react";
 import { getCurrentOrg } from "@/lib/data/org";
 import { listFlows } from "@/lib/data/flows";
-import { seedTemplateFlows } from "@/lib/actions/flows";
+import { seedSpecialtyFlows, seedTemplateFlows } from "@/lib/actions/flows";
+import { SPECIALTIES } from "@/lib/specialty-templates";
 import { getDashboardData } from "@/lib/data/dashboard";
 import { getLeadInsights } from "@/lib/data/lead-insights";
 import { FunnelInsights } from "@/components/dashboard/funnel-insights";
@@ -19,9 +20,13 @@ export default async function FlowsPage() {
   if (!org) redirect("/login");
   let flows = await listFlows(org.id);
   // Conta nova (real) recebe os modelos de funil da Cliva na primeira visita.
-  if (isSupabaseConfigured && flows.length === 0) {
+  if (isSupabaseConfigured) {
     try {
-      const n = await seedTemplateFlows(org.id);
+      let n = flows.length === 0 ? await seedTemplateFlows(org.id) : 0;
+      // Modelos por especialidade: conta nova ou conta que ainda não tem nenhum.
+      const tplNames = new Set(SPECIALTIES.map((s) => s.name));
+      const hasSpecialty = flows.some((f) => tplNames.has(f.name) || (f.settings as { template?: string } | null)?.template);
+      if (!hasSpecialty) n += await seedSpecialtyFlows(org.id);
       if (n > 0) flows = await listFlows(org.id);
     } catch { /* segue sem modelos se algo falhar */ }
   }
