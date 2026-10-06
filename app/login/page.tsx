@@ -48,7 +48,13 @@ export default function LoginPage() {
       setError(error.message);
       return;
     }
-    router.push("/dashboard");
+    // Conta nova vai direto escolher o plano (o painel também redireciona).
+    if (mode === "signup") {
+      const plano = new URLSearchParams(window.location.search).get("plano");
+      router.push(plano ? `/assinar?plano=${encodeURIComponent(plano)}` : "/assinar");
+    } else {
+      router.push("/dashboard");
+    }
     router.refresh();
   }
 

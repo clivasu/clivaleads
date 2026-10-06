@@ -4,6 +4,8 @@ import { getCurrentOrg } from "@/lib/data/org";
 import { isSupabaseConfigured } from "@/lib/env";
 import { OrgSettingsForm } from "@/components/settings/org-settings-form";
 import { ChangePasswordForm } from "@/components/settings/change-password-form";
+import { BillingCard } from "@/components/billing/billing-card";
+import { getBillingState, getUsage } from "@/lib/data/billing";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,9 @@ export default async function SettingsPage() {
   const host = h.get("host") ?? "prelead.vercel.app";
   const proto = host.startsWith("localhost") ? "http" : "https";
   const baseUrl = `${proto}://${host}`;
+
+  const billing = await getBillingState(org.id);
+  const usage = billing.enabled ? await getUsage(org.id) : null;
 
   return (
     <div className="mx-auto max-w-xl">
@@ -29,6 +34,17 @@ export default async function SettingsPage() {
         </p>
       ) : (
         <>
+          {billing.enabled && usage && (
+            <BillingCard
+              plan={billing.plan}
+              status={billing.billing?.status ?? null}
+              trialEndsAt={billing.billing?.trial_ends_at ?? null}
+              periodEnd={billing.billing?.current_period_end ?? null}
+              cancelAtPeriodEnd={Boolean(billing.billing?.cancel_at_period_end)}
+              hasCustomer={Boolean(billing.billing?.stripe_customer_id)}
+              usage={usage}
+            />
+          )}
           <OrgSettingsForm org={org} baseUrl={baseUrl} />
           <ChangePasswordForm />
         </>

@@ -7,6 +7,7 @@ import { Check, X, Plus, ArrowRight, Sparkles, Link2, Globe, Code2, Download, Gi
 import { ClivaLogo, ClivaMark } from "@/components/brand/logo";
 import { Magnetic, Reveal } from "@/components/landing/motion";
 import { cn } from "@/lib/utils";
+import { PLANS, formatPrice, planLimits } from "@/lib/plans";
 
 /* ============================ COMPARAÇÃO ============================ */
 export function Comparison() {
@@ -40,14 +41,7 @@ export function Comparison() {
 }
 
 /* ============================ PLANOS ============================ */
-const PLANOS = [
-  { name: "Essencial", price: 97, desc: "Para começar a lotar a agenda com tranquilidade.", highlight: false,
-    limits: [["Até 2 funis", true], ["Até 5 mil leads/mês", true], ["Webhook / CRM", false], ["Edição em equipe", false]] as const },
-  { name: "Pro", price: 197, desc: "Para quem já anuncia e quer performance.", highlight: true,
-    limits: [["Até 5 funis", true], ["Até 10 mil leads/mês", true], ["Webhook / CRM", true], ["Edição em equipe", false]] as const },
-  { name: "Elite", price: 297, desc: "Para escala e para quem atende várias clínicas.", highlight: false,
-    limits: [["Até 10 funis", true], ["Até 25 mil leads/mês", true], ["Webhook / CRM", true], ["Edição em equipe", true]] as const },
-];
+const PLANOS = PLANS.map((p) => ({ ...p, price: formatPrice(p.priceCents), limits: planLimits(p) }));
 const COMUM = [
   { icon: Sparkles, l: "30+ blocos interativos" }, { icon: Link2, l: "Link na bio + rastreio" }, { icon: Gift, l: "Roleta e diagnóstico" },
   { icon: Globe, l: "Domínio próprio" }, { icon: Code2, l: "Pixel e UTMs" }, { icon: Download, l: "Exportação de leads" },
@@ -56,19 +50,19 @@ const COMUM = [
 export function Pricing() {
   return (
     <div>
-      <div className="grid gap-5 lg:grid-cols-3 lg:items-stretch">
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4 lg:items-stretch">
         {PLANOS.map((p, i) => (
           <Reveal key={p.name} delay={i * 0.08} className="h-full">
             <div className={cn("relative h-full rounded-[2rem] p-[1.5px]", p.highlight ? "bg-[conic-gradient(from_var(--a,0deg),#34d399,#0d9488,#a7f3d0,#34d399)] [animation:spin-border_6s_linear_infinite]" : "bg-slate-200")}>
-              <div className={cn("flex h-full flex-col rounded-[calc(2rem-1.5px)] p-7", p.highlight ? "bg-slate-950 text-white" : "bg-white")}>
-                <div className="flex items-center justify-between">
-                  <p className="font-display text-xl font-semibold">Cliva {p.name}</p>
-                  {p.highlight && <span className="rounded-full bg-emerald-400 px-2.5 py-1 text-[11px] font-bold text-emerald-950">MAIS ESCOLHIDO</span>}
+              <div className={cn("flex h-full flex-col rounded-[calc(2rem-1.5px)] p-6", p.highlight ? "bg-slate-950 text-white" : "bg-white")}>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-display whitespace-nowrap text-xl font-semibold">Cliva {p.name}</p>
+                  {p.highlight && <span className="whitespace-nowrap rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-bold text-emerald-950">POPULAR</span>}
                 </div>
                 <p className={cn("mt-2 text-sm", p.highlight ? "text-white/60" : "text-slate-500")}>{p.desc}</p>
                 <p className="mt-6 flex items-end gap-1">
                   <span className={cn("pb-2 text-lg font-semibold", p.highlight ? "text-white/70" : "text-slate-400")}>R$</span>
-                  <span className="font-display text-6xl font-semibold tracking-[-0.04em]">{p.price}</span>
+                  <span className="font-display text-5xl font-semibold tracking-[-0.04em]">{p.price}</span>
                   <span className={cn("pb-2 text-sm", p.highlight ? "text-white/60" : "text-slate-500")}>/mês</span>
                 </p>
                 <p className={cn("mt-1 text-xs font-semibold", p.highlight ? "text-emerald-300" : "text-emerald-700")}>7 dias grátis para testar</p>
@@ -80,7 +74,7 @@ export function Pricing() {
                   ))}
                 </ul>
                 <div className="mt-auto pt-8">
-                  <Link href={`/login?cadastro=1&plano=${p.name.toLowerCase()}`}
+                  <Link href={`/login?cadastro=1&plano=${p.key}`}
                     className={cn("flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold transition-all",
                       p.highlight ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-emerald-950 hover:brightness-110" : "bg-slate-900 text-white hover:bg-emerald-700")}>
                     Começar teste grátis <ArrowRight className="h-4 w-4" />
@@ -112,7 +106,7 @@ const FAQS = [
   { q: "Preciso saber programar ou contratar um designer?", a: "Não. Você escolhe um modelo, troca textos e imagens e publica. Tudo é visual, arrastando blocos." },
   { q: "Funciona para a minha área?", a: "Sim. Funciona para estética, odontologia, nutrição, dermatologia, fisioterapia, psicologia e outras especialidades da saúde. Os modelos são adaptáveis para qualquer procedimento." },
   { q: "Como o paciente chega ao meu WhatsApp?", a: "No fim do funil, o Cliva monta uma mensagem com as respostas da pessoa e abre o seu WhatsApp. Você recebe o contato já com nome, queixa e prazo." },
-  { q: "Como funcionam os 7 dias grátis?", a: "Você cria a conta, testa todos os recursos do plano escolhido por 7 dias e decide se continua. Pode cancelar quando quiser." },
+  { q: "Como funcionam os 7 dias grátis?", a: "Você cria a conta, escolhe o plano e cadastra o cartão. Nada é cobrado nos primeiros 7 dias. Se cancelar antes do fim do teste, não paga nada." },
   { q: "Os dados dos pacientes ficam seguros?", a: "Sim. Cada clínica tem a sua conta isolada, e os formulários pedem consentimento conforme a LGPD." },
   { q: "Posso trocar de plano depois?", a: "Pode. Comece no plano que fizer sentido e mude quando a agenda crescer, sem perder nada do que já criou." },
 ];

@@ -39,7 +39,9 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/admin") ||
     path.startsWith("/leads") ||
     path.startsWith("/analytics") ||
-    path.startsWith("/settings");
+    path.startsWith("/settings") ||
+    path.startsWith("/schedule") ||
+    path.startsWith("/assinar");
 
   if (!user && isPrivate) {
     const url = request.nextUrl.clone();

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/env";
 import { getCurrentOrg } from "@/lib/data/org";
 import type { FlowStep } from "@/lib/types";
+import { getBillingState } from "@/lib/data/billing";
 
 export interface SaveFlowInput {
   id: string;
@@ -46,6 +47,27 @@ export async function saveFlow(input: SaveFlowInput): Promise<ActionResult> {
   }
 
   const supabase = await createClient();
+
+  // Limite de funis publicados do plano.
+  if (input.status === "published") {
+    const org = await getCurrentOrg();
+    const billing = org ? await getBillingState(org.id) : null;
+    if (org && billing?.plan) {
+      const { count } = await supabase
+        .from("flows")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", org.id)
+        .eq("status", "published")
+        .neq("id", input.id);
+      if ((count ?? 0) >= billing.plan.funnels) {
+        const n = billing.plan.funnels;
+        return {
+          ok: false,
+          error: `Seu plano ${billing.plan.name} permite ${n} funi${n === 1 ? "l publicado" : "s publicados"}. Salve como rascunho, despublique outro funil ou troque de plano em Configurações.`,
+        };
+      }
+    }
+  }
 
   const { error: flowErr } = await supabase
     .from("flows")
@@ -182,7 +204,7 @@ export async function seedTemplateFlows(orgId: string): Promise<number> {
         slug: newSlug,
         procedure: tpl.procedure ?? null,
         description: tpl.description ?? null,
-        status: "published",
+        status: "draft",
         whatsapp_number: null,
         final_message: tpl.final_message ?? null,
         settings: {},

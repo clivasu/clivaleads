@@ -3,6 +3,7 @@ import { cookies, headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/env";
 import { totalScore } from "@/lib/scoring";
+import { getBillingStateAdmin, monthStartISO } from "@/lib/data/billing";
 import type { LeadAnswer, ContactInfo } from "@/lib/types";
 
 interface Body {
@@ -43,6 +44,25 @@ export async function POST(request: NextRequest) {
   const session_id = cookieStore.get("pl_sid")?.value ?? crypto.randomUUID();
 
   const supabase = createAdminClient();
+
+  // Limite do plano: sem assinatura ou com a cota de leads do mês esgotada,
+  // o funil continua funcionando para o paciente, mas o lead não é gravado.
+  const billing = await getBillingStateAdmin(organization_id);
+  if (billing.enabled) {
+    if (!billing.hasAccess) {
+      return NextResponse.json({ ok: false, error: "subscription_inactive" }, { status: 402 });
+    }
+    if (billing.plan) {
+      const { count } = await supabase
+        .from("lead_sessions")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organization_id)
+        .gte("created_at", monthStartISO());
+      if ((count ?? 0) >= billing.plan.leadsPerMonth) {
+        return NextResponse.json({ ok: false, error: "lead_limit" }, { status: 402 });
+      }
+    }
+  }
 
   const { data: session, error } = await supabase
     .from("lead_sessions")
