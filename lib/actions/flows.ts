@@ -221,56 +221,9 @@ export async function seedTemplateFlows(orgId: string): Promise<number> {
   return created;
 }
 
-// Insere um modelo por especialidade (rascunho) na organização.
-async function insertSpecialtyFlow(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  orgId: string,
-  whatsapp: string | null,
-  key: string,
-): Promise<string | null> {
-  const { getSpecialty, buildSpecialtySteps } = await import("@/lib/specialty-templates");
-  const spec = getSpecialty(key);
-  if (!spec) return null;
-  const { data: flow, error } = await supabase
-    .from("flows")
-    .insert({
-      organization_id: orgId,
-      name: spec.name,
-      slug: `${slugifyBase(spec.specialty)}-${Math.random().toString(36).slice(2, 7)}`,
-      procedure: spec.procedure,
-      description: spec.description,
-      cover_image_url: `/templates/${spec.key}/cover.webp`,
-      status: "draft",
-      whatsapp_number: whatsapp,
-      final_message: spec.final_message,
-      settings: { template: spec.key },
-    })
-    .select("id")
-    .single();
-  if (error || !flow) return null;
-  const { error: insErr } = await supabase.from("flow_steps").insert(serializeSteps(buildSpecialtySteps(spec, flow.id)));
-  if (insErr) return null;
-  return flow.id;
-}
-
-// Semeia os 7 modelos por especialidade. Roda para conta nova e, uma vez,
-// para contas que ainda não têm nenhum deles.
-export async function seedSpecialtyFlows(orgId: string): Promise<number> {
-  if (!isSupabaseConfigured) return 0;
-  const { SPECIALTIES } = await import("@/lib/specialty-templates");
-  const supabase = await createClient();
-  const { data: org } = await supabase.from("organizations").select("whatsapp_number").eq("id", orgId).single();
-  let created = 0;
-  // Ordem inversa: o primeiro da lista fica no topo (lista ordena por mais recente).
-  for (const spec of [...SPECIALTIES].reverse()) {
-    if (await insertSpecialtyFlow(supabase, orgId, org?.whatsapp_number ?? null, spec.key)) created += 1;
-  }
-  return created;
-}
-
 // Cria um funil a partir de um modelo por especialidade (galeria do "Novo funil").
 export async function createFlowFromTemplate(key: string): Promise<ActionResult> {
-  const { getSpecialty, specialtyFlows } = await import("@/lib/specialty-templates");
+  const { getSpecialty, buildSpecialtySteps, specialtyFlows } = await import("@/lib/specialty-templates");
   const spec = getSpecialty(key);
   if (!spec) return { ok: false, error: "Modelo não encontrado." };
 
@@ -283,9 +236,28 @@ export async function createFlowFromTemplate(key: string): Promise<ActionResult>
   if (!org) return { ok: false, error: "Nenhuma organização encontrada. Faça login." };
 
   const supabase = await createClient();
-  const id = await insertSpecialtyFlow(supabase, org.id, org.whatsapp_number ?? null, spec.key);
-  if (!id) return { ok: false, error: "Falha ao criar o funil." };
+  const { data: flow, error } = await supabase
+    .from("flows")
+    .insert({
+      organization_id: org.id,
+      name: spec.name,
+      slug: `${slugifyBase(spec.specialty)}-${Math.random().toString(36).slice(2, 7)}`,
+      procedure: spec.procedure,
+      description: spec.description,
+      cover_image_url: `/templates/${spec.key}/cover.webp`,
+      status: "draft",
+      whatsapp_number: org.whatsapp_number ?? null,
+      final_message: spec.final_message,
+      settings: {},
+    })
+    .select("id")
+    .single();
+  if (error || !flow) return { ok: false, error: error?.message ?? "Falha ao criar." };
+
+  const rows = serializeSteps(buildSpecialtySteps(spec, flow.id));
+  const { error: insErr } = await supabase.from("flow_steps").insert(rows);
+  if (insErr) return { ok: false, error: insErr.message };
 
   revalidatePath("/flows");
-  return { ok: true, id };
+  return { ok: true, id: flow.id };
 }
