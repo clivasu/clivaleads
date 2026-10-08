@@ -37,6 +37,7 @@ import { buildLeadMessage, buildWhatsappUrl } from "@/lib/whatsapp";
 import { themeVars, type FlowTheme } from "@/lib/theme";
 import { totalScore, tierFromScore } from "@/lib/scoring";
 import { track, detectBrowser, detectDevice } from "@/lib/tracking";
+import { BeforeAfterView } from "@/components/flow-runner/before-after";
 import { cn } from "@/lib/utils";
 import { EXIT_DEFAULTS, GOTO_EXIT, lastMainIndex, nextLinear, resolveGoto } from "@/lib/flow-logic";
 
@@ -704,18 +705,7 @@ function BeforeAfterStep({ step }: { step: FlowStep }) {
   return (
     <div>
       <StepTitle title={c.title ?? "Antes e depois"} />
-      <div className="grid grid-cols-2 gap-3">
-        <figure>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={c.before_url} alt="Antes" className="w-full rounded-xl" />
-          <figcaption className="mt-2 text-center text-xs font-medium text-slate-400">Antes</figcaption>
-        </figure>
-        <figure>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={c.after_url} alt="Depois" className="w-full rounded-xl" />
-          <figcaption className="mt-2 text-center text-xs font-medium text-slate-400">Depois</figcaption>
-        </figure>
-      </div>
+      <BeforeAfterView c={c} />
       {c.caption && <p className="mt-4 text-center text-xs text-slate-400">{c.caption}</p>}
     </div>
   );

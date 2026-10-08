@@ -124,3 +124,10 @@ html.lenis, html.lenis body { height: auto; }
   padding: 0.75rem 1.25rem max(0.9rem, env(safe-area-inset-bottom));
   background: linear-gradient(to top, var(--page-bg, #fff) 72%, transparent);
 }
+
+/* Antes e depois: o puxador "chama" para ser arrastado até o primeiro toque. */
+@keyframes ba-nudge {
+  0%, 100% { transform: translateX(0); }
+  30% { transform: translateX(3px); }
+  60% { transform: translateX(-2px); }
+}

@@ -201,6 +201,15 @@ export interface StepConfig {
   before_url?: string;
   after_url?: string;
   caption?: string;
+  ba_mode?: "slider" | "static";       // deslizar para revelar | lado a lado
+  ba_transition?: "wipe" | "fade";    // cortina suave | dissolver
+  ba_aspect?: "4:5" | "1:1" | "3:4" | "16:9";
+  ba_before_label?: string;
+  ba_after_label?: string;
+  ba_hint?: string;
+  // enquadramento de cada foto (para as duas se encaixarem)
+  ba_before_x?: number; ba_before_y?: number; ba_before_zoom?: number;
+  ba_after_x?: number; ba_after_y?: number; ba_after_zoom?: number;
   // carousel
   items?: CarouselItem[];
   carousel_layout?: "slider" | "cards" | "grid" | "list";

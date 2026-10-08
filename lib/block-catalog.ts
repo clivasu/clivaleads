@@ -128,7 +128,14 @@ export function defaultConfig(type: StepType): StepConfig {
         { label: "Ver nossos resultados", variant: "outline" },
       ] };
     case "before_after":
-      return { title: "Antes e depois", before_url: "https://placehold.co/400x400/E2E8F0/475569/png?text=Antes", after_url: "https://placehold.co/400x400/DDD6FE/5B21B6/png?text=Depois", caption: "Resultados podem variar." };
+      return {
+        title: "Antes e depois",
+        before_url: "https://placehold.co/800x1000/E2E8F0/475569/png?text=Antes",
+        after_url: "https://placehold.co/800x1000/DDD6FE/5B21B6/png?text=Depois",
+        caption: "Resultados podem variar.",
+        ba_mode: "slider", ba_transition: "wipe", ba_aspect: "4:5",
+        ba_hint: "Arraste para ver o resultado",
+      };
     case "alert":
       return { body: "Mensagem de aviso importante.", variant: "info" };
     case "news":

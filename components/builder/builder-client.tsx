@@ -20,6 +20,7 @@ import { GOTO_EXIT, GOTO_WHATSAPP, applySmartLogic, isNegativeAnswer } from "@/l
 import { DEFAULT_THEME, type FlowTheme, type FontChoice } from "@/lib/theme";
 import { saveFlow } from "@/lib/actions/flows";
 import { UploadButton } from "@/components/bio/upload-button";
+import { beforeAfterFrames } from "@/components/flow-runner/before-after";
 import { cn } from "@/lib/utils";
 
 // Emojis rápidos para as opções de pergunta.
@@ -654,6 +655,9 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
           <OptionsEditor options={c.options ?? []} question={c.title ?? ""} onChange={(options) => onChange({ options })} />
         </>
       )}
+
+      {/* Antes e depois */}
+      {t === "before_after" && <BeforeAfterEditor c={c} onChange={onChange} />}
 
       {/* Hero (capa com imagem + degradê) */}
       {t === "hero" && (
@@ -1654,6 +1658,146 @@ function SettingsPanel({ s, setS, slug }: { s: FunnelSettings; setS: (p: Partial
           <button className="rounded-lg border border-rose-200 px-3 py-1.5 text-sm font-medium text-rose-600 hover:bg-rose-50">Excluir funil</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ------------------------- Antes e depois: editor ------------------------- */
+type BAConfig = FlowStep["config"];
+
+function Seg<T extends string>({ value, options, onChange }: { value: T; options: [T, string][]; onChange: (v: T) => void }) {
+  return (
+    <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
+      {options.map(([v, lbl]) => (
+        <button key={v} onClick={() => onChange(v)} className={cn("rounded-lg border py-1.5 text-xs font-medium", value === v ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-600")}>
+          {lbl}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function BeforeAfterEditor({ c, onChange }: { c: BAConfig; onChange: (p: Partial<BAConfig>) => void }) {
+  const mode = c.ba_mode ?? "slider";
+  return (
+    <>
+      <Field label="Exibição">
+        <Seg value={mode} options={[["slider", "Deslizar para revelar"], ["static", "Lado a lado"]]} onChange={(v) => onChange({ ba_mode: v })} />
+      </Field>
+      {mode === "slider" && (
+        <Field label="Transição">
+          <Seg value={c.ba_transition ?? "wipe"} options={[["wipe", "Cortina suave"], ["fade", "Dissolver"]]} onChange={(v) => onChange({ ba_transition: v })} />
+        </Field>
+      )}
+      <Field label="Formato das fotos">
+        <Seg value={c.ba_aspect ?? "4:5"} options={[["4:5", "4:5"], ["1:1", "1:1"], ["3:4", "3:4"], ["16:9", "16:9"]]} onChange={(v) => onChange({ ba_aspect: v })} />
+      </Field>
+
+      <Field label="Imagem antes (link)">
+        <input className={inputCls} value={c.before_url ?? ""} onChange={(e) => onChange({ before_url: e.target.value })} placeholder="https://..." />
+      </Field>
+      <div className="-mt-2 mb-3"><UploadButton label="Enviar foto do antes" maxSizeMB={5} onUploaded={(url) => onChange({ before_url: url })} /></div>
+      <Field label="Imagem depois (link)">
+        <input className={inputCls} value={c.after_url ?? ""} onChange={(e) => onChange({ after_url: e.target.value })} placeholder="https://..." />
+      </Field>
+      <div className="-mt-2 mb-3"><UploadButton label="Enviar foto do depois" maxSizeMB={5} onUploaded={(url) => onChange({ after_url: url })} /></div>
+
+      {c.before_url && c.after_url && <BeforeAfterAligner c={c} onChange={onChange} />}
+
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Rótulo antes"><input className={inputCls} value={c.ba_before_label ?? ""} onChange={(e) => onChange({ ba_before_label: e.target.value })} placeholder="Antes" /></Field>
+        <Field label="Rótulo depois"><input className={inputCls} value={c.ba_after_label ?? ""} onChange={(e) => onChange({ ba_after_label: e.target.value })} placeholder="Depois" /></Field>
+      </div>
+      {mode === "slider" && (
+        <Field label="Dica sobre a foto (vazio = sem dica)">
+          <input className={inputCls} value={c.ba_hint ?? "Arraste para ver o resultado"} onChange={(e) => onChange({ ba_hint: e.target.value })} />
+        </Field>
+      )}
+      <Field label="Legenda"><input className={inputCls} value={c.caption ?? ""} onChange={(e) => onChange({ caption: e.target.value })} placeholder="Resultados podem variar." /></Field>
+    </>
+  );
+}
+
+// Sobrepõe as duas fotos (o depois semitransparente por cima do antes) para
+// a pessoa arrastar e dar zoom até os contornos coincidirem. Assim a
+// transição no funil fica sem "pulo" entre uma imagem e outra.
+function BeforeAfterAligner({ c, onChange }: { c: BAConfig; onChange: (p: Partial<BAConfig>) => void }) {
+  const [target, setTarget] = useState<"after" | "before">("after");
+  const [ghost, setGhost] = useState(50);
+  const frame = useRef<HTMLDivElement>(null);
+  const natural = useRef<Record<"before" | "after", { w: number; h: number } | null>>({ before: null, after: null });
+  const drag = useRef<{ px: number; py: number; x: number; y: number } | null>(null);
+  const clamp = (v: number) => Math.max(0, Math.min(100, v));
+
+  const key = target === "after" ? "ba_after" : "ba_before";
+  const x = (c[`${key}_x` as const] as number | undefined) ?? 50;
+  const y = (c[`${key}_y` as const] as number | undefined) ?? 50;
+  const zoom = (c[`${key}_zoom` as const] as number | undefined) ?? 1;
+  const set = (p: { x?: number; y?: number; zoom?: number }) =>
+    onChange({
+      ...(p.x !== undefined ? { [`${key}_x`]: p.x } : {}),
+      ...(p.y !== undefined ? { [`${key}_y`]: p.y } : {}),
+      ...(p.zoom !== undefined ? { [`${key}_zoom`]: p.zoom } : {}),
+    } as Partial<BAConfig>);
+
+  const onDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = { px: e.clientX, py: e.clientY, x, y };
+  };
+  const onMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    const el = frame.current;
+    if (!d || !el) return;
+    const r = el.getBoundingClientRect();
+    const n = natural.current[target] ?? { w: r.width, h: r.height };
+    // Quanto a foto (com zoom) sobra além do quadro em cada eixo.
+    const s = Math.max(r.width / n.w, r.height / n.h);
+    const overX = Math.max(1, zoom * n.w * s - r.width);
+    const overY = Math.max(1, zoom * n.h * s - r.height);
+    set({
+      x: Math.round(clamp(d.x - ((e.clientX - d.px) / overX) * 100) * 10) / 10,
+      y: Math.round(clamp(d.y - ((e.clientY - d.py) / overY) * 100) * 10) / 10,
+    });
+  };
+  const onUp = () => { drag.current = null; };
+
+  const f = beforeAfterFrames(c);
+  return (
+    <div className="mb-3 rounded-xl border border-emerald-100 bg-emerald-50/40 p-3">
+      <p className="text-sm font-semibold text-slate-800">Encaixar as fotos</p>
+      <p className="mb-2 text-[11px] leading-snug text-slate-500">
+        O depois aparece transparente por cima do antes. Arraste e use o zoom até rosto, olhos e contorno coincidirem: a transição fica imperceptível.
+      </p>
+      <Seg value={target} options={[["after", "Ajustar depois"], ["before", "Ajustar antes"]]} onChange={setTarget} />
+      <div
+        ref={frame}
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
+        className="relative mt-2 cursor-grab touch-none select-none overflow-hidden rounded-lg bg-slate-200 active:cursor-grabbing"
+        style={{ aspectRatio: f.aspect }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={c.before_url} alt="" draggable={false}
+          onLoad={(e) => { natural.current.before = { w: e.currentTarget.naturalWidth || 1, h: e.currentTarget.naturalHeight || 1 }; }}
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover" style={f.before} />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={c.after_url} alt="" draggable={false}
+          onLoad={(e) => { natural.current.after = { w: e.currentTarget.naturalWidth || 1, h: e.currentTarget.naturalHeight || 1 }; }}
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover" style={{ ...f.after, opacity: ghost / 100 }} />
+        {/* grade de referência */}
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,.35)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,.35)_1px,transparent_1px)] bg-[size:33.33%_33.33%]" />
+      </div>
+      <Field label={`Zoom do ${target === "after" ? "depois" : "antes"}: ${zoom.toFixed(2)}x`}>
+        <input type="range" min={1} max={3} step={0.01} value={zoom} onChange={(e) => set({ zoom: Number(e.target.value) })} className="w-full accent-emerald-500" />
+      </Field>
+      <Field label={`Transparência do depois: ${ghost}%`}>
+        <input type="range" min={0} max={100} value={ghost} onChange={(e) => setGhost(Number(e.target.value))} className="w-full accent-emerald-500" />
+      </Field>
+      <button onClick={() => set({ x: 50, y: 50, zoom: 1 })} className="text-xs font-medium text-slate-500 underline hover:text-slate-700">
+        Recentralizar {target === "after" ? "depois" : "antes"}
+      </button>
     </div>
   );
 }
