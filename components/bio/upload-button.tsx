@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Upload } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/env";
+import { compressImage } from "@/lib/compress-image";
 
 export function UploadButton({
   onUploaded,
@@ -21,14 +22,21 @@ export function UploadButton({
   const isVideo = accept.startsWith("video");
 
   async function handle(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > maxSizeMB * 1024 * 1024) {
-      alert(`O arquivo deve ter até ${maxSizeMB} MB para não ocupar muito espaço.`);
+    const picked = e.target.files?.[0];
+    if (!picked) return;
+    // Fotos grandes são reduzidas antes do envio; o limite vale para o
+    // arquivo final (o original pode ser maior, até 25 MB).
+    const reject = (mb: number) => {
+      alert(`O arquivo deve ter até ${mb} MB para não ocupar muito espaço.`);
       if (ref.current) ref.current.value = "";
-      return;
-    }
+    };
+    if (!isVideo && picked.size > 25 * 1024 * 1024) return reject(25);
     setBusy(true);
+    const file = isVideo ? picked : await compressImage(picked);
+    if (file.size > maxSizeMB * 1024 * 1024) {
+      setBusy(false);
+      return reject(maxSizeMB);
+    }
     try {
       if (isSupabaseConfigured) {
         const supabase = createClient();
