@@ -1,3 +1,5 @@
+import { Greeting, TodayLabel } from "@/components/dashboard/greeting";
+import { formatToday, greetingFor } from "@/lib/greeting";
 import {
   Profile2User,
   CalendarTick,
@@ -61,12 +63,11 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
 };
 
 export default async function DashboardPage() {
-  const today = new Date().toLocaleDateString("pt-BR", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
+  // Fuso de Brasília no servidor; o navegador ajusta para a hora local.
+  const TZ = "America/Sao_Paulo";
+  const now = new Date();
+  const today = formatToday(now, TZ);
+  const hourBR = Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hourCycle: "h23", timeZone: TZ }).format(now));
 
   // Conta real (Supabase) começa zerada; modo demo mantém a vitrine.
   const demo = !isSupabaseConfigured;
@@ -81,16 +82,14 @@ export default async function DashboardPage() {
       {/* Greeting */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            Bom dia, <span className="font-serif italic">{greetName}</span>
-          </h1>
+          <Greeting name={greetName} initialGreeting={greetingFor(hourBR)} />
           <p className="text-sm text-slate-500">
             Veja o que está acontecendo na sua clínica hoje.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-right text-sm lowercase text-slate-500 first-letter:uppercase">
-            {today}
+            <TodayLabel initial={today} />
           </span>
           <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700">
             <span className="h-2 w-2 rounded-full bg-emerald-500" />

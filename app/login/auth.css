@@ -1,0 +1,242 @@
+/* Login e cadastro: cartão com painel diagonal que desliza entre os modos.
+   Adaptado do modelo "login page v2" para a identidade clara da Cliva
+   (esmeralda #10B981 → teal #0D9488). Classes com prefixo cl-auth. */
+
+.cl-auth-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  background:
+    radial-gradient(900px 500px at 10% 0%, rgba(16, 185, 129, 0.10), transparent 60%),
+    radial-gradient(800px 500px at 100% 100%, rgba(13, 148, 136, 0.10), transparent 60%),
+    #f3f5f7;
+}
+
+.cl-auth-card {
+  width: 820px;
+  height: 560px;
+  background: #fff;
+  border-radius: 24px;
+  position: relative;
+  display: flex;
+  /* clip (e não hidden): o painel diagonal é maior que o cartão, e com
+     hidden o navegador "rola" o cartão por dentro ao focar um campo. */
+  overflow: hidden;
+  overflow: clip;
+  border: 1.5px solid rgba(16, 185, 129, 0.45);
+  box-shadow:
+    0 0 0 6px rgba(16, 185, 129, 0.06),
+    0 30px 80px -30px rgba(13, 148, 136, 0.45);
+}
+
+.cl-auth-shape {
+  position: absolute;
+  top: -10%;
+  width: 250%;
+  height: 120%;
+  background:
+    radial-gradient(400px 300px at 70% 30%, rgba(255, 255, 255, 0.16), transparent 70%),
+    linear-gradient(135deg, #10b981, #0d9488 60%, #0f766e);
+  z-index: 1;
+  box-shadow: 0 0 40px rgba(16, 185, 129, 0.45);
+}
+
+.cl-auth-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+/* Formulários */
+.cl-auth-form {
+  position: absolute;
+  top: 0;
+  width: 50%;
+  height: 100%;
+  padding: 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  z-index: 5;
+}
+.cl-auth-form form { width: 100%; max-width: 300px; margin: 0 auto; }
+.cl-auth-form.is-login { left: 0; }
+.cl-auth-form.is-signup { right: 0; }
+.cl-auth-form h2 {
+  font-size: 1.9rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+/* Campos com rótulo flutuante e linha embaixo */
+.cl-auth-field { position: relative; margin-bottom: 24px; }
+.cl-auth-field input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid #cbd5e1;
+  padding: 6px 30px 6px 0;
+  color: #0f172a;
+  font-size: 0.97rem;
+  font-weight: 600;
+  outline: none;
+  transition: border-bottom-color 0.3s ease;
+}
+.cl-auth-field label {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  color: #64748b;
+  font-size: 0.97rem;
+  font-weight: 500;
+  pointer-events: none;
+  transition: 0.2s ease all;
+}
+.cl-auth-field input:focus ~ label,
+.cl-auth-field input:not(:placeholder-shown) ~ label {
+  top: -18px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #059669;
+}
+.cl-auth-field input:focus { border-bottom-color: #059669; }
+.cl-auth-field svg {
+  position: absolute;
+  right: 0;
+  bottom: 9px;
+  width: 18px;
+  height: 18px;
+  color: #94a3b8;
+  transition: color 0.3s ease;
+}
+.cl-auth-field input:focus ~ svg,
+.cl-auth-field input:not(:placeholder-shown) ~ svg { color: #059669; }
+.cl-auth-field input:-webkit-autofill,
+.cl-auth-field input:-webkit-autofill:hover,
+.cl-auth-field input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 30px #fff inset !important;
+  -webkit-text-fill-color: #0f172a !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+.cl-auth-label-static {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+/* Botão e textos */
+.cl-auth-btn {
+  width: 100%;
+  padding: 13px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #10b981, #0d9488);
+  color: #fff;
+  font-size: 0.97rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+.cl-auth-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -6px rgba(16, 185, 129, 0.6);
+}
+.cl-auth-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.cl-auth-error {
+  margin: -6px 0 14px;
+  border-radius: 10px;
+  background: #fff1f2;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  color: #be123c;
+}
+.cl-auth-bottom {
+  text-align: center;
+  margin-top: 22px;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+.cl-auth-link {
+  background: none;
+  border: none;
+  color: #059669;
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin-left: 5px;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+.cl-auth-link:hover { color: #047857; }
+
+/* Texto de boas-vindas sobre o painel */
+.cl-auth-welcome {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 45%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  text-align: left;
+  color: #fff;
+  z-index: 10;
+}
+.cl-auth-welcome.is-login { right: 0; padding: 44px 44px 44px 110px; }
+.cl-auth-welcome.is-signup { left: 0; padding: 44px; }
+.cl-auth-welcome h1 {
+  font-size: 2.1rem;
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  margin: 18px 0 14px;
+  text-transform: uppercase;
+}
+.cl-auth-welcome p {
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.9);
+}
+.cl-auth-badge {
+  display: flex;
+  height: 46px;
+  width: 46px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.25);
+}
+.cl-auth-mobilehead { display: none; }
+
+/* Celular: cartão em coluna, sem painel diagonal */
+@media (max-width: 860px) {
+  .cl-auth-card { width: 100%; max-width: 440px; height: auto; flex-direction: column; }
+  .cl-auth-shape, .cl-auth-welcome { display: none; }
+  .cl-auth-content { flex-direction: column; }
+  .cl-auth-form { position: static; width: 100%; height: auto; padding: 30px 24px 34px; }
+  .cl-auth-mobilehead {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 20px 24px;
+    color: #fff;
+    background: linear-gradient(135deg, #10b981, #0d9488 60%, #0f766e);
+  }
+  .cl-auth-mobilehead b { display: block; font-size: 1.05rem; }
+  .cl-auth-mobilehead span { font-size: 0.8rem; opacity: 0.9; }
+  .cl-auth-mobilehead .cl-auth-badge { height: 40px; width: 40px; border-radius: 12px; }
+}

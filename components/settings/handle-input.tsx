@@ -11,8 +11,9 @@ export type HandleStatus = "idle" | "checking" | "ok" | "taken";
 // Campo do identificador público com checagem de disponibilidade enquanto
 // a pessoa digita (cliva.me/<handle>).
 export function HandleInput({
-  value, onChange, onStatus, host = "cliva.me", id = "handle", optional = false,
+  value, onChange, onStatus, host = "cliva.me", id = "handle", optional = false, variant = "box",
 }: {
+  variant?: "box" | "line"; // "line" = sublinhado (tela de login/cadastro)
   value: string;
   onChange: (v: string) => void;
   onStatus?: (s: HandleStatus) => void;
@@ -44,6 +45,42 @@ export function HandleInput({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
+  const icon = (
+    <span className="shrink-0 px-2.5">
+      {status === "checking" && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+      {status === "ok" && <Check className="h-4 w-4 text-emerald-600" />}
+      {status === "taken" && <X className="h-4 w-4 text-rose-500" />}
+    </span>
+  );
+  const field = (cls: string) => (
+    <input
+      id={id}
+      value={value}
+      onChange={(e) => onChange(typingHandle(e.target.value))}
+      onBlur={() => onChange(slugifyHandle(value))}
+      placeholder={optional ? "seu-nome" : "marco"}
+      className={cls}
+      autoComplete="off"
+      spellCheck={false}
+    />
+  );
+
+  if (variant === "line") {
+    return (
+      <div>
+        <div className={cn(
+          "flex items-center border-b-2 pb-1 text-[15px] transition-colors",
+          status === "taken" ? "border-rose-400" : status === "ok" ? "border-emerald-500" : "border-slate-300 focus-within:border-emerald-600",
+        )}>
+          <span className="shrink-0 text-slate-400">{host}/</span>
+          {field("min-w-0 flex-1 bg-transparent font-semibold text-slate-900 outline-none placeholder:font-normal placeholder:text-slate-300")}
+          {icon}
+        </div>
+        {msg && <p className={cn("mt-1 text-xs", status === "taken" ? "text-rose-600" : "text-emerald-700")}>{msg}</p>}
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-1.5">
       <div className={cn(
@@ -51,21 +88,8 @@ export function HandleInput({
         status === "taken" ? "border-rose-300 focus-within:ring-rose-100" : status === "ok" ? "border-emerald-300 focus-within:ring-emerald-100" : "border-input focus-within:ring-slate-100",
       )}>
         <span className="shrink-0 bg-slate-50 px-3 py-2 text-slate-400">{host}/</span>
-        <input
-          id={id}
-          value={value}
-          onChange={(e) => onChange(typingHandle(e.target.value))}
-          onBlur={() => onChange(slugifyHandle(value))}
-          placeholder={optional ? "seu-nome" : "marco"}
-          className="min-w-0 flex-1 px-2 py-2 outline-none"
-          autoComplete="off"
-          spellCheck={false}
-        />
-        <span className="shrink-0 px-2.5">
-          {status === "checking" && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
-          {status === "ok" && <Check className="h-4 w-4 text-emerald-600" />}
-          {status === "taken" && <X className="h-4 w-4 text-rose-500" />}
-        </span>
+        {field("min-w-0 flex-1 px-2 py-2 outline-none")}
+        {icon}
       </div>
       {msg && <p className={cn("text-xs", status === "taken" ? "text-rose-600" : "text-emerald-700")}>{msg}</p>}
     </div>
