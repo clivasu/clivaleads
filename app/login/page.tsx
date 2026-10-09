@@ -93,11 +93,17 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [forgot, setForgot] = useState(false);       // "Esqueci minha senha"
+  const [resetSent, setResetSent] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Vindo da landing: abre em "Criar conta" e preenche o e-mail digitado no hero.
   useEffect(() => {
-    setMode(new URLSearchParams(window.location.search).get("cadastro") ? "signup" : "signin");
+    const params = new URLSearchParams(window.location.search);
+    setMode(params.get("cadastro") ? "signup" : "signin");
+    if (params.has("esqueci")) setForgot(true);
+    if (params.get("link") === "expirado") setNotice("Esse link expirou ou já foi usado. Entre com sua senha ou peça um novo link.");
     try {
       const saved = sessionStorage.getItem("cliva_signup_email");
       if (saved) { setEmail(saved); sessionStorage.removeItem("cliva_signup_email"); }
@@ -111,6 +117,18 @@ export default function LoginPage() {
     setMode(next);
     setTimeout(() => setAnimating(false), 1200);
   };
+
+  async function sendReset(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (!isSupabaseConfigured) { setError("Supabase ainda não conectado."); return; }
+    setLoading(true);
+    const { error: err } = await createClient().auth.resetPasswordForEmail(email.trim());
+    setLoading(false);
+    // Mesmo sem conta com esse e-mail, a resposta é igual (não revela quem tem conta).
+    if (err && /rate limit|too many/i.test(err.message)) { setError(translateAuthError(err.message)); return; }
+    setResetSent(true);
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -181,10 +199,38 @@ export default function LoginPage() {
               <AnimatePresence mode="wait" initial={false}>
                 {isLogin ? (
                   <motion.div key="login" className="cl-auth-form is-login" variants={stagger(1)} initial="hidden" animate="visible" exit="exit">
+                    {forgot ? (
+                      <form onSubmit={sendReset}>
+                        <motion.h2 variants={loginItem}>Recuperar senha</motion.h2>
+                        {resetSent ? (
+                          <motion.p variants={loginItem} className="mb-6 rounded-xl bg-emerald-50 px-4 py-3 text-center text-sm text-emerald-800">
+                            Se existir uma conta com <b>{email}</b>, enviamos um link para criar uma nova senha. Confira a caixa de entrada e o spam.
+                          </motion.p>
+                        ) : (
+                          <>
+                            <motion.p variants={loginItem} className="-mt-3 mb-7 text-center text-sm text-slate-500">Informe seu e-mail e enviaremos um link para criar uma nova senha.</motion.p>
+                            <Field id="reset-email" label="E-mail" type="email" value={email} onChange={setEmail} icon={<IconMail />} variants={loginItem} autoComplete="email" />
+                            {error && <motion.p className="cl-auth-error" variants={loginItem}>{error}</motion.p>}
+                            <motion.div variants={loginItem}>
+                              <button type="submit" className="cl-auth-btn" disabled={loading}>
+                                {loading && <Loader2 className="h-4 w-4 animate-spin" />} Enviar link
+                              </button>
+                            </motion.div>
+                          </>
+                        )}
+                        <motion.p className="cl-auth-bottom" variants={loginItem}>
+                          <button type="button" className="cl-auth-link" onClick={() => { setForgot(false); setResetSent(false); setError(null); }}>← Voltar para o login</button>
+                        </motion.p>
+                      </form>
+                    ) : (
                     <form onSubmit={submit}>
                       <motion.h2 variants={loginItem}>Entrar</motion.h2>
+                      {notice && <motion.p variants={loginItem} className="mb-5 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">{notice}</motion.p>}
                       <Field id="login-email" label="E-mail" type="email" value={email} onChange={setEmail} icon={<IconMail />} variants={loginItem} autoComplete="email" />
                       <Field id="login-password" label="Senha" type="password" value={password} onChange={setPassword} icon={<IconLock />} variants={loginItem} autoComplete="current-password" />
+                      <motion.p variants={loginItem} className="-mt-3 mb-4 text-right">
+                        <button type="button" className="text-xs font-medium text-slate-500 hover:text-emerald-700" onClick={() => { setForgot(true); setError(null); }}>Esqueci minha senha</button>
+                      </motion.p>
                       {error && <motion.p className="cl-auth-error" variants={loginItem}>{error}</motion.p>}
                       <motion.div variants={loginItem}>
                         <button type="submit" className="cl-auth-btn" disabled={loading || animating}>
@@ -201,6 +247,7 @@ export default function LoginPage() {
                         </motion.p>
                       )}
                     </form>
+                    )}
                   </motion.div>
                 ) : (
                   <motion.div key="signup" className="cl-auth-form is-signup" variants={stagger(-1)} initial="hidden" animate="visible" exit="exit">

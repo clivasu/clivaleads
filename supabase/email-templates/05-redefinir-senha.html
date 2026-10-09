@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light only">
+<meta name="supported-color-schemes" content="light">
+<title>Redefina sua senha da Cliva</title>
+<style>
+  @media (max-width:600px) {
+    .cl-card { padding:34px 24px 30px !important; }
+    .cl-title { font-size:24px !important; }
+  }
+</style>
+</head>
+<body style="margin:0;padding:0;background-color:#f3f5f7;-webkit-text-size-adjust:100%;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">Crie uma nova senha para sua conta.&#8203;&nbsp;&#8203;&nbsp;&#8203;&nbsp;&#8203;&nbsp;&#8203;&nbsp;&#8203;&nbsp;&#8203;&nbsp;&#8203;&nbsp;</div>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#f3f5f7" style="background-color:#f3f5f7;">
+<tr><td align="center" style="padding:40px 16px 48px;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:560px;">
+
+<!-- Marca -->
+<tr><td align="center" style="padding:0 0 24px;">
+<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
+<td style="vertical-align:middle;"><img src="https://cliva.me/brand/cliva-mark.png" width="36" height="36" alt="" style="display:block;border:0;border-radius:10px;"></td>
+<td style="vertical-align:middle;padding-left:10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:22px;font-weight:700;letter-spacing:-0.02em;color:#0f172a;">Cliva</td>
+</tr></table>
+</td></tr>
+
+<!-- Cartão -->
+<tr><td style="background-color:#ffffff;border:1px solid #e2e8f0;border-radius:24px;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+<tr><td class="cl-card" style="padding:44px 48px 40px;">
+<div style="width:44px;height:4px;border-radius:4px;margin:0 0 22px;font-size:0;line-height:0;background-color:#10b981;background-image:linear-gradient(90deg,#10b981,#0d9488);">&nbsp;</div>
+<span style="display:inline-block;padding:6px 12px;border-radius:999px;background-color:#ecfdf5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;font-weight:600;color:#047857;">Segurança da conta</span>
+<h1 class="cl-title" style="margin:18px 0 18px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:28px;line-height:1.2;font-weight:700;letter-spacing:-0.02em;color:#0f172a;">Redefinir sua senha</h1>
+<p style="margin:0 0 14px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.65;color:#334155;">{{ if .Data.full_name }}Olá, {{ .Data.full_name }}!{{ else }}Olá!{{ end }}</p>
+<p style="margin:0 0 14px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.65;color:#334155;">Recebemos um pedido para redefinir a senha da sua conta na Cliva. Clique no botão para criar uma nova senha.</p>
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:30px 0 6px;">
+<tr><td align="center" bgcolor="#059669" style="border-radius:999px;background-color:#059669;background-image:linear-gradient(90deg,#10b981,#0d9488);">
+<a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=recovery&amp;next=/redefinir-senha" target="_blank" style="display:inline-block;padding:15px 34px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;font-weight:600;line-height:1;color:#ffffff;text-decoration:none;border-radius:999px;">Criar nova senha&nbsp;&rarr;</a>
+</td></tr></table><p style="margin:22px 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#64748b;">Se o botão não funcionar, copie e cole este endereço no navegador:<br>
+<a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=recovery&amp;next=/redefinir-senha" target="_blank" style="color:#059669;text-decoration:underline;word-break:break-all;">{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=recovery&amp;next=/redefinir-senha</a></p>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:30px 0 0;"><tr><td style="border-top:1px solid #eef2f6;font-size:0;line-height:0;">&nbsp;</td></tr></table>
+<p style="margin:18px 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#64748b;">O link vale por tempo limitado. Se você não pediu para redefinir a senha, ignore este e-mail: sua senha atual continua valendo.</p>
+</td></tr>
+</table>
+</td></tr>
+
+<!-- Rodapé -->
+<tr><td align="center" style="padding:28px 24px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.7;color:#94a3b8;">
+<strong style="color:#64748b;">Cliva</strong> · Funis de pré-atendimento para clínicas<br>
+Este e-mail foi enviado para {{ .Email }} · <a href="https://cliva.me" target="_blank" style="color:#64748b;text-decoration:underline;">cliva.me</a>
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>
