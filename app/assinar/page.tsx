@@ -22,6 +22,24 @@ export default async function AssinarPage({
   if (!state.enabled || state.hasAccess) redirect("/dashboard");
 
   const status = state.billing?.status;
+
+  // Conta bloqueada pelo admin: não oferece planos (assinar não desbloqueia).
+  if (status === "blocked") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#f3f5f7] px-4">
+        <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <div className="flex justify-center"><ClivaLogo /></div>
+          <h1 className="mt-6 text-xl font-bold text-slate-900">Conta suspensa</h1>
+          <p className="mt-2 text-sm text-slate-500">
+            O acesso a esta conta foi suspenso. Para entender o motivo ou reativar, fale com o suporte da Cliva.
+          </p>
+          <a href="mailto:clivasuporte@gmail.com" className="mt-6 inline-flex rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">
+            Falar com o suporte
+          </a>
+        </div>
+      </div>
+    );
+  }
   const notice =
     status === "canceled" ? "Sua assinatura foi cancelada. Escolha um plano para voltar a usar a Cliva."
     : status === "unpaid" || status === "incomplete_expired" ? "Não conseguimos confirmar o pagamento. Escolha um plano para reativar."

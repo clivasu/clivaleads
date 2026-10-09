@@ -68,9 +68,11 @@ async function syncSubscription(sub: Stripe.Subscription, orgIdHint?: string | n
   // Evento de uma assinatura antiga (ex.: cancelada) não derruba a atual.
   const { data: current } = await supabase
     .from("org_billing")
-    .select("stripe_subscription_id, status")
+    .select("stripe_subscription_id, status, manual")
     .eq("organization_id", orgId)
     .maybeSingle();
+  // Decisão manual do admin (cortesia, bloqueio, plano) vale mais que a Stripe.
+  if ((current as { manual?: boolean } | null)?.manual) return;
   if (
     current?.stripe_subscription_id &&
     current.stripe_subscription_id !== sub.id &&

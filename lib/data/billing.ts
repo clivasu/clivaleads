@@ -14,6 +14,8 @@ export interface OrgBilling {
   current_period_end: string | null;
   cancel_at_period_end: boolean;
   trial_used: boolean;
+  manual?: boolean;
+  admin_note?: string | null;
 }
 
 export interface BillingState {
@@ -23,7 +25,8 @@ export interface BillingState {
   hasAccess: boolean;
 }
 
-const ACCESS_STATUSES = new Set(["trialing", "active", "past_due", "legacy"]);
+// comp = cortesia liberada pelo admin; legacy = conta anterior à cobrança.
+const ACCESS_STATUSES = new Set(["trialing", "active", "past_due", "legacy", "comp"]);
 
 export function statusHasAccess(status?: string | null): boolean {
   return ACCESS_STATUSES.has(status ?? "");
