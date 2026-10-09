@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { ExternalLink, Pencil, Plus } from "lucide-react";
+import { DeleteFlowButton } from "@/components/flows/delete-flow-button";
 import { getCurrentOrg } from "@/lib/data/org";
 import { listFlows } from "@/lib/data/flows";
 import { seedTemplateFlows } from "@/lib/actions/flows";
@@ -25,6 +27,9 @@ export default async function FlowsPage() {
       if (n > 0) flows = await listFlows(org.id);
     } catch { /* segue sem modelos se algo falhar */ }
   }
+
+  const h = await headers();
+  const host = h.get("host") ?? "cliva.me";
 
   // Dados de desempenho dos funis (eventos + leads capturados).
   const funnelData = await getDashboardData(org.id);
@@ -54,20 +59,27 @@ export default async function FlowsPage() {
                   </Badge>
                 </div>
                 <p className="mt-1 text-sm text-slate-500">
-                  {f.procedure} · <span className="font-mono text-xs">/f/{f.slug}</span>
+                  {f.procedure && <>{f.procedure} · </>}<span className="font-mono text-xs">{host}/{org.slug}/{f.slug}</span>
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <Link href={`/f/${f.slug}`} target="_blank">
-                  <Button variant="outline" size="sm" className="gap-2">
+                {f.status === "published" ? (
+                  <Link href={`/${org.slug}/${f.slug}`} target="_blank">
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <ExternalLink className="h-3.5 w-3.5" /> Abrir
+                    </Button>
+                  </Link>
+                ) : (
+                  <Button variant="outline" size="sm" className="gap-2" disabled title="Publique o funil para abrir o link">
                     <ExternalLink className="h-3.5 w-3.5" /> Abrir
                   </Button>
-                </Link>
+                )}
                 <Link href={`/flows/${f.id}/builder`}>
                   <Button variant="secondary" size="sm" className="gap-2">
                     <Pencil className="h-3.5 w-3.5" /> Editar
                   </Button>
                 </Link>
+                <DeleteFlowButton flowId={f.id} flowName={f.name} />
               </div>
             </CardContent>
           </Card>

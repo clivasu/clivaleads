@@ -6,10 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { updateOrg } from "@/lib/actions/org";
-
-function slugify(v: string) {
-  return v.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-}
+import { HandleInput, type HandleStatus } from "@/components/settings/handle-input";
 
 interface OrgLike {
   name: string;
@@ -24,6 +21,7 @@ export function OrgSettingsForm({ org, baseUrl }: { org: OrgLike; baseUrl: strin
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState(org.name);
   const [handle, setHandle] = useState(org.slug);
+  const [handleStatus, setHandleStatus] = useState<HandleStatus>("idle");
   const [color, setColor] = useState(org.primary_color ?? "#7C3AED");
   const [whatsapp, setWhatsapp] = useState(org.whatsapp_number ?? "");
   const [instagram, setInstagram] = useState(org.instagram ?? "");
@@ -51,7 +49,7 @@ export function OrgSettingsForm({ org, baseUrl }: { org: OrgLike; baseUrl: strin
 
           <div className="grid gap-2">
             <Label htmlFor="handle">Seu identificador (link público)</Label>
-            <Input id="handle" value={handle} onChange={(e) => setHandle(slugify(e.target.value))} placeholder="marco" required />
+            <HandleInput value={handle} onChange={setHandle} onStatus={setHandleStatus} host={baseUrl.replace(/^https?:\/\//, "")} />
             <p className="text-xs text-slate-500">
               Seus funis ficam em <span className="font-medium text-slate-700">{baseUrl}/{handle || "seu-id"}/nome-do-funil</span>
             </p>
@@ -78,7 +76,7 @@ export function OrgSettingsForm({ org, baseUrl }: { org: OrgLike; baseUrl: strin
           </div>
 
           {msg && <p className={`text-sm ${msg.ok ? "text-emerald-600" : "text-destructive"}`}>{msg.text}</p>}
-          <Button type="submit" disabled={pending} className="mt-2">
+          <Button type="submit" disabled={pending || handleStatus === "taken" || handleStatus === "checking"} className="mt-2">
             {pending ? "Salvando..." : "Salvar"}
           </Button>
         </form>

@@ -34,14 +34,12 @@ export default async function DashboardLayout({
     }
   }
   return (
-    <div className="relative flex min-h-screen bg-gradient-to-br from-emerald-50 via-slate-50 to-teal-50/60">
-      <div className="pointer-events-none fixed -left-32 top-0 h-96 w-96 rounded-full bg-emerald-200/30 blur-3xl" />
-      <div className="pointer-events-none fixed bottom-0 right-0 h-96 w-96 rounded-full bg-teal-200/20 blur-3xl" />
+    <div className="relative flex min-h-screen bg-[#f3f5f7]">
       <Sidebar orgName={nav.orgName} userName={nav.userName} userRole={nav.userRole} isAdmin={nav.isAdmin} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />
         {!isSupabaseConfigured && (
-          <div className="border-b bg-amber-50 px-6 py-2 text-center text-xs text-amber-700">
+          <div className="mx-3 mb-3 rounded-xl bg-amber-50 px-4 py-2 text-center text-xs text-amber-700 md:ml-0 md:mr-4">
             Modo demonstração — Supabase não conectado. Dados de exemplo.{" "}
             <Link href="/settings" className="font-semibold underline">
               Como conectar
@@ -49,15 +47,18 @@ export default async function DashboardLayout({
           </div>
         )}
         {banner && (
-          <div className={banner.tone === "warn" ? "border-b bg-amber-50 px-6 py-2 text-center text-xs text-amber-800" : "border-b bg-emerald-50 px-6 py-2 text-center text-xs text-emerald-800"}>
+          <div className={banner.tone === "warn" ? "mx-3 mb-3 rounded-xl bg-amber-50 px-4 py-2 text-center text-xs text-amber-800 md:ml-0 md:mr-4" : "mx-3 mb-3 rounded-xl bg-emerald-50 px-4 py-2 text-center text-xs text-emerald-800 md:ml-0 md:mr-4"}>
             {banner.text}{" "}
             <Link href="/settings#plano" className="font-semibold underline">
               {banner.tone === "warn" ? "Atualizar pagamento" : "Ver plano"}
             </Link>
           </div>
         )}
-        <main className="flex-1 px-6 py-6">
-          <div className="mx-auto max-w-7xl">{children}</div>
+        {/* Conteúdo num painel branco de cantos arredondados sobre o fundo neutro. */}
+        <main className="flex flex-1 flex-col px-3 pb-3 md:pl-0 md:pr-4 md:pb-4">
+          <div className="flex-1 overflow-hidden rounded-[28px] border border-slate-200/70 bg-white px-6 py-6 shadow-[0_1px_3px_rgba(15,23,42,0.04)] md:px-8 md:py-7">
+            <div className="mx-auto max-w-7xl">{children}</div>
+          </div>
         </main>
       </div>
     </div>

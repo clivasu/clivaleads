@@ -6,6 +6,9 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/env";
 import { ClivaLogo } from "@/components/brand/logo";
+import { HandleInput, type HandleStatus } from "@/components/settings/handle-input";
+import { claimHandle } from "@/lib/actions/handle";
+import { slugifyHandle } from "@/lib/handles";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +17,8 @@ import { Button } from "@/components/ui/button";
 export default function LoginPage() {
   const router = useRouter();
   const [name, setName] = useState("");
+  const [handle, setHandle] = useState("");
+  const [handleStatus, setHandleStatus] = useState<HandleStatus>("idle");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"signin" | "signup">("signin");
@@ -43,11 +48,16 @@ export default function LoginPage() {
         ? supabase.auth.signInWithPassword({ email, password })
         : supabase.auth.signUp({ email, password, options: { data: { full_name: name.trim() } } });
     const { error } = await fn;
-    setLoading(false);
     if (error) {
+      setLoading(false);
       setError(error.message);
       return;
     }
+    // Identificador escolhido no cadastro; se não der, fica o gerado pelo e-mail.
+    if (mode === "signup" && slugifyHandle(handle)) {
+      await claimHandle(handle).catch(() => null);
+    }
+    setLoading(false);
     // Conta nova vai direto escolher o plano (o painel também redireciona).
     if (mode === "signup") {
       const plano = new URLSearchParams(window.location.search).get("plano");
@@ -76,6 +86,13 @@ export default function LoginPage() {
                   <Input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} required placeholder="Ex.: Dra. Bárbara" />
                 </div>
               )}
+              {mode === "signup" && (
+                <div className="grid gap-2">
+                  <Label htmlFor="handle">Seu link (opcional)</Label>
+                  <HandleInput value={handle} onChange={setHandle} onStatus={setHandleStatus} optional />
+                  {!handle && <p className="text-xs text-slate-400">Se deixar em branco, usamos a parte do seu e-mail antes do @. Dá para trocar depois.</p>}
+                </div>
+              )}
               <div className="grid gap-2">
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
@@ -85,7 +102,7 @@ export default function LoginPage() {
                 <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
               </div>
               {error && <p className="text-sm text-destructive">{error}</p>}
-              <Button type="submit" disabled={loading}>
+              <Button type="submit" disabled={loading || (mode === "signup" && (handleStatus === "taken" || handleStatus === "checking"))}>
                 {loading ? "..." : mode === "signin" ? "Entrar" : "Criar conta"}
               </Button>
             </form>

@@ -261,3 +261,35 @@ export async function createFlowFromTemplate(key: string): Promise<ActionResult>
   revalidatePath("/flows");
   return { ok: true, id: flow.id };
 }
+
+// Quantos leads um funil tem (para avisar antes de excluir).
+export async function countFlowLeads(id: string): Promise<number> {
+  if (!isSupabaseConfigured) return 0;
+  const supabase = await createClient();
+  const { count } = await supabase
+    .from("lead_sessions")
+    .select("id", { count: "exact", head: true })
+    .eq("flow_id", id);
+  return count ?? 0;
+}
+
+// Exclui o funil (etapas, eventos e leads dele vão junto, por cascata no banco).
+export async function deleteFlow(id: string): Promise<ActionResult> {
+  if (!isSupabaseConfigured) return { ok: false, error: "No modo demonstração os funis de exemplo não podem ser excluídos." };
+  const org = await getCurrentOrg();
+  if (!org) return { ok: false, error: "Faça login." };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("flows")
+    .delete()
+    .eq("id", id)
+    .eq("organization_id", org.id)
+    .select("id");
+  if (error) return { ok: false, error: error.message };
+  if (!data || data.length === 0) return { ok: false, error: "Funil não encontrado ou sem permissão para excluir." };
+
+  revalidatePath("/flows");
+  revalidatePath("/dashboard");
+  return { ok: true, id };
+}

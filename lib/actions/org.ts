@@ -4,21 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/env";
 import { getCurrentOrg } from "@/lib/data/org";
-
-// Identificadores reservados (rotas do app) que não podem virar handle.
-const RESERVED = new Set([
-  "f", "api", "login", "dashboard", "flows", "leads", "analytics",
-  "schedule", "settings", "admin", "new", "builder", "_next", "favicon.ico",
-]);
-
-function slugify(v: string) {
-  return v
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+import { handleFormatError, slugifyHandle } from "@/lib/handles";
 
 export interface UpdateOrgInput {
   name: string;
@@ -34,9 +20,9 @@ export async function updateOrg(input: UpdateOrgInput): Promise<{ ok: boolean; e
   const org = await getCurrentOrg();
   if (!org) return { ok: false, error: "Nenhuma organização encontrada. Faça login." };
 
-  const handle = slugify(input.handle);
-  if (!handle) return { ok: false, error: "Informe um identificador válido (ex.: marco)." };
-  if (RESERVED.has(handle)) return { ok: false, error: `"${handle}" é reservado. Escolha outro.` };
+  const handle = slugifyHandle(input.handle);
+  const formatError = handleFormatError(handle);
+  if (formatError) return { ok: false, error: formatError };
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -53,10 +39,11 @@ export async function updateOrg(input: UpdateOrgInput): Promise<{ ok: boolean; e
 
   if (error) {
     const dup = error.code === "23505" || /duplicate|unique/i.test(error.message);
-    return { ok: false, error: dup ? `O identificador "${handle}" já está em uso.` : error.message };
+    return { ok: false, error: dup ? `"${handle}" já está em uso por outra conta.` : error.message };
   }
 
   revalidatePath("/settings");
   revalidatePath("/dashboard");
+  revalidatePath("/flows");
   return { ok: true, handle };
 }

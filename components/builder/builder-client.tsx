@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Flag, Type, Image as ImageIcon, Video, GalleryHorizontal, Images,
@@ -20,6 +20,7 @@ import { GOTO_EXIT, GOTO_WHATSAPP, applySmartLogic, isNegativeAnswer } from "@/l
 import { DEFAULT_THEME, type FlowTheme, type FontChoice } from "@/lib/theme";
 import { saveFlow } from "@/lib/actions/flows";
 import { UploadButton } from "@/components/bio/upload-button";
+import { DeleteFlowButton } from "@/components/flows/delete-flow-button";
 import { beforeAfterFrames } from "@/components/flow-runner/before-after";
 import { cn } from "@/lib/utils";
 
@@ -282,8 +283,22 @@ export function BuilderClient({ flow, leads = [] }: { flow: PublicFlow; leads?: 
     return g;
   }, []);
 
+  // Ocupa exatamente o espaço até o fim da tela, descontando topo e avisos.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const fit = () => {
+      const el = rootRef.current;
+      if (!el) return;
+      const bottomGap = window.innerWidth >= 768 ? 17 : 13; // margem do painel + borda
+      el.style.height = `${Math.max(480, window.innerHeight - el.getBoundingClientRect().top - window.scrollY - bottomGap)}px`;
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, []);
+
   return (
-    <div className="-mx-6 -my-6 flex h-[calc(100vh-52px)] flex-col bg-white">
+    <div ref={rootRef} className="-mx-6 -my-6 flex h-[calc(100vh-84px)] flex-col bg-white md:-mx-8 md:-my-7">
       {/* Top bar */}
       <div className="flex items-center gap-4 border-b px-5 py-3">
         <Link href="/flows" className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900">
@@ -396,7 +411,7 @@ export function BuilderClient({ flow, leads = [] }: { flow: PublicFlow; leads?: 
 
         {tab === "design" && <DesignPanel theme={theme} setT={setT} />}
 
-        {tab === "settings" && <SettingsPanel s={settings} setS={setS} slug={flow.slug} />}
+        {tab === "settings" && <SettingsPanel s={settings} setS={setS} slug={flow.slug} flowId={flow.id} handle={flow.organization.slug} />}
 
         {tab === "flow" && (
           <FlowCanvas
@@ -1564,7 +1579,7 @@ function SwitchRow({ label, desc, on, onChange }: { label: string; desc?: string
   );
 }
 
-function SettingsPanel({ s, setS, slug }: { s: FunnelSettings; setS: (p: Partial<FunnelSettings>) => void; slug: string }) {
+function SettingsPanel({ s, setS, slug, flowId, handle }: { s: FunnelSettings; setS: (p: Partial<FunnelSettings>) => void; slug: string; flowId: string; handle: string }) {
   const ta = "w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs focus:border-emerald-400 focus:outline-none";
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50 p-6">
@@ -1578,7 +1593,7 @@ function SettingsPanel({ s, setS, slug }: { s: FunnelSettings; setS: (p: Partial
           <Field label="Nome do funil"><input className={inputCls} value={s.name} onChange={(e) => setS({ name: e.target.value })} /></Field>
           <Field label="URL pública">
             <div className="flex items-center overflow-hidden rounded-lg border border-slate-200">
-              <span className="bg-slate-50 px-3 py-2 text-sm text-slate-400">seudominio.com/f/</span>
+              <span className="bg-slate-50 px-3 py-2 text-sm text-slate-400">{typeof window !== "undefined" ? window.location.host : "cliva.me"}/{handle}/</span>
               <input className="min-w-0 flex-1 px-2 py-2 text-sm focus:outline-none" value={s.slug} onChange={(e) => setS({ slug: e.target.value })} />
             </div>
           </Field>
@@ -1655,7 +1670,7 @@ function SettingsPanel({ s, setS, slug }: { s: FunnelSettings; setS: (p: Partial
         <div className="rounded-2xl border border-rose-200 bg-white p-5 shadow-sm">
           <h3 className="text-sm font-semibold text-rose-600">Zona de perigo</h3>
           <p className="mb-3 text-xs text-slate-400">Ações irreversíveis.</p>
-          <button className="rounded-lg border border-rose-200 px-3 py-1.5 text-sm font-medium text-rose-600 hover:bg-rose-50">Excluir funil</button>
+          <DeleteFlowButton flowId={flowId} flowName={s.name} variant="button" redirectTo="/flows" />
         </div>
       </div>
     </div>
