@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/env";
 import { getCurrentOrg } from "@/lib/data/org";
-import { handleFormatError, slugifyHandle } from "@/lib/handles";
+import { handleFormatError, officialHandleError, slugifyHandle } from "@/lib/handles";
 
 export interface UpdateOrgInput {
   name: string;
@@ -25,6 +25,9 @@ export async function updateOrg(input: UpdateOrgInput): Promise<{ ok: boolean; e
   if (formatError) return { ok: false, error: formatError };
 
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const officialError = officialHandleError(handle, user?.email);
+  if (officialError) return { ok: false, error: officialError };
   const { error } = await supabase
     .from("organizations")
     .update({

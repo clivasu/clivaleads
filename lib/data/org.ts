@@ -59,7 +59,8 @@ export async function getNavInfo(): Promise<NavInfo> {
   };
 }
 
-// Verdadeiro se o usuário logado é o admin geral (mmarquessbsb@gmail.com).
+// Verdadeiro se o usuário logado é admin geral (profiles.is_super_admin:
+// mmarquessbsb@gmail.com e clivasuporte@gmail.com, ver migration 0009).
 export async function isSuperAdmin(): Promise<boolean> {
   if (!isSupabaseConfigured) return false;
   const supabase = await createClient();

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/env";
 import { getCurrentOrg } from "@/lib/data/org";
-import { handleFormatError, slugifyHandle } from "@/lib/handles";
+import { handleFormatError, officialHandleError, slugifyHandle } from "@/lib/handles";
 
 export interface HandleCheck {
   handle: string;
@@ -19,6 +19,11 @@ export async function checkHandle(raw: string): Promise<HandleCheck> {
   const formatError = handleFormatError(handle);
   if (formatError) return { handle, available: false, error: formatError };
   if (!isSupabaseConfigured) return { handle, available: true };
+
+  // "cliva" e "clivame": só a conta oficial.
+  const { data: { user } } = await (await createClient()).auth.getUser();
+  const officialError = officialHandleError(handle, user?.email);
+  if (officialError) return { handle, available: false, error: officialError };
 
   const admin = createAdminClient();
   const { data } = await admin.from("organizations").select("id").eq("slug", handle).maybeSingle();

@@ -6,8 +6,18 @@ export const RESERVED_HANDLES = new Set([
   "f", "api", "login", "cadastro", "dashboard", "flows", "leads", "analytics",
   "schedule", "settings", "admin", "new", "builder", "assinar", "bio",
   "templates", "brand", "_next", "favicon.ico", "icon.png", "apple-icon.png",
-  "www", "app", "cliva", "suporte", "ajuda", "help", "blog", "planos",
+  "www", "app", "suporte", "ajuda", "help", "blog", "planos", "auth", "redefinir-senha",
 ]);
+
+// Links oficiais da marca: só a conta oficial da Cliva pode usar.
+export const OFFICIAL_EMAIL = "clivasuporte@gmail.com";
+export const OFFICIAL_HANDLES = new Set(["cliva", "clivame"]);
+
+// Erro para link oficial usado por outra conta (null = pode usar).
+export function officialHandleError(handle: string, email?: string | null): string | null {
+  if (!OFFICIAL_HANDLES.has(handle)) return null;
+  return (email ?? "").toLowerCase() === OFFICIAL_EMAIL ? null : `"${handle}" é reservado. Escolha outro.`;
+}
 
 export const HANDLE_MIN = 3;
 export const HANDLE_MAX = 30;
