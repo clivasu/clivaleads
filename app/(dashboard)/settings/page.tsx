@@ -5,6 +5,8 @@ import { isSupabaseConfigured } from "@/lib/env";
 import { OrgSettingsForm } from "@/components/settings/org-settings-form";
 import { ChangePasswordForm } from "@/components/settings/change-password-form";
 import { BillingCard } from "@/components/billing/billing-card";
+import { ProfileForm } from "@/components/settings/profile-form";
+import { createClient } from "@/lib/supabase/server";
 import { getBillingState, getUsage } from "@/lib/data/billing";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +21,7 @@ export default async function SettingsPage() {
   const baseUrl = `${proto}://${host}`;
 
   const billing = await getBillingState(org.id);
+  const { data: { user } } = isSupabaseConfigured ? await (await createClient()).auth.getUser() : { data: { user: null } };
   const usage = billing.enabled ? await getUsage(org.id) : null;
 
   return (
@@ -43,6 +46,13 @@ export default async function SettingsPage() {
               cancelAtPeriodEnd={Boolean(billing.billing?.cancel_at_period_end)}
               hasCustomer={Boolean(billing.billing?.stripe_customer_id)}
               usage={usage}
+            />
+          )}
+          {user && (
+            <ProfileForm
+              name={(user.user_metadata?.full_name as string | undefined) ?? ""}
+              avatarUrl={(user.user_metadata?.avatar_url as string | undefined) || null}
+              email={user.email ?? ""}
             />
           )}
           <OrgSettingsForm org={org} baseUrl={baseUrl} />

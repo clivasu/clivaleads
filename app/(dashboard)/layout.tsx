@@ -35,7 +35,7 @@ export default async function DashboardLayout({
   }
   return (
     <div className="relative flex min-h-screen bg-[#f3f5f7]">
-      <Sidebar orgName={nav.orgName} userName={nav.userName} userRole={nav.userRole} isAdmin={nav.isAdmin} />
+      <Sidebar orgName={nav.orgName} userName={nav.userName} userRole={nav.userRole} isAdmin={nav.isAdmin} avatarUrl={nav.avatarUrl} orgLogo={nav.orgLogo} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />
         {!isSupabaseConfigured && (

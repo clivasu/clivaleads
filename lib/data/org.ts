@@ -30,6 +30,8 @@ export interface NavInfo {
   userName: string;
   userRole: string;
   isAdmin: boolean;
+  avatarUrl?: string | null;
+  orgLogo?: string | null;
 }
 
 // Dados para a sidebar (nome da clínica, usuário, se é admin geral).
@@ -56,6 +58,8 @@ export async function getNavInfo(): Promise<NavInfo> {
     userName: metaName || profile?.full_name || user.email || "",
     userRole: profile?.is_super_admin ? "Admin geral" : "Proprietário",
     isAdmin: Boolean(profile?.is_super_admin),
+    avatarUrl: (user.user_metadata?.avatar_url as string | undefined) || null,
+    orgLogo: org?.logo_url ?? null,
   };
 }
 

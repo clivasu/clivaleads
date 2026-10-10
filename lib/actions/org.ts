@@ -13,6 +13,7 @@ export interface UpdateOrgInput {
   whatsapp: string;
   instagram: string;
   defaultMessage: string;
+  logoUrl?: string | null;
 }
 
 export async function updateOrg(input: UpdateOrgInput): Promise<{ ok: boolean; error?: string; handle?: string }> {
@@ -37,6 +38,7 @@ export async function updateOrg(input: UpdateOrgInput): Promise<{ ok: boolean; e
       whatsapp_number: input.whatsapp || null,
       instagram: input.instagram || null,
       default_message: input.defaultMessage || null,
+      ...(input.logoUrl !== undefined ? { logo_url: input.logoUrl || null } : {}),
     })
     .eq("id", org.id);
 

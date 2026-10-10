@@ -64,9 +64,11 @@ export interface SidebarProps {
   userName?: string;
   userRole?: string;
   isAdmin?: boolean;
+  avatarUrl?: string | null; // foto de perfil (Configurações)
+  orgLogo?: string | null;   // logo da clínica (Configurações)
 }
 
-export function Sidebar({ orgName, userName, userRole, isAdmin }: SidebarProps = {}) {
+export function Sidebar({ orgName, userName, userRole, isAdmin, avatarUrl, orgLogo }: SidebarProps = {}) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const initials = (userName || orgName || "P")
@@ -144,8 +146,13 @@ export function Sidebar({ orgName, userName, userRole, isAdmin }: SidebarProps =
           )}
           title="Trocar de clínica"
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50">
-            <Buildings2 size={20} variant="Bulk" color={ACTIVE_COLOR} />
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-emerald-50">
+            {orgLogo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={orgLogo} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <Buildings2 size={20} variant="Bulk" color={ACTIVE_COLOR} />
+            )}
           </span>
           {!collapsed && (
             <>
@@ -220,8 +227,11 @@ export function Sidebar({ orgName, userName, userRole, isAdmin }: SidebarProps =
             collapsed ? "justify-center" : "gap-3 px-1",
           )}
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-semibold text-emerald-700">
-            {initials || "P"}
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-100 text-sm font-semibold text-emerald-700">
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+            ) : (initials || "P")}
           </span>
           {!collapsed && (
             <>
