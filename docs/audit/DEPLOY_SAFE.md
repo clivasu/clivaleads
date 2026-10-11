@@ -33,6 +33,10 @@ Ordem: **0010 → 0011 → 0012 → 0013 → deploy**, na mesma janela.
 - Abandono por etapa, origem das visitas e deduplicação só valem para eventos gravados depois da 0013. Leads já agendados antes dela não geram `appointment_booked` retroativo.
 - Antes de aplicar, rode a primeira consulta de `supabase/verify/0013_verify.sql`: todos os tipos já gravados precisam estar na lista nova.
 
+### 0014 (página pública do identificador)
+
+Independe das outras: pode ser aplicada antes, sozinha, com o código atual no ar. Só amplia a leitura pública da clínica para quem tem Link na Bio publicado. Rollback: `supabase/rollback/0014_public_handle.rollback.sql`.
+
 ## Passo a passo
 
 1. **Backup.** No Supabase: Database → Backups. No plano Free não há backup automático: exporte antes com `pg_dump` (ou Database → Backups → download, se disponível) e guarde o arquivo fora do Supabase.

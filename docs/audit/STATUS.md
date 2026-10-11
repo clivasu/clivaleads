@@ -12,7 +12,7 @@ Branch: `fix/security-integrity-cliva`. Nada aplicado em produção.
 | Next.js 16.3.5 → 16.3.8, `npm audit` de produção zerado | feito, testado | `npm audit --omit=dev`: 0 vulnerabilidades |
 | `npm run lint` (ESLint 9) | feito, testado | 0 erros, 24 avisos registrados (nenhum nos arquivos da Entrega C) |
 | `npm run typecheck` | testado | sem erros |
-| `npm test` (Vitest + Postgres real via PGlite) | feito, testado | 91 testes passando (após a Entrega C) |
+| `npm test` (Vitest + Postgres real via PGlite) | feito, testado | 93 testes passando (após a Entrega C e a 0014) |
 | `npm run build` / `build:local` | testado | build local com webpack passa |
 | CI (GitHub Actions) | feito | `.github/workflows/ci.yml`; roda quando a branch for enviada |
 | 1.1 Sem autoelevação a superadmin | feito, testado | grant por coluna + trigger; teste ANTES/DEPOIS |
@@ -86,6 +86,7 @@ Branch: `fix/security-integrity-cliva`. Nada aplicado em produção.
 | Preço por procedimento configurável pela clínica | pendente | hoje usa ticket fixo (rotulado como estimativa) |
 | Receita confirmada | pendente | não existe fonte de receita real no sistema |
 | Aplicar 0013 em produção | autorização | `docs/audit/DEPLOY_SAFE.md` |
+| Bug: `cliva.me/<identificador>` dava 404 para conta só com Link na Bio publicado (ou sem funil publicado) | feito, testado | `0014_public_handle.sql`, `tests/db/public-handle.test.ts`; independe das outras migrations |
 
 ## Próximas entregas
 
