@@ -2,10 +2,23 @@ import { NextResponse, type NextRequest } from "next/server";
 import type Stripe from "stripe";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getStripe, isStripeConfigured, STRIPE_WEBHOOK_SECRET } from "@/lib/stripe";
-import { getPlan, getPlanByLookupKey } from "@/lib/plans";
-import { statusHasAccess } from "@/lib/data/billing";
+import { decideBillingUpdate, type SubscriptionSnapshot } from "@/lib/billing/sync";
 
 // Recebe os eventos da Stripe e mantém public.org_billing em dia.
+// - Assinatura do webhook verificada (rejeita payload adulterado).
+// - Idempotente: evento já processado é ignorado (stripe_events).
+// - Fora de ordem: o estado é sempre relido da Stripe antes de gravar, então
+//   um evento antigo que chega depois não sobrescreve o estado atual.
+
+const HANDLED = new Set([
+  "checkout.session.completed",
+  "customer.subscription.created",
+  "customer.subscription.updated",
+  "customer.subscription.deleted",
+  "customer.subscription.paused",
+  "customer.subscription.resumed",
+]);
+
 export async function POST(request: NextRequest) {
   if (!isStripeConfigured || !STRIPE_WEBHOOK_SECRET) {
     return NextResponse.json({ error: "Stripe não configurada" }, { status: 503 });
@@ -21,86 +34,91 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Assinatura inválida" }, { status: 400 });
   }
+  if (!HANDLED.has(event.type)) return NextResponse.json({ received: true, ignored: true });
+
+  const supabase = createAdminClient();
+
+  // Já processado? (retry da Stripe ou entrega duplicada)
+  const { data: seen, error: seenErr } = await supabase.from("stripe_events").select("id").eq("id", event.id).maybeSingle();
+  if (seen) return NextResponse.json({ received: true, duplicate: true });
+  const dedupeAvailable = !seenErr; // tabela ausente (0011 não aplicada): segue sem dedupe
 
   try {
-    switch (event.type) {
-      case "checkout.session.completed": {
-        const s = event.data.object as Stripe.Checkout.Session;
-        if (s.mode === "subscription" && s.subscription) {
-          const subId = typeof s.subscription === "string" ? s.subscription : s.subscription.id;
-          const sub = await stripe.subscriptions.retrieve(subId);
-          await syncSubscription(sub, s.client_reference_id ?? s.metadata?.org_id);
-        }
-        break;
+    let subId: string | null = null;
+    let orgHint: string | null = null;
+    if (event.type === "checkout.session.completed") {
+      const s = event.data.object as Stripe.Checkout.Session;
+      if (s.mode === "subscription" && s.subscription) {
+        subId = typeof s.subscription === "string" ? s.subscription : s.subscription.id;
+        orgHint = s.client_reference_id ?? s.metadata?.org_id ?? null;
       }
-      case "customer.subscription.created":
-      case "customer.subscription.updated":
-      case "customer.subscription.deleted":
-      case "customer.subscription.paused":
-      case "customer.subscription.resumed":
-        await syncSubscription(event.data.object as Stripe.Subscription);
-        break;
+    } else {
+      subId = (event.data.object as Stripe.Subscription).id;
+    }
+
+    if (subId) {
+      // Estado atual, não o do evento (cobre eventos fora de ordem).
+      const sub = await stripe.subscriptions.retrieve(subId);
+      await syncSubscription(supabase, sub, orgHint, event.created);
     }
   } catch (e) {
-    // 500 faz a Stripe tentar de novo mais tarde.
-    return NextResponse.json({ error: e instanceof Error ? e.message : "erro" }, { status: 500 });
+    console.error("[stripe-webhook] falha ao processar", event.type, e instanceof Error ? e.message : "erro");
+    // 500 faz a Stripe tentar de novo mais tarde (o evento NÃO foi marcado).
+    return NextResponse.json({ error: "processing_failed" }, { status: 500 });
   }
 
+  if (dedupeAvailable) {
+    await supabase.from("stripe_events").insert({ id: event.id, type: event.type });
+  }
   return NextResponse.json({ received: true });
 }
 
-async function syncSubscription(sub: Stripe.Subscription, orgIdHint?: string | null) {
-  const supabase = createAdminClient();
-  const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
+function snapshot(sub: Stripe.Subscription): SubscriptionSnapshot {
+  const item = sub.items.data[0];
+  return {
+    id: sub.id,
+    status: sub.status,
+    customerId: typeof sub.customer === "string" ? sub.customer : sub.customer.id,
+    metadataOrgId: sub.metadata?.org_id ?? null,
+    metadataPlan: sub.metadata?.plan ?? null,
+    priceLookupKey: item?.price?.lookup_key ?? null,
+    trialEnd: sub.trial_end,
+    currentPeriodEnd: item?.current_period_end ?? null,
+    cancelAtPeriodEnd: sub.cancel_at_period_end,
+    cancelAt: sub.cancel_at,
+  };
+}
+
+async function syncSubscription(
+  supabase: ReturnType<typeof createAdminClient>,
+  sub: Stripe.Subscription,
+  orgIdHint: string | null,
+  eventCreated: number,
+) {
+  const snap = snapshot(sub);
 
   // Org: metadata da assinatura > dica do checkout > cliente já conhecido.
-  let orgId = sub.metadata?.org_id || orgIdHint || null;
+  let orgId = snap.metadataOrgId || orgIdHint || null;
   if (!orgId) {
-    const { data } = await supabase
-      .from("org_billing")
-      .select("organization_id")
-      .eq("stripe_customer_id", customerId)
-      .maybeSingle();
+    const { data } = await supabase.from("org_billing").select("organization_id").eq("stripe_customer_id", snap.customerId).maybeSingle();
     orgId = data?.organization_id ?? null;
   }
   if (!orgId) return; // assinatura de fora da Cliva
 
-  // Evento de uma assinatura antiga (ex.: cancelada) não derruba a atual.
   const { data: current } = await supabase
     .from("org_billing")
     .select("stripe_subscription_id, status, manual")
     .eq("organization_id", orgId)
     .maybeSingle();
-  // Decisão manual do admin (cortesia, bloqueio, plano) vale mais que a Stripe.
-  if ((current as { manual?: boolean } | null)?.manual) return;
-  if (
-    current?.stripe_subscription_id &&
-    current.stripe_subscription_id !== sub.id &&
-    statusHasAccess(current.status) &&
-    !statusHasAccess(sub.status)
-  ) return;
 
-  // Plano pelo preço atual (cobre troca de plano feita no portal).
-  const item = sub.items.data[0];
-  const plan =
-    getPlanByLookupKey(item?.price?.lookup_key) ?? getPlan(sub.metadata?.plan) ?? null;
-  const ts = (n?: number | null) => (n ? new Date(n * 1000).toISOString() : null);
+  const decision = decideBillingUpdate(orgId, snap, current);
+  if (decision.action === "skip") return;
 
-  const { error } = await supabase.from("org_billing").upsert(
-    {
-      organization_id: orgId,
-      plan: plan?.key ?? null,
-      status: sub.status,
-      stripe_customer_id: customerId,
-      stripe_subscription_id: sub.id,
-      trial_ends_at: ts(sub.trial_end),
-      current_period_end: ts(item?.current_period_end),
-      cancel_at_period_end: Boolean(sub.cancel_at_period_end || sub.cancel_at),
-      // Quem já teve assinatura não ganha outro teste grátis.
-      trial_used: true,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "organization_id" },
-  );
+  const row = { ...decision.row, stripe_event_at: new Date(eventCreated * 1000).toISOString() };
+  let { error } = await supabase.from("org_billing").upsert(row, { onConflict: "organization_id" });
+  // Coluna stripe_event_at ainda não existe (0011 não aplicada).
+  if (error && (error.code === "42703" || error.code === "PGRST204")) {
+    ({ error } = await supabase.from("org_billing").upsert(decision.row, { onConflict: "organization_id" }));
+  }
   if (error) throw new Error(error.message);
 }

@@ -178,3 +178,21 @@ export async function getFlowPrivateSettings(flowId: string): Promise<FlowPrivat
     hasHeadScripts: Boolean(data.head_scripts),
   };
 }
+
+// Link antigo /f/<slug>: até a migration 0004 o slug era único no sistema,
+// então o link apontava para o funil publicado mais antigo com esse slug.
+// Resolve de forma determinística para a URL canônica /<identificador>/<slug>.
+export async function resolveLegacySlug(slug: string): Promise<string | null> {
+  if (!isSupabaseConfigured) return null;
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("flows")
+    .select("slug, created_at, organization:organizations(slug)")
+    .eq("slug", slug)
+    .eq("status", "published")
+    .order("created_at", { ascending: true })
+    .limit(1);
+  const row = data?.[0] as unknown as { slug: string; organization: { slug: string } | null } | undefined;
+  if (!row?.organization?.slug) return null;
+  return `/${row.organization.slug}/${row.slug}`;
+}

@@ -1,11 +1,11 @@
 "use server";
 
-import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/data/org";
 import { getBillingState } from "@/lib/data/billing";
 import { getStripe, isStripeConfigured } from "@/lib/stripe";
 import { getPlan, TRIAL_DAYS } from "@/lib/plans";
+import { siteUrl } from "@/lib/site-url";
 
 export interface BillingResult {
   ok: boolean;
@@ -13,11 +13,9 @@ export interface BillingResult {
   error?: string;
 }
 
+// Origem canônica (não confia no header Host).
 async function origin(): Promise<string> {
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "cliva.me";
-  const proto = host.startsWith("localhost") ? "http" : "https";
-  return `${proto}://${host}`;
+  return siteUrl();
 }
 
 // Abre o checkout da Stripe para o plano escolhido (7 dias grátis na 1ª vez).
