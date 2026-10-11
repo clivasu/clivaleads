@@ -234,7 +234,7 @@ export function ScheduleBoard({ demo = true, storageKey }: { demo?: boolean; sto
                     <div className="flex flex-col gap-1">
                       {procs.map((p) => (
                         <label key={p.name} className="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-slate-50">
-                          <input type="checkbox" checked={procFilter.has(p.name)} onChange={(e) => setProcFilter((prev) => { const n = new Set(prev); e.target.checked ? n.add(p.name) : n.delete(p.name); return n; })} className="accent-emerald-500" />
+                          <input type="checkbox" checked={procFilter.has(p.name)} onChange={(e) => setProcFilter((prev) => { const n = new Set(prev); if (e.target.checked) n.add(p.name); else n.delete(p.name); return n; })} className="accent-emerald-500" />
                           <span className="h-3 w-3 rounded-full" style={{ background: p.color }} />
                           {p.name}
                         </label>

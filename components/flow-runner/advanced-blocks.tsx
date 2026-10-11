@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { motion, useInView } from "framer-motion";
-import { Play, Clock, ArrowRight } from "lucide-react";
+import { Play, ArrowRight } from "lucide-react";
 import type { FlowStep, ShareLinks } from "@/lib/types";
 
 /* ============================ NOTÍCIA / ADVERTORIAL ============================ */

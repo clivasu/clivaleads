@@ -271,7 +271,7 @@ export function BuilderClient({ flow, leads = [] }: { flow: PublicFlow; leads?: 
     const { tree, removed } = removeNode(steps, from);
     if (removed) update(insertIntoId(tree, containerId, removed));
   };
-  const toggleCollapse = (id: string) => setCollapsed((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleCollapse = (id: string) => setCollapsed((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
   const ancestor = useMemo(() => topAncestor(steps, selectedId), [steps, selectedId]);
   const previewFlow: PublicFlow = useMemo(() => ({ ...flow, steps: ancestor ? [ancestor] : [] }), [flow, ancestor]);
@@ -741,7 +741,7 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
           </Field>
           <ColorRow label="Cor de fundo" value={c.bg ?? "#ffffff"} onChange={(v) => onChange({ bg: v })} />
           <p className="mt-2 rounded-lg bg-emerald-50 p-2 text-[11px] text-emerald-700">
-            Com esta seção selecionada, os blocos da paleta são adicionados <b>dentro</b> dela. Você também pode arrastar blocos para o "soltar aqui".
+            Com esta seção selecionada, os blocos da paleta são adicionados <b>dentro</b> dela. Você também pode arrastar blocos para o “soltar aqui”.
           </p>
         </>
       )}
@@ -963,7 +963,7 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
                 </label>
               ))}
             </div>
-            <p className="mt-2 text-[11px] text-slate-400">Ex.: 3 tentativas — 1ª "Não foi dessa vez", 2ª "Brinde", 3ª o prêmio principal.</p>
+            <p className="mt-2 text-[11px] text-slate-400">Ex.: 3 tentativas — 1ª “Não foi dessa vez”, 2ª “Brinde”, 3ª o prêmio principal.</p>
             {(c.max_attempts ?? 1) > 1 && (
               <Field label="Texto do botão de girar de novo"><input className={inputCls} value={c.retry_label ?? ""} onChange={(e) => onChange({ retry_label: e.target.value })} placeholder="Girar novamente" /></Field>
             )}
@@ -1235,7 +1235,7 @@ function ChartGrowthEditor({ c, onChange }: { c: FlowStep["config"]; onChange: (
 
       {style === "compare" && (
         <>
-          <p className="mb-1 mt-3 text-xs font-medium text-slate-500">Série "Você"</p>
+          <p className="mb-1 mt-3 text-xs font-medium text-slate-500">Série “Você”</p>
           <div className="mb-3 grid grid-cols-3 gap-2">
             {(c.you_series ?? [0, 0, 0]).map((v, i) => (
               <input key={i} type="number" className={inputCls} value={v} onChange={(e) => {
@@ -1243,7 +1243,7 @@ function ChartGrowthEditor({ c, onChange }: { c: FlowStep["config"]; onChange: (
               }} />
             ))}
           </div>
-          <p className="mb-1 text-xs font-medium text-slate-500">Série "Concorrência"</p>
+          <p className="mb-1 text-xs font-medium text-slate-500">Série “Concorrência”</p>
           <div className="grid grid-cols-3 gap-2">
             {(c.competitor_series ?? [0, 0, 0]).map((v, i) => (
               <input key={i} type="number" className={inputCls} value={v} onChange={(e) => {
@@ -1579,7 +1579,7 @@ function SwitchRow({ label, desc, on, onChange }: { label: string; desc?: string
   );
 }
 
-function SettingsPanel({ s, setS, slug, flowId, handle }: { s: FunnelSettings; setS: (p: Partial<FunnelSettings>) => void; slug: string; flowId: string; handle: string }) {
+function SettingsPanel({ s, setS, flowId, handle }: { s: FunnelSettings; setS: (p: Partial<FunnelSettings>) => void; slug?: string; flowId: string; handle: string }) {
   const ta = "w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs focus:border-emerald-400 focus:outline-none";
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50 p-6">

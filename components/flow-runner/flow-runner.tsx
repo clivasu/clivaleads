@@ -5,7 +5,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRight,
   ArrowUpRight,
-  MessageCircle,
   Star,
   Check,
   Clock,
@@ -1071,7 +1070,6 @@ function VideoMp4({ url, hide, fake, speed }: { url: string; hide?: boolean; fak
   const exp = speed ?? 0.5;
   return (
     <>
-      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video
         ref={ref}
         src={url}
