@@ -33,6 +33,7 @@ export const sessionCreateSchema = z.object({
   browser: text(40).optional(),
   entry_page: text(500).optional(),
   whatsapp_clicked: z.boolean().optional(),
+  final_cta_clicked: z.boolean().optional(),
   disqualified: z.boolean().optional(),
 });
 export type SessionCreate = z.infer<typeof sessionCreateSchema>;
@@ -40,14 +41,21 @@ export type SessionCreate = z.infer<typeof sessionCreateSchema>;
 export const sessionPatchSchema = z.object({
   id: uuid,
   token: z.string().min(10).max(200),
-  whatsapp_clicked: z.boolean().optional(),
+  // whatsapp = abriu o WhatsApp; final_cta = botão final (formulário, Continuar)
+  action: z.enum(["whatsapp", "final_cta"]).default("whatsapp"),
+  whatsapp_clicked: z.boolean().optional(), // legado
 });
 
-export const TRACK_TYPES = ["page_view", "flow_started", "flow_completed", "whatsapp_clicked"] as const;
+// Tipos que o navegador pode enviar. lead_qualified e appointment_booked são
+// gravados só pelo servidor (não podem ser forjados pelo visitante).
+export const TRACK_TYPES = ["page_view", "flow_started", "step_view", "step_completed", "flow_completed", "flow_exited", "whatsapp_clicked"] as const;
 const trackEvent = z.object({
   type: z.enum(TRACK_TYPES),
   flow_id: uuid,
   organization_id: uuid.optional(), // ignorado
+  event_id: uuid.optional(),
+  step_index: z.number().int().min(0).max(500).optional(),
+  step_id: z.string().max(64).optional(),
 });
 export const trackSchema = z.union([
   z.object({ events: z.array(z.unknown()).max(50) }),

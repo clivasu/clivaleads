@@ -10,9 +10,9 @@ Branch: `fix/security-integrity-cliva`. Nada aplicado em produção.
 |---|---|---|
 | Inventário e baseline | feito | `docs/audit/BASELINE.md` |
 | Next.js 16.3.5 → 16.3.8, `npm audit` de produção zerado | feito, testado | `npm audit --omit=dev`: 0 vulnerabilidades |
-| `npm run lint` (ESLint 9) | feito, testado | 0 erros, 23 avisos registrados |
+| `npm run lint` (ESLint 9) | feito, testado | 0 erros, 24 avisos registrados (nenhum nos arquivos da Entrega C) |
 | `npm run typecheck` | testado | sem erros |
-| `npm test` (Vitest + Postgres real via PGlite) | feito, testado | 68 testes passando (após a Entrega B) |
+| `npm test` (Vitest + Postgres real via PGlite) | feito, testado | 91 testes passando (após a Entrega C) |
 | `npm run build` / `build:local` | testado | build local com webpack passa |
 | CI (GitHub Actions) | feito | `.github/workflows/ci.yml`; roda quando a branch for enviada |
 | 1.1 Sem autoelevação a superadmin | feito, testado | grant por coluna + trigger; teste ANTES/DEPOIS |
@@ -58,10 +58,38 @@ Branch: `fix/security-integrity-cliva`. Nada aplicado em produção.
 | 2.6 `/f/<slug>` → URL canônica, determinístico | feito | funil publicado mais antigo com o slug (dono do link antes da 0004) |
 | Aplicar 0011 e 0012 em produção | autorização | `docs/audit/DEPLOY_SAFE.md` |
 
+## Entrega C — Fase 3
+
+| Item | Situação | Evidência |
+|---|---|---|
+| Eventos padronizados (`page_view`, `flow_started`, `step_view`, `step_completed`, `flow_completed`, `flow_exited`, `whatsapp_clicked`, `lead_qualified`, `appointment_booked`) | feito, testado | `0013_events.sql`; tipos antigos mantidos no check |
+| `flow_started` só na primeira interação real (não na abertura) | feito | `components/flow-runner/flow-runner.tsx` |
+| `step_view`/`step_completed` só com posição e id interno da etapa (nunca resposta) | feito, testado | validação Zod recusa metadados |
+| `flow_completed` não conta quem foi para o final "sem interesse" (`flow_exited`) | feito, testado | fixture v3 |
+| `whatsapp_clicked` só quando o WhatsApp abre; formulário/"Continuar" viram `final_cta_clicked` | feito, testado | fixture v4; PATCH com `action` |
+| Corrida POST × PATCH (clique enquanto o lead é gravado) | feito | cliques pendentes aplicados após o POST |
+| `lead_qualified` gravado pelo servidor (score ≥ 61), uma vez por lead | feito, testado | índice único `(lead_session_id, type)` |
+| `appointment_booked` só quando a clínica marca agendado/convertido, uma vez por lead | feito, testado | gatilho no banco; vale para qualquer tela |
+| Código de tracking morto removido (`question_viewed`, `option_clicked`, `flow_disqualified`) | feito | eram descartados pelo servidor |
+| `event_id` e deduplicação de reenvio | feito, testado | índice único + upsert `ignoreDuplicates` |
+| Visitas × visitantes únicos × inícios × conclusões × leads com contato × cliques × agendamentos | feito, testado | `analytics_overview` (números exatos na fixture) |
+| Agregações no banco (sem o limite de 1.000 linhas nem o recorte de 200 leads) | feito, testado | RPCs `analytics_overview` e `analytics_answers` (RLS valendo) |
+| Isolamento entre clínicas nas métricas | feito, testado | clínica B pedindo o id da A recebe zeros |
+| Taxas com denominador explícito e período anterior comparável | feito, testado | `lib/analytics/metrics.ts`, `period.ts` |
+| Filtros: período, funil, procedimento, origem, campanha | feito, testado | UTM gravada também nos eventos |
+| Paginação da lista de leads no banco | feito | 50 por página, total exato |
+| "Receita" renomeada para **potencial estimado** | feito | tooltip explica que não é faturamento |
+| Sem números demo com banco real; "sem dados" quando vazio | feito | demo só sem Supabase |
+| Gráficos (Recharts) com definição de cada métrica no ⓘ | feito | `/analytics` e resumo em `/flows` |
+| Editar/excluir lead desfaz na tela se o banco recusar | feito | `components/leads/leads-table.tsx` |
+| Abandono por etapa | feito | só com funil selecionado e só com dados registrados após a 0013 |
+| Preço por procedimento configurável pela clínica | pendente | hoje usa ticket fixo (rotulado como estimativa) |
+| Receita confirmada | pendente | não existe fonte de receita real no sistema |
+| Aplicar 0013 em produção | autorização | `docs/audit/DEPLOY_SAFE.md` |
+
 ## Próximas entregas
 
 | Entrega | Itens | Situação |
 |---|---|---|
-| C | eventos padronizados, deduplicação, agregações SQL, métricas com definição | pendente |
 | D | pixels com consentimento, webhooks com HMAC/retry/anti-SSRF, SEO (canonical) | pendente |
 | E | medições de performance, fontes, headers de segurança, observabilidade | pendente |

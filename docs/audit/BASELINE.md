@@ -18,7 +18,7 @@ A falha crítica era execução remota de código em `next/og` (16.2.0 a 16.3.5)
 
 ## Migrations (ordem de execução)
 
-`0001_init` → `0002_builder_storage` → `0003_public_org_read` → `0004_handles_and_admin` → `0005_lead_contact` → `0006_bio_links` → `0007_billing` → `0008_admin_billing` → `0009_official_admin` → **`0010_security_hardening` (nova)**.
+`0001_init` → `0002_builder_storage` → `0003_public_org_read` → `0004_handles_and_admin` → `0005_lead_contact` → `0006_bio_links` → `0007_billing` → `0008_admin_billing` → `0009_official_admin` → **`0010_security_hardening`** → **`0011_integrity`** → **`0012_schedule`** → **`0013_events`** (novas nesta branch).
 
 As migrations são aplicadas pelo SQL Editor do Supabase. O estado real do banco pode divergir dos arquivos. Antes de aplicar a 0010, rode `supabase/verify/0010_verify.sql` (somente leitura) e compare.
 
@@ -62,6 +62,15 @@ Gravidade: **Crítica** (comprometimento de várias clínicas), **Alta** (dado o
 | 2.5 | URLs do checkout montadas com o header `Host`. | `lib/actions/billing.ts` | Baixa | Corrigido (`lib/site-url.ts`) |
 | 2.5b | Webhook Stripe sem idempotência e sujeito a eventos fora de ordem. | `app/api/stripe/webhook/route.ts` | Média | Corrigido |
 | 2.6 | `/f/<slug>` pode ser ambíguo (slug único por clínica). Retornava 404 em caso de ambiguidade, sem vazar dados. | `lib/data/flows.ts` | Baixa | Corrigido (redirect determinístico) |
+
+| C1 | `page_view` e `flow_started` disparavam juntos ao abrir o funil: "inícios" era igual a "visitas". | `flow-runner.tsx` (efeito de montagem) | Média | Corrigido (início = primeira interação) |
+| C2 | Lead que caía no final "sem interesse" contava como conclusão (`flow_completed`). | `flow-runner.tsx` (`persistSession`) | Média | Corrigido (`flow_exited`) |
+| C3 | Enviar o formulário final ou clicar em "Continuar" na última etapa marcava `whatsapp_clicked` no lead, sem abrir o WhatsApp. | `flow-runner.tsx` | Média | Corrigido (`final_cta_clicked`) |
+| C4 | Painel somava eventos e leads no app: limite de 1.000 linhas da API nos eventos e 200 leads em `listLeads`. Acima disso os números ficavam errados sem aviso. | `lib/data/dashboard.ts`, `analytics.ts`, `lead-insights.ts` | Média | Corrigido (RPCs no banco; módulos antigos removidos) |
+| C5 | "Receita do mês" era ticket fixo × leads que avançaram, apresentado como faturamento. | `lib/data/analytics.ts` | Baixa | Corrigido (rótulo "potencial estimado") |
+| C6 | "Saíram no meio" = inícios − conclusões, apresentado como abandono. | `funnel-insights.tsx` | Baixa | Corrigido ("não concluíram", com definição) |
+| C7 | Sem identificador de evento: reenvio do lote contava duas vezes. | `lib/tracking.ts` | Baixa | Corrigido (`event_id`) |
+| C8 | Excluir um funil apaga em cascata os leads e eventos dele (`on delete cascade`). A confirmação avisa quantos leads vão junto. | `0001_init.sql`, `delete-flow-button.tsx` | Baixa | Registrado; avaliar arquivar em vez de apagar (decisão de produto) |
 
 ## Dívida técnica registrada
 

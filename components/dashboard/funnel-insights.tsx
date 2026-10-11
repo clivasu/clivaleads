@@ -1,30 +1,46 @@
-import { MousePointerClick, LogOut, MessageCircle, Users, TrendingUp, Flame, Activity, Snowflake } from "lucide-react";
-import type { DashboardData } from "@/lib/data/dashboard";
-import type { LeadInsights, Bucket } from "@/lib/data/lead-insights";
+import Link from "next/link";
+import { MousePointerClick, LogOut, MessageCircle, Users, TrendingUp, Flame, Activity, Snowflake, ArrowRight } from "lucide-react";
+import type { FunnelAnalytics } from "@/lib/data/funnel-analytics";
+import type { Bucket } from "@/lib/analytics/answers";
+import { TIER_LABEL, tierFromScore } from "@/lib/scoring";
+import { MetricInfo } from "@/components/analytics/metric-info";
+import type { MetricKey } from "@/lib/analytics/metrics";
 
 function pct(n: number, d: number) {
   return d > 0 ? Math.round((n / d) * 100) : 0;
 }
 const CARD = "rounded-2xl border border-slate-200 bg-white shadow-sm";
 
-export function FunnelInsights({ data, insights }: { data: DashboardData; insights: LeadInsights }) {
-  const m = data.metrics;
-  const started = m.started || insights.total;
-  const exits = Math.max(0, started - m.completed);
-  const anyData = m.visitors + started + insights.total > 0;
+export function FunnelInsights({ data }: { data: FunnelAnalytics }) {
+  const t = data.totals;
+  // Inícios sem conclusão nem saída explícita (não é abandono confirmado).
+  const notFinished = Math.max(0, t.starts - t.completions - t.exits);
+  const anyData = data.available && t.visits + t.starts + t.leads > 0;
+  const insights = {
+    total: t.leads,
+    interest: { hot: t.qualified, warm: t.warm, cold: t.cold },
+    pains: data.profile.pains,
+    gender: data.profile.gender,
+    ages: data.profile.ages,
+    devices: { mobile: t.devices_mobile, desktop: t.devices_desktop },
+    recent: data.recent.map((l) => {
+      const tier = tierFromScore(l.score);
+      return { ...l, tier, tierLabel: TIER_LABEL[tier], date: new Date(l.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", timeZone: "America/Sao_Paulo" }) };
+    }),
+  };
 
-  const kpis = [
-    { key: "visitors", label: "Visitantes", value: m.visitors, sub: "abriram o funil", icon: Users, tone: "slate" },
-    { key: "clicks", label: "Interagiram", value: started, sub: `${pct(started, m.visitors)}% dos visitantes`, icon: MousePointerClick, tone: "emerald" },
-    { key: "exits", label: "Saíram no meio", value: exits, sub: `${pct(exits, started)}% de saída`, icon: LogOut, tone: "rose" },
-    { key: "whatsapp", label: "Foram pro WhatsApp", value: m.whatsapp, sub: `${pct(m.whatsapp, started)}% de conversão`, icon: MessageCircle, tone: "green" },
+  const kpis: { key: string; metric: MetricKey; label: string; value: number; sub: string; icon: typeof Users; tone: string }[] = [
+    { key: "visitors", metric: "visits", label: "Visitas", value: t.visits, sub: `${t.unique_visitors.toLocaleString("pt-BR")} visitantes únicos`, icon: Users, tone: "slate" },
+    { key: "clicks", metric: "starts", label: "Interagiram", value: t.starts, sub: `${pct(t.starts, t.visits)}% das visitas`, icon: MousePointerClick, tone: "emerald" },
+    { key: "exits", metric: "not_finished", label: "Não concluíram", value: notFinished, sub: `${pct(notFinished, t.starts)}% dos inícios`, icon: LogOut, tone: "rose" },
+    { key: "whatsapp", metric: "whatsapp_clicks", label: "Foram pro WhatsApp", value: t.whatsapp_clicks, sub: `${pct(t.whatsapp_clicks, t.completions)}% das conclusões`, icon: MessageCircle, tone: "green" },
   ];
 
   const funnelSteps = [
-    { label: "Visitantes", value: m.visitors },
-    { label: "Interagiram", value: started },
-    { label: "Concluíram", value: m.completed },
-    { label: "WhatsApp", value: m.whatsapp },
+    { label: "Visitas", value: t.visits },
+    { label: "Interagiram", value: t.starts },
+    { label: "Concluíram", value: t.completions },
+    { label: "WhatsApp", value: t.whatsapp_clicks },
   ];
   const funnelMax = Math.max(1, ...funnelSteps.map((s) => s.value));
 
@@ -34,13 +50,14 @@ export function FunnelInsights({ data, insights }: { data: DashboardData; insigh
         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100"><TrendingUp className="h-4 w-4 text-emerald-600" /></span>
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Desempenho dos funis</h2>
-          <p className="text-sm text-slate-400">Como os leads estão se comportando nos seus funis.</p>
+          <p className="text-sm text-slate-400">Últimos 30 dias. Passe o mouse no ⓘ para ver como cada número é contado.</p>
         </div>
+        <Link href="/analytics" className="ml-auto flex items-center gap-1 text-sm font-medium text-emerald-600 hover:text-emerald-700">Análise completa <ArrowRight className="h-4 w-4" /></Link>
       </div>
 
       {!anyData ? (
         <div className={`${CARD} p-10 text-center`}>
-          <p className="text-sm text-slate-500">Nenhum lead ainda. Publique um funil e compartilhe o link — os dados aparecem aqui em tempo real.</p>
+          <p className="text-sm text-slate-500">{data.available ? "Sem dados nos últimos 30 dias. Publique um funil e compartilhe o link: os números aparecem aqui." : "Métricas indisponíveis até a atualização do banco (migration 0013)."}</p>
         </div>
       ) : (
         <>
@@ -54,6 +71,7 @@ export function FunnelInsights({ data, insights }: { data: DashboardData; insigh
                   <div className="mb-3 flex items-center gap-2.5">
                     <span className={`flex h-9 w-9 items-center justify-center rounded-full ${tone}`}><Icon className="h-4 w-4" /></span>
                     <span className="text-sm font-medium text-slate-600">{k.label}</span>
+                    <MetricInfo metric={k.metric} />
                   </div>
                   <p className="text-3xl font-bold tracking-tight text-slate-900">{k.value.toLocaleString("pt-BR")}</p>
                   <p className="mt-1 text-xs text-slate-400">{k.sub}</p>
@@ -78,7 +96,7 @@ export function FunnelInsights({ data, insights }: { data: DashboardData; insigh
                         {s.value.toLocaleString("pt-BR")}
                       </div>
                     </div>
-                    <span className="w-12 shrink-0 text-right text-xs font-medium text-slate-400">{i === 0 ? "100%" : `${pct(s.value, funnelSteps[0].value)}%`}</span>
+                    <span className="w-12 shrink-0 text-right text-xs font-medium text-slate-400" title={i === 0 ? undefined : "sobre as visitas"}>{i === 0 ? "100%" : `${pct(s.value, funnelSteps[0].value)}%`}</span>
                   </div>
                 ))}
               </div>
@@ -92,7 +110,7 @@ export function FunnelInsights({ data, insights }: { data: DashboardData; insigh
                 <InterestRow icon={Activity} color="text-amber-600" bg="bg-amber-500" label="Em potencial" value={insights.interest.warm} total={insights.total} />
                 <InterestRow icon={Snowflake} color="text-slate-500" bg="bg-slate-400" label="Frio" value={insights.interest.cold} total={insights.total} />
               </div>
-              <p className="mt-4 text-[11px] text-slate-400">Calculado pelas respostas de cada lead (score 0–100).</p>
+              <p className="mt-4 text-[11px] text-slate-400">Score 0–100 calculado no servidor pelas respostas. Quente = 61 ou mais.</p>
             </div>
           </div>
 

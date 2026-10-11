@@ -7,6 +7,7 @@ import { readJsonLimited, sessionCreateSchema, sessionPatchSchema } from "@/lib/
 import { issueLeadToken, verifyLeadToken } from "@/lib/security/lead-token";
 import { clientIp, rateLimit } from "@/lib/security/rate-limit";
 import { scoreAnswers, totalFrom } from "@/lib/security/scoring";
+import { tierFromScore } from "@/lib/scoring";
 import type { FlowStep } from "@/lib/types";
 
 // Captura de leads dos funis públicos (sem login do paciente).
@@ -91,6 +92,7 @@ export async function POST(request: NextRequest) {
       score,
       status: body.disqualified ? "lost" : body.whatsapp_clicked ? "whatsapp" : "new",
       whatsapp_clicked: body.whatsapp_clicked ?? false,
+      final_cta_clicked: body.final_cta_clicked ?? false,
       device: body.device ?? null,
       browser: body.browser ?? null,
       entry_page: body.entry_page ?? null,
@@ -101,12 +103,17 @@ export async function POST(request: NextRequest) {
       utm_content: cookieStore.get("utm_content")?.value?.slice(0, 200) ?? null,
       utm_term: cookieStore.get("utm_term")?.value?.slice(0, 200) ?? null,
   };
-  let { data: session, error } = await supabase.from("lead_sessions").insert(row).select("id").single();
-  // Banco ainda sem a coluna client_ref (migration 0010 não aplicada): grava sem ela.
-  if (error && (error.code === "42703" || error.code === "PGRST204")) {
-    const { client_ref: _omit, ...legacy } = row;
+  const insertLead = (r: Record<string, unknown>) => supabase.from("lead_sessions").insert(r).select("id").single();
+  let attempt: Record<string, unknown> = row;
+  let { data: session, error } = await insertLead(attempt);
+  // Banco ainda sem as colunas novas (0013: final_cta_clicked; 0010: client_ref):
+  // grava sem elas, da mais nova para a mais antiga.
+  for (const col of ["final_cta_clicked", "client_ref"]) {
+    if (!error || !(error.code === "42703" || error.code === "PGRST204")) break;
+    const { [col]: _omit, ...rest } = attempt;
     void _omit;
-    ({ data: session, error } = await supabase.from("lead_sessions").insert(legacy).select("id").single());
+    attempt = rest;
+    ({ data: session, error } = await insertLead(attempt));
   }
 
   if (error || !session) {
@@ -139,6 +146,16 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Lead qualificado (faixa quente) vira evento do funil. O índice único
+  // (lead_session_id, type) impede contar o mesmo lead duas vezes. Banco sem a
+  // 0013 recusa o tipo: a métrica "qualificados" usa o score do lead e não depende disso.
+  if (!body.disqualified && tierFromScore(score) === "hot") {
+    const { error: evError } = await supabase.from("events").insert({
+      organization_id, flow_id: flow.id, session_id, type: "lead_qualified", lead_session_id: session.id, metadata: {},
+    });
+    if (evError && evError.code !== "23505") console.warn("[sessions] evento lead_qualified não gravado", evError.code);
+  }
+
   return NextResponse.json({ ok: true, id: session.id, token: issueLeadToken(session.id), score });
 }
 
@@ -155,7 +172,19 @@ export async function PATCH(request: NextRequest) {
   if (!verifyLeadToken(v.data.id, v.data.token)) return fail(403, "forbidden");
 
   const supabase = createAdminClient();
-  // Não rebaixa um lead que a clínica já marcou como agendado/convertido.
+
+  // Botão final (formulário, "Continuar", link): só marca o clique, sem mudar o status.
+  if (v.data.action === "final_cta") {
+    const { error } = await supabase.from("lead_sessions").update({ final_cta_clicked: true }).eq("id", v.data.id);
+    // Banco sem a 0013 não tem a coluna: o clique simplesmente não é registrado.
+    if (error && error.code !== "42703" && error.code !== "PGRST204") {
+      console.error("[sessions] falha ao marcar botão final", error.code);
+      return fail(500, "save_failed");
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // WhatsApp aberto. Não rebaixa um lead que a clínica já marcou como agendado/convertido.
   const { error } = await supabase
     .from("lead_sessions")
     .update({ whatsapp_clicked: true, status: "whatsapp" })

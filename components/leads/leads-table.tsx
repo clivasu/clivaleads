@@ -43,25 +43,42 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
   const [confirming, setConfirming] = useState<LeadRow | null>(null);
   const [, startTransition] = useTransition();
 
+  const [error, setError] = useState<string | null>(null);
+
+  // Otimista: aplica na hora e desfaz se o banco recusar (ex.: sem permissão).
   const remove = (lead: LeadRow) => {
+    const before = rows;
     setRows((prev) => prev.filter((l) => l.id !== lead.id));
     setConfirming(null);
-    startTransition(() => { deleteLeadAction(lead.id); });
+    setError(null);
+    startTransition(async () => {
+      const res = await deleteLeadAction(lead.id);
+      if (!res.ok) { setRows(before); setError("Não foi possível excluir o lead. Tente de novo."); }
+    });
   };
 
   const save = (id: string, patch: Partial<LeadRow>) => {
+    const before = rows;
     setRows((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
     setEditing(null);
-    startTransition(() => {
-      updateLeadAction(id, {
+    setError(null);
+    startTransition(async () => {
+      const res = await updateLeadAction(id, {
         name: patch.name, phone: patch.phone, email: patch.email,
         procedure: patch.procedure, status: patch.status,
       });
+      if (!res.ok) { setRows(before); setError("Não foi possível salvar as alterações. Tente de novo."); }
     });
   };
 
   return (
     <div className="overflow-x-auto" onClick={() => setMenuId(null)}>
+      {error && (
+        <p role="alert" className="flex items-center justify-between gap-3 border-b bg-rose-50 px-5 py-2.5 text-sm text-rose-700">
+          {error}
+          <button onClick={() => setError(null)} className="rounded p-0.5 hover:bg-rose-100" aria-label="Fechar aviso"><X className="h-4 w-4" /></button>
+        </p>
+      )}
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b text-left text-xs uppercase tracking-wide text-slate-400">
