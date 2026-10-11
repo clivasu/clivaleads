@@ -1,59 +1,47 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/env";
+import { readJsonLimited, trackEventSchema, trackSchema } from "@/lib/security/validation";
+import { clientIp, rateLimit } from "@/lib/security/rate-limit";
 
-// Tipos gravados no banco: os que os relatórios leem e que o check da
-// tabela events aceita (um tipo inválido derrubaria o lote inteiro).
-const ALLOWED = new Set([
-  "page_view",
-  "flow_started",
-  "flow_completed",
-  "whatsapp_clicked",
-]);
-const MAX_EVENTS = 50;
-
-interface IncomingEvent {
-  type?: string;
-  flow_id?: string | null;
-  organization_id?: string;
-  metadata?: Record<string, unknown>;
-}
-
-// Aceita um lote { events: [...] } ou, de páginas antigas em cache, um evento solto.
+// Eventos dos funis públicos, em lote. Só tipos que os relatórios usam e que o
+// check da tabela events aceita; a clínica é derivada do funil publicado.
+// metadata não é aceita do navegador (evita gravar dado pessoal/sensível).
 export async function POST(request: NextRequest) {
-  let payload: { events?: IncomingEvent[] } & IncomingEvent;
-  try {
-    payload = JSON.parse(await request.text());
-  } catch {
-    return NextResponse.json({ ok: false }, { status: 400 });
-  }
+  const hdrs = await headers();
+  if (!rateLimit(`track:${clientIp(hdrs)}`, 60)) return NextResponse.json({ ok: false }, { status: 429 });
 
-  const list = (Array.isArray(payload?.events) ? payload.events : [payload])
-    .slice(0, MAX_EVENTS)
-    .filter((e) => e && typeof e.type === "string" && ALLOWED.has(e.type) && typeof e.organization_id === "string");
+  const parsed = await readJsonLimited(request);
+  if (!parsed.ok) return NextResponse.json({ ok: false }, { status: parsed.status });
+  const top = trackSchema.safeParse(parsed.data);
+  if (!top.success) return NextResponse.json({ ok: false }, { status: 400 });
 
+  const raw = "events" in top.data && Array.isArray(top.data.events) ? top.data.events : [top.data];
+  const list = raw.map((e) => trackEventSchema.safeParse(e)).filter((r) => r.success).map((r) => r.data!);
   if (list.length === 0) return NextResponse.json({ ok: true, stored: 0 });
 
-  if (!isSupabaseConfigured) {
-    // Sem banco conectado ainda: aceita silenciosamente (modo demo).
-    return NextResponse.json({ ok: true, skipped: true });
-  }
-
-  const cookieStore = await cookies();
-  const session_id = cookieStore.get("pl_sid")?.value ?? null;
+  if (!isSupabaseConfigured) return NextResponse.json({ ok: true, skipped: true });
 
   const supabase = createAdminClient();
-  const { error } = await supabase.from("events").insert(
-    list.map((e) => ({
-      organization_id: e.organization_id,
-      flow_id: e.flow_id ?? null,
-      session_id,
-      type: e.type,
-      metadata: e.metadata ?? {},
-    })),
-  );
-  if (error) return NextResponse.json({ ok: false }, { status: 500 });
+  const flowIds = [...new Set(list.map((e) => e.flow_id))];
+  const { data: flows } = await supabase
+    .from("flows")
+    .select("id, organization_id")
+    .in("id", flowIds)
+    .eq("status", "published");
+  const orgOf = new Map((flows ?? []).map((f) => [f.id as string, f.organization_id as string]));
 
-  return NextResponse.json({ ok: true, stored: list.length });
+  const rows = list
+    .filter((e) => orgOf.has(e.flow_id))
+    .map((e) => ({ flow_id: e.flow_id, organization_id: orgOf.get(e.flow_id)!, type: e.type }));
+  if (rows.length === 0) return NextResponse.json({ ok: true, stored: 0 });
+
+  const session_id = (await cookies()).get("pl_sid")?.value ?? null;
+  const { error } = await supabase.from("events").insert(rows.map((r) => ({ ...r, session_id, metadata: {} })));
+  if (error) {
+    console.error("[track] falha ao gravar eventos", error.code);
+    return NextResponse.json({ ok: false }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true, stored: rows.length });
 }

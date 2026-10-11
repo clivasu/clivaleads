@@ -214,3 +214,17 @@ describe("DEPOIS da 0010: falhas bloqueadas e uso legítimo preservado", () => {
     expect(c.orgId).toBeTruthy();
   });
 });
+
+describe("ROLLBACK da 0010", () => {
+  it("devolve os valores privados ao JSON do funil sem perder dados", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const s = await scenario("0009_official_admin.sql");
+    await runMigration(s.db, "0010_security_hardening.sql");
+    await s.db.exec(readFileSync(join(__dirname, "..", "..", "supabase", "rollback", "0010_security_hardening.rollback.sql"), "utf8"));
+    const { rows } = await s.db.query<{ v: string }>(`select settings->>'webhookSecret' as v from flows where id = $1`, [s.flowB]);
+    expect(rows[0].v).toBe("whsec_segredo_b");
+    const leads = await s.db.query(`select id from lead_sessions`);
+    expect(leads.rows.length).toBe(1);
+  });
+});

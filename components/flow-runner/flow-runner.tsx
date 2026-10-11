@@ -55,6 +55,9 @@ export function FlowRunner({
   const startedRef = useRef(false);
   const completedRef = useRef(false);
   const sessionIdRef = useRef<string | null>(null);
+  const sessionTokenRef = useRef<string | null>(null); // prova de posse para o PATCH
+  // Identifica este lead em reenvios (retry/refresh) para o servidor não duplicar.
+  const clientRefRef = useRef<string>(typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : "");
   const convertedRef = useRef(false);
 
   const steps = flow.steps;
@@ -102,7 +105,7 @@ export function FlowRunner({
       void fetch("/api/sessions", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: sessionIdRef.current, whatsapp_clicked: true }),
+        body: JSON.stringify({ id: sessionIdRef.current, token: sessionTokenRef.current ?? "", whatsapp_clicked: true }),
         keepalive: true,
       });
     } catch { /* noop */ }
@@ -123,7 +126,7 @@ export function FlowRunner({
     const wantConvert = convertedRef.current;
     const body = JSON.stringify({
       flow_id: flow.id,
-      organization_id: flow.organization_id,
+      client_ref: clientRefRef.current || undefined,
       procedure: flow.procedure,
       answers: finalAnswers,
       contact: finalContact,
@@ -131,7 +134,7 @@ export function FlowRunner({
       disqualified,
       device: detectDevice(),
       browser: detectBrowser(),
-      entry_page: typeof window !== "undefined" ? window.location.pathname : null,
+      entry_page: typeof window !== "undefined" ? window.location.pathname : undefined,
     });
     (async () => {
       try {
@@ -143,6 +146,7 @@ export function FlowRunner({
         });
         const json = await res.json().catch(() => ({}));
         sessionIdRef.current = json?.id ?? null;
+        sessionTokenRef.current = json?.token ?? null;
         // Conversão sinalizada enquanto o insert acontecia → aplica agora.
         if (convertedRef.current && !wantConvert) markConverted();
       } catch { /* nunca quebrar a experiência do lead */ }

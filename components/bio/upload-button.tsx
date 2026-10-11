@@ -5,6 +5,11 @@ import { Upload } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/env";
 import { compressImage } from "@/lib/compress-image";
+import { getUploadFolder } from "@/lib/actions/upload";
+
+// Pasta da clínica, buscada uma vez por página.
+let folderPromise: Promise<string | null> | null = null;
+const uploadFolder = () => (folderPromise ??= getUploadFolder().catch(() => null));
 
 export function UploadButton({
   onUploaded,
@@ -40,11 +45,13 @@ export function UploadButton({
     try {
       if (isSupabaseConfigured) {
         const supabase = createClient();
-        const ext = (file.name.split(".").pop() || (isVideo ? "mp4" : "jpg")).toLowerCase();
-        const path = `${isVideo ? "video" : "bio"}/${crypto.randomUUID()}.${ext}`;
+        const folder = await uploadFolder();
+        if (!folder) throw new Error("Faça login para enviar arquivos.");
+        const ext = (file.name.split(".").pop() || (isVideo ? "mp4" : "jpg")).toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || "bin";
+        const path = `${folder}/${isVideo ? "video" : "img"}/${crypto.randomUUID()}.${ext}`;
         const { error } = await supabase.storage
           .from("media")
-          .upload(path, file, { upsert: true, contentType: file.type });
+          .upload(path, file, { upsert: false, contentType: file.type });
         if (error) throw error;
         const { data } = supabase.storage.from("media").getPublicUrl(path);
         onUploaded(data.publicUrl);

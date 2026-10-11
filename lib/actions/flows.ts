@@ -27,6 +27,26 @@ export interface ActionResult {
   id?: string;
 }
 
+// Chaves de flows.settings que são privadas (integrações/contatos internos).
+const PRIVATE_KEYS = ["webhookUrl", "webhookSecret", "autoSendLead", "headScripts", "notifyEmail", "notifyWhatsapp", "notifyOnLead"];
+
+function splitSettings(settings: Record<string, unknown>) {
+  const publicSettings: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(settings ?? {})) if (!PRIVATE_KEYS.includes(k)) publicSettings[k] = v;
+  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const privateSettings: Record<string, unknown> = {
+    webhook_url: str(settings?.webhookUrl),
+    auto_send_lead: Boolean(settings?.autoSendLead),
+    notify_email: str(settings?.notifyEmail),
+    notify_whatsapp: str(settings?.notifyWhatsapp),
+    notify_on_lead: settings?.notifyOnLead === undefined ? null : Boolean(settings.notifyOnLead),
+  };
+  // Segredo: vazio = manter o atual; preenchido = trocar. Scripts livres não são mais aceitos.
+  const secret = str(settings?.webhookSecret);
+  if (secret) privateSettings.webhook_secret = secret;
+  return { publicSettings, privateSettings: privateSettings as { webhook_url: string | null } & Record<string, unknown> };
+}
+
 // Achata a árvore para linhas de flow_steps, guardando os filhos (blocos
 // aninhados do container/hero) dentro do próprio config JSONB.
 function serializeSteps(steps: FlowStep[]) {
@@ -69,7 +89,14 @@ export async function saveFlow(input: SaveFlowInput): Promise<ActionResult> {
     }
   }
 
-  const { error: flowErr } = await supabase
+  // Integrações e contatos internos não vão para flows.settings (lido pelo
+  // público): ficam em flow_private_settings.
+  const { publicSettings, privateSettings } = splitSettings(input.settings);
+  if (privateSettings.webhook_url && !/^https:\/\//i.test(privateSettings.webhook_url)) {
+    return { ok: false, error: "A URL do webhook precisa começar com https://" };
+  }
+
+  const { data: updated, error: flowErr } = await supabase
     .from("flows")
     .update({
       name: input.name,
@@ -80,11 +107,25 @@ export async function saveFlow(input: SaveFlowInput): Promise<ActionResult> {
       whatsapp_number: input.whatsapp || null,
       final_message: input.finalMessage || null,
       cover_image_url: input.coverImageUrl ?? null,
-      settings: input.settings,
+      settings: publicSettings,
     })
-    .eq("id", input.id);
+    .eq("id", input.id)
+    .select("id, organization_id");
 
   if (flowErr) return { ok: false, error: flowErr.message };
+  // RLS: só owner/admin da clínica alteram o funil (atendente não).
+  if (!updated || updated.length === 0) return { ok: false, error: "Você não tem permissão para editar este funil." };
+
+  // A atualização acima passou pela RLS (owner/admin): grava as privadas pelo servidor.
+  const { createAdminClient } = await import("@/lib/supabase/server");
+  const { error: privErr } = await createAdminClient()
+    .from("flow_private_settings")
+    .upsert(
+      { flow_id: input.id, organization_id: updated[0].organization_id, ...privateSettings, updated_at: new Date().toISOString() },
+      { onConflict: "flow_id" },
+    );
+  // Tabela ainda não criada (migration 0010 não aplicada): segue sem as privadas.
+  if (privErr && privErr.code !== "42P01" && privErr.code !== "PGRST205") return { ok: false, error: privErr.message };
 
   // Substitui as etapas (delete + insert). RLS garante que só o dono altera.
   const { error: delErr } = await supabase
