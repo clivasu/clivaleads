@@ -55,11 +55,13 @@ Gravidade: **Crítica** (comprometimento de várias clínicas), **Alta** (dado o
 | 1.5e | `lead_answers` gravado sem checar erro: lead podia ficar sem respostas. | `sessions/route.ts` | Média | Corrigido (desfaz o lead) |
 | 1.2c | Identificadores reservados validados só no app; a API do Supabase permitia gravar `admin`, `login`, `cliva`. | `lib/actions/org.ts` | Baixa | Corrigido (trigger no banco) |
 | 2.2 | Editor não recarregava `flows.settings`: SEO, pixels e cookies voltavam ao padrão a cada abertura. | `builder-client.tsx` | Média | Corrigido junto com 1.4 |
-| B1 | Excluir lead não funciona: não existe policy de DELETE em `lead_sessions`; a ação devolve sucesso sem apagar. | `lib/data/leads.ts:103`, `0001` | Média | Pendente (Entrega B) |
-| 2.1 | Salvar funil apaga e reinsere etapas sem transação. | `lib/actions/flows.ts` | Alta | Pendente (Entrega B) |
-| 2.4 | Agenda só no `localStorage`. | `components/schedule/schedule-board.tsx` | Média | Pendente (Entrega B) |
-| 2.5 | URLs do checkout montadas com o header `Host`. | `lib/actions/billing.ts` | Baixa | Pendente (Entrega B) |
-| 2.6 | `/f/<slug>` pode ser ambíguo (slug único por clínica). Hoje retorna 404 em caso de ambiguidade, sem vazar dados. | `lib/data/flows.ts` | Baixa | Pendente (Entrega B) |
+| B1 | Excluir lead não funciona: não existe policy de DELETE em `lead_sessions`; a ação devolve sucesso sem apagar. | `lib/data/leads.ts:103`, `0001` | Média | Corrigido (0011) |
+| 2.1 | Salvar funil apaga e reinsere etapas sem transação. | `lib/actions/flows.ts` | Alta | Corrigido (0011, `save_flow`) |
+| B2 | Salvar funil gerava ids novos para as etapas e quebrava a lógica "vá para a etapa Y" (goto por id). Modelos de funil perdiam as referências ao serem criados. | `lib/actions/flows.ts` (`serializeSteps` sem id), `builder-client.tsx` (`uid()`) | Alta | Corrigido (`lib/flow-persistence.ts`) |
+| 2.4 | Agenda só no `localStorage`. | `components/schedule/schedule-board.tsx` | Média | Corrigido (0012 + importação) |
+| 2.5 | URLs do checkout montadas com o header `Host`. | `lib/actions/billing.ts` | Baixa | Corrigido (`lib/site-url.ts`) |
+| 2.5b | Webhook Stripe sem idempotência e sujeito a eventos fora de ordem. | `app/api/stripe/webhook/route.ts` | Média | Corrigido |
+| 2.6 | `/f/<slug>` pode ser ambíguo (slug único por clínica). Retornava 404 em caso de ambiguidade, sem vazar dados. | `lib/data/flows.ts` | Baixa | Corrigido (redirect determinístico) |
 
 ## Dívida técnica registrada
 

@@ -14,6 +14,12 @@ import {
 import { PatientPanel } from "@/components/schedule/patient-panel";
 import { AppointmentModal, draftToAppt, type ApptDraft } from "@/components/schedule/appointment-modal";
 import { cn } from "@/lib/utils";
+import { useRouter } from "next/navigation";
+import type { ScheduleData } from "@/lib/data/schedule";
+import {
+  addProcedure as addProcedureAction, addProfessional, deleteAppointment, importLocalSchedule,
+  removeProcedure, removeProfessional, saveAppointment, type ImportSummary, type ScheduleResult,
+} from "@/lib/actions/schedule";
 
 const ROW_H = 76;
 const HOURS = Array.from({ length: DAY_END - DAY_START }, (_, i) => DAY_START + i);
@@ -31,16 +37,47 @@ function startOfWeek(d: Date) {
 type View = "day" | "week" | "month";
 type ColorOf = (name: string) => string;
 
-export function ScheduleBoard({ demo = true, storageKey }: { demo?: boolean; storageKey?: string }) {
+export function ScheduleBoard({ demo = true, storageKey, initial }: { demo?: boolean; storageKey?: string; initial?: ScheduleData }) {
+  // Três modos: demonstração (exemplos), banco (0012 aplicada) e navegador
+  // (legado, enquanto a 0012 não estiver aplicada).
+  const dbMode = !demo && Boolean(initial?.available);
+  const router = useRouter();
   // Conta real começa em branco: só aparece o que a clínica cadastrar.
-  const [appts, setAppts] = useState<Appt[]>(() => (demo ? seedAppointments() : []));
-  const [docs, setDocs] = useState<Doctor[]>(demo ? seedDoctors : []);
-  const [procs, setProcs] = useState<Procedure[]>(demo ? seedProcedures : []);
-  const [extraPatients, setExtraPatients] = useState<Patient[]>([]);
+  const [appts, setAppts] = useState<Appt[]>(() => (demo ? seedAppointments() : dbMode ? initial!.appts : []));
+  const [docs, setDocs] = useState<Doctor[]>(demo ? seedDoctors : dbMode ? initial!.docs : []);
+  const [procs, setProcs] = useState<Procedure[]>(demo ? seedProcedures : dbMode ? initial!.procs : []);
+  const [extraPatients, setExtraPatients] = useState<Patient[]>(dbMode ? initial!.patients : []);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
-  // Guarda a agenda da clínica neste navegador (por organização).
+  // Banco: a cada atualização vinda do servidor, a tela passa a refletir o banco.
+  useEffect(() => {
+    if (!dbMode || !initial) return;
+    setAppts(initial.appts);
+    setDocs(initial.docs);
+    setProcs(initial.procs);
+    setExtraPatients(initial.patients);
+  }, [dbMode, initial]);
+  // Outros dispositivos/usuários: atualiza ao voltar para a aba e a cada minuto.
+  useEffect(() => {
+    if (!dbMode) return;
+    const refresh = () => { if (document.visibilityState === "visible") router.refresh(); };
+    window.addEventListener("focus", refresh);
+    const t = setInterval(refresh, 60_000);
+    return () => { window.removeEventListener("focus", refresh); clearInterval(t); };
+  }, [dbMode, router]);
+
+  // Grava no banco; se o servidor recusar (ex.: horário ocupado), desfaz.
+  const persist = (call: () => Promise<ScheduleResult>, rollback: () => void) => {
+    if (!dbMode) return;
+    setSyncError(null);
+    call().then((r) => { if (!r.ok) { rollback(); setSyncError(r.error ?? "Não foi possível salvar."); } })
+      .catch(() => { rollback(); setSyncError("Sem conexão. A alteração não foi salva."); });
+  };
+  const newId = () => (dbMode ? crypto.randomUUID() : "ap" + Date.now());
+
+  // Modo navegador (legado): guarda a agenda neste navegador (por organização).
   const loadedRef = useRef(false);
-  const key = !demo && storageKey ? `cliva_agenda_${storageKey}` : null;
+  const key = !demo && !dbMode && storageKey ? `cliva_agenda_${storageKey}` : null;
   useEffect(() => {
     if (!key) return;
     try {
@@ -89,22 +126,51 @@ export function ScheduleBoard({ demo = true, storageKey }: { demo?: boolean; sto
   );
 
   // ------- CRUD agendamentos -------
+  // Envia um agendamento ao banco (cria ou atualiza pelo id).
+  const pushAppt = (a: Appt, before: Appt[]) =>
+    persist(
+      () => saveAppointment({
+        id: a.id, doctorId: a.doctorId, patientName: patientOf(a.patientId)?.name ?? "Paciente",
+        procedure: a.procedure, date: a.date, start: a.start, end: a.end, status: a.status, isReturn: a.isReturn,
+      }),
+      () => setAppts(before),
+    );
+
   const saveDraft = (d: ApptDraft) => {
-    let patient = (demo ? seedPatients.find((p) => p.name === d.patientName) : undefined) ?? extraPatients.find((p) => p.name === d.patientName);
+    let patient = (demo ? seedPatients.find((p) => p.name === d.patientName) : undefined)
+      ?? extraPatients.find((p) => p.name.toLowerCase() === d.patientName.trim().toLowerCase());
     if (!patient) {
-      patient = { id: "np" + Date.now(), name: d.patientName, phone: "55", age: 30, gender: "F", since: iso(new Date()), tags: ["Novo"], notes: "", history: [] };
+      patient = { id: "np" + Date.now(), name: d.patientName.trim(), phone: "55", age: 30, gender: "F", since: iso(new Date()), tags: ["Novo"], notes: "", history: [] };
       setExtraPatients((p) => [...p, patient!]);
     }
-    if (d.id) {
-      setAppts((prev) => prev.map((a) => (a.id === d.id ? draftToAppt(d, patient!.id, d.id) : a)));
-    } else {
-      setAppts((prev) => [...prev, draftToAppt(d, patient!.id, "ap" + Date.now())]);
+    const before = appts;
+    const appt = draftToAppt(d, patient.id, d.id ?? newId());
+    setAppts((prev) => (d.id ? prev.map((a) => (a.id === d.id ? appt : a)) : [...prev, appt]));
+    if (dbMode) {
+      persist(
+        () => saveAppointment({ id: appt.id, doctorId: appt.doctorId, patientName: patient!.name, procedure: appt.procedure, date: appt.date, start: appt.start, end: appt.end, status: appt.status, isReturn: appt.isReturn }),
+        () => setAppts(before),
+      );
     }
     setModal(null);
   };
-  const setStatus = (id: string, s: Status) => setAppts((prev) => prev.map((a) => (a.id === id ? { ...a, status: s } : a)));
-  const moveAppt = (id: string, patch: Partial<Appt>) => setAppts((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
-  const deleteAppt = (id: string) => { setAppts((prev) => prev.filter((a) => a.id !== id)); setSelectedId(null); setModal(null); };
+  const setStatus = (id: string, s: Status) => {
+    const before = appts;
+    const cur = appts.find((a) => a.id === id);
+    setAppts((prev) => prev.map((a) => (a.id === id ? { ...a, status: s } : a)));
+    if (cur) pushAppt({ ...cur, status: s }, before);
+  };
+  const moveAppt = (id: string, patch: Partial<Appt>) => {
+    const before = appts;
+    const cur = appts.find((a) => a.id === id);
+    setAppts((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+    if (cur) pushAppt({ ...cur, ...patch }, before);
+  };
+  const deleteAppt = (id: string) => {
+    const before = appts;
+    setAppts((prev) => prev.filter((a) => a.id !== id)); setSelectedId(null); setModal(null);
+    persist(() => deleteAppointment(id), () => setAppts(before));
+  };
 
   const openApptEdit = (a: Appt) => {
     const p = patientOf(a.patientId);
@@ -115,21 +181,31 @@ export function ScheduleBoard({ demo = true, storageKey }: { demo?: boolean; sto
 
   // ------- CRUD profissionais / procedimentos -------
   const addDoctor = (name: string) => {
-    setDocs((prev) => {
-      if (prev.some((d) => d.name.toLowerCase() === name.toLowerCase())) return prev;
-      return [...prev, { id: "doc" + Date.now(), name, initials: initialsFrom(name), avatarColor: AVATAR_COLORS[prev.length % AVATAR_COLORS.length] }];
-    });
+    if (docs.some((d) => d.name.toLowerCase() === name.toLowerCase())) return;
+    const before = docs;
+    const doc = { id: dbMode ? crypto.randomUUID() : "doc" + Date.now(), name, initials: initialsFrom(name), avatarColor: AVATAR_COLORS[docs.length % AVATAR_COLORS.length] };
+    setDocs((prev) => [...prev, doc]);
+    persist(() => addProfessional({ id: doc.id, name, avatarColor: doc.avatarColor }), () => setDocs(before));
   };
   const deleteDoctor = (id: string) => {
-    setDocs((prev) => (prev.length <= 1 ? prev : prev.filter((d) => d.id !== id)));
+    if (docs.length <= 1) return;
+    const before = docs;
+    setDocs((prev) => prev.filter((d) => d.id !== id));
     setDocFilter((f) => (f === id ? "all" : f));
+    persist(() => removeProfessional(id), () => setDocs(before));
   };
   const addProcedure = (name: string, color: string) => {
-    setProcs((prev) => (prev.some((p) => p.name.toLowerCase() === name.toLowerCase()) ? prev : [...prev, { name, color }]));
+    if (procs.some((p) => p.name.toLowerCase() === name.toLowerCase())) return;
+    const before = procs;
+    setProcs((prev) => [...prev, { name, color }]);
+    persist(() => addProcedureAction({ name, color }), () => setProcs(before));
   };
   const deleteProcedure = (name: string) => {
-    setProcs((prev) => (prev.length <= 1 ? prev : prev.filter((p) => p.name !== name)));
+    if (procs.length <= 1) return;
+    const before = procs;
+    setProcs((prev) => prev.filter((p) => p.name !== name));
     setProcFilter((prev) => { const n = new Set(prev); n.delete(name); return n; });
+    persist(() => removeProcedure(name), () => setProcs(before));
   };
 
   // ------- notificação de próximo -------
@@ -176,6 +252,14 @@ export function ScheduleBoard({ demo = true, storageKey }: { demo?: boolean; sto
           <button onClick={() => setDismissedNotif(notifKey)} className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
         </div>
       )}
+
+      {syncError && (
+        <div className="mx-4 mt-4 flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <span className="flex-1">{syncError}</span>
+          <button onClick={() => setSyncError(null)} className="text-rose-400 hover:text-rose-600" aria-label="Fechar"><X className="h-4 w-4" /></button>
+        </div>
+      )}
+      {dbMode && storageKey && <LocalImportBanner orgKey={storageKey} />}
 
       {/* tabs */}
       <div className="flex items-center gap-6 border-b px-6">
@@ -296,7 +380,7 @@ export function ScheduleBoard({ demo = true, storageKey }: { demo?: boolean; sto
           initial={modal}
           doctors={docs}
           procedures={procs}
-          patients={demo ? seedPatients : extraPatients}
+          patients={demo ? seedPatients : extraPatients.filter((p) => !p.id.startsWith("nome:"))}
           onClose={() => setModal(null)}
           onSave={saveDraft}
           onDelete={modal.id ? () => deleteAppt(modal.id!) : undefined}
@@ -642,6 +726,79 @@ function AgendaSetup({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* --------------------- importação da agenda do navegador --------------------- */
+// A agenda antiga ficava só neste navegador (localStorage). Com a agenda no
+// banco, oferece importar, com confirmação. A cópia local só é apagada se a
+// pessoa pedir, depois de importar.
+function LocalImportBanner({ orgKey }: { orgKey: string }) {
+  const storeKey = `cliva_agenda_${orgKey}`;
+  const doneKey = `cliva_agenda_importada_${orgKey}`;
+  const [local, setLocal] = useState<{ docs: unknown[]; procs: unknown[]; appts: unknown[]; patients: unknown[] } | null>(null);
+  const [hidden, setHidden] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<ImportSummary | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storeKey);
+      const imported = localStorage.getItem(doneKey);
+      const skipped = sessionStorage.getItem(doneKey + "_depois");
+      if (!raw || skipped) return;
+      const d = JSON.parse(raw);
+      const parsed = { docs: d.docs ?? [], procs: d.procs ?? [], appts: d.appts ?? [], patients: d.patients ?? [] };
+      if (parsed.appts.length === 0 && parsed.docs.length === 0) return;
+      if (imported) { setResult(null); setLocal(parsed); setHidden(true); return; }
+      setLocal(parsed);
+    } catch { /* sem localStorage: nada a importar */ }
+  }, [storeKey, doneKey]);
+
+  if (!local || hidden) return null;
+
+  const runImport = async () => {
+    setBusy(true);
+    const r = await importLocalSchedule(local as never).catch(() => null);
+    setBusy(false);
+    if (!r) { setResult({ ok: false, error: "Sem conexão.", professionals: 0, procedures: 0, appointments: 0, skippedDuplicates: 0, skippedConflicts: 0, skippedInvalid: 0 }); return; }
+    setResult(r);
+    if (r.ok) {
+      try { localStorage.setItem(doneKey, new Date().toISOString()); } catch { /* noop */ }
+      router.refresh();
+    }
+  };
+
+  return (
+    <div className="mx-4 mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+      {!result ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="flex-1">
+            Encontramos <b>{local.appts.length} agendamento{local.appts.length === 1 ? "" : "s"}</b> e <b>{local.docs.length} profissiona{local.docs.length === 1 ? "l" : "is"}</b> salvos só neste navegador.
+            Importar para a conta da clínica? Depois disso a agenda aparece em todos os dispositivos.
+          </span>
+          <button disabled={busy} onClick={runImport} className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-60">
+            {busy ? "Importando…" : "Importar"}
+          </button>
+          <button disabled={busy} onClick={() => { try { sessionStorage.setItem(doneKey + "_depois", "1"); } catch { /* noop */ } setHidden(true); }} className="text-xs text-sky-700 underline">Agora não</button>
+        </div>
+      ) : result.ok ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="flex-1">
+            Importado: {result.appointments} agendamento(s), {result.professionals} profissional(is), {result.procedures} procedimento(s).
+            {result.skippedDuplicates + result.skippedConflicts + result.skippedInvalid > 0 &&
+              ` Ignorados: ${result.skippedDuplicates} já existentes, ${result.skippedConflicts} com horário em conflito, ${result.skippedInvalid} incompletos.`}
+            {" "}A cópia deste navegador foi mantida.
+          </span>
+          <button onClick={() => { if (confirm("Apagar a cópia da agenda guardada neste navegador? Os dados importados continuam na conta.")) { try { localStorage.removeItem(storeKey); } catch { /* noop */ } setHidden(true); } }}
+            className="text-xs text-sky-700 underline">Apagar cópia do navegador</button>
+          <button onClick={() => setHidden(true)} className="text-xs text-sky-700 underline">Fechar</button>
+        </div>
+      ) : (
+        <span>Não foi possível importar: {result.error}</span>
+      )}
     </div>
   );
 }
