@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
+import { btree_gist } from "@electric-sql/pglite/contrib/btree_gist";
 
 // Banco Postgres real (PGlite, em memória) com o ambiente do Supabase
 // imitado e TODAS as migrations do projeto aplicadas em ordem.
@@ -8,13 +9,12 @@ const ROOT = join(__dirname, "..", "..");
 const MIGRATIONS = join(ROOT, "supabase", "migrations");
 
 export async function freshDb(opts: { upTo?: string } = {}) {
-  const db = new PGlite();
+  const db = new PGlite({ extensions: { btree_gist } });
   await db.exec(readFileSync(join(__dirname, "supabase-stub.sql"), "utf8"));
   const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).sort();
   for (const f of files) {
     if (opts.upTo && f > opts.upTo) break;
-    // pgcrypto não é necessário: gen_random_uuid() é nativo desde o PG 13.
-    const sql = readFileSync(join(MIGRATIONS, f), "utf8").replace(/create extension[^;]*;/gi, "");
+    const sql = stripUnavailable(readFileSync(join(MIGRATIONS, f), "utf8"));
     try {
       await db.exec(sql);
     } catch (e) {
@@ -24,8 +24,13 @@ export async function freshDb(opts: { upTo?: string } = {}) {
   return db;
 }
 
+// pgcrypto não é necessário no teste: gen_random_uuid() é nativo desde o PG 13.
+function stripUnavailable(sql: string) {
+  return sql.replace(/create extension if not exists "?pgcrypto"?[^;]*;/gi, "");
+}
+
 export async function runMigration(db: PGlite, file: string) {
-  const sql = readFileSync(join(MIGRATIONS, file), "utf8").replace(/create extension[^;]*;/gi, "");
+  const sql = stripUnavailable(readFileSync(join(MIGRATIONS, file), "utf8"));
   await db.exec(sql);
 }
 

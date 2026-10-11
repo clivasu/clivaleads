@@ -20,6 +20,8 @@ import type { FlowPrivateSettingsView } from "@/lib/data/flows";
 import { GOTO_EXIT, GOTO_WHATSAPP, applySmartLogic, isNegativeAnswer } from "@/lib/flow-logic";
 import { DEFAULT_THEME, type FlowTheme, type FontChoice } from "@/lib/theme";
 import { saveFlow } from "@/lib/actions/flows";
+import { applyIdMap } from "@/lib/flow-persistence";
+import { DEFAULT_SETTINGS, pickPersistedSettings, type FunnelSettings } from "@/lib/flow-settings";
 import { UploadButton } from "@/components/bio/upload-button";
 import { DeleteFlowButton } from "@/components/flows/delete-flow-button";
 import { beforeAfterFrames } from "@/components/flow-runner/before-after";
@@ -45,40 +47,6 @@ const LABELS = Object.fromEntries(
 
 function uid() {
   return "s-" + Math.random().toString(36).slice(2, 9);
-}
-
-interface FunnelSettings {
-  name: string; slug: string; procedure: string; description: string; status: "draft" | "published";
-  whatsapp: string; finalMessage: string; redirectUrl: string; restartOnFinish: boolean; allowBack: boolean; saveProgress: boolean;
-  metaPixel: string; ga4: string; gtm: string; tiktokPixel: string; headScripts: string;
-  webhookUrl: string; webhookSecret: string; autoSendLead: boolean;
-  seoTitle: string; seoDescription: string; ogImage: string; favicon: string; noindex: boolean;
-  customDomain: string;
-  notifyEmail: string; notifyWhatsapp: string; notifyOnLead: boolean;
-  consentText: string; privacyUrl: string; cookieBanner: boolean;
-  customCss: string;
-}
-const DEFAULT_SETTINGS: FunnelSettings = {
-  name: "", slug: "", procedure: "", description: "", status: "draft",
-  whatsapp: "", finalMessage: "", redirectUrl: "", restartOnFinish: false, allowBack: true, saveProgress: true,
-  metaPixel: "", ga4: "", gtm: "", tiktokPixel: "", headScripts: "",
-  webhookUrl: "", webhookSecret: "", autoSendLead: false,
-  seoTitle: "", seoDescription: "", ogImage: "", favicon: "", noindex: false,
-  customDomain: "",
-  notifyEmail: "", notifyWhatsapp: "", notifyOnLead: true,
-  consentText: "Ao continuar, você concorda em ser contatado. Seus dados estão protegidos (LGPD).", privacyUrl: "", cookieBanner: false,
-  customCss: "",
-};
-
-// Só aceita do JSON salvo as chaves conhecidas e do tipo certo.
-function pickPersistedSettings(raw: unknown): Partial<FunnelSettings> {
-  if (!raw || typeof raw !== "object") return {};
-  const src = raw as Record<string, unknown>;
-  const out: Record<string, unknown> = {};
-  for (const [k, def] of Object.entries(DEFAULT_SETTINGS)) {
-    if (k in src && typeof src[k] === typeof def) out[k] = src[k];
-  }
-  return out as Partial<FunnelSettings>;
 }
 
 /* ---- helpers de árvore (blocos aninhados via children) ---- */
@@ -189,6 +157,12 @@ export function BuilderClient({ flow, leads = [], privateSettings }: { flow: Pub
       });
       if (res.ok) {
         setSaved(true);
+        // Etapas novas ganharam id definitivo no servidor: aplica aqui também.
+        const map = res.idMap;
+        if (map && Object.keys(map).length > 0) {
+          setSteps((prev) => applyIdMap(prev, map));
+          setSelectedId((cur) => map[cur] ?? cur);
+        }
       } else {
         setSaveError(res.error ?? "Falha ao salvar.");
       }

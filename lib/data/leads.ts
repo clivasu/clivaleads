@@ -95,16 +95,17 @@ export interface LeadPatch {
 export async function updateLead(id: string, patch: LeadPatch): Promise<boolean> {
   if (!isSupabaseConfigured) return true;
   const supabase = await createClient();
-  const { error } = await supabase.from("lead_sessions").update(patch).eq("id", id);
-  return !error;
+  // .select() mostra se a RLS deixou alterar (sem permissão = 0 linhas, sem erro).
+  const { data, error } = await supabase.from("lead_sessions").update(patch).eq("id", id).select("id");
+  return !error && (data?.length ?? 0) > 0;
 }
 
 // Remove um lead (e suas respostas via cascade no banco).
 export async function deleteLead(id: string): Promise<boolean> {
   if (!isSupabaseConfigured) return true;
   const supabase = await createClient();
-  const { error } = await supabase.from("lead_sessions").delete().eq("id", id);
-  return !error;
+  const { data, error } = await supabase.from("lead_sessions").delete().eq("id", id).select("id");
+  return !error && (data?.length ?? 0) > 0;
 }
 
 export async function getLead(id: string): Promise<LeadWithAnswers | null> {
