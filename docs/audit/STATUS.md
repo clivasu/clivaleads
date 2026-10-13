@@ -2,7 +2,9 @@
 
 Legenda: **feito** (código pronto na branch) · **testado** (teste automatizado ou manual executado) · **pendente** · **bloqueado** · **autorização** (precisa de autorização para produção).
 
-Branch: `fix/security-integrity-cliva`. Nada aplicado em produção.
+Branch: `fix/security-integrity-cliva`, com merge na `main` (PR #1, `bdffdaf`) em 2026-10-12.
+
+**Produção (2026-10-12):** migrations 0010 a 0014 aplicadas no Supabase; deploy `bdffdaf` no ar em cliva.me; teste com login aprovado (funis, imagens, leads, Analytics, Agenda, admin). Pendentes: rotação das credenciais expostas, rate limit no firewall da Vercel, variável `LEAD_TOKEN_SECRET`.
 
 ## Entrega A — Fase 0 e Fase 1
 
@@ -32,7 +34,7 @@ Branch: `fix/security-integrity-cliva`. Nada aplicado em produção.
 | 1.5 Rate limit distribuído (firewall Vercel) | autorização | configurar no painel da Vercel |
 | 1.6 Scripts livres no `<head>` desativados | feito | campo substituído por aviso; conteúdo antigo guardado e não executado |
 | 1.6 Mapa de dados e LGPD | feito | `docs/audit/LGPD.md` (revisão jurídica recomendada) |
-| Aplicar 0010 em produção | autorização | seguir `docs/audit/DEPLOY_SAFE.md` |
+| Aplicar 0010 em produção | feito (2026-10-12) | seguir `docs/audit/DEPLOY_SAFE.md` |
 
 ## Entrega B — Fase 2
 
@@ -56,7 +58,7 @@ Branch: `fix/security-integrity-cliva`. Nada aplicado em produção.
 | 2.5 Origem canônica no checkout/portal | feito, testado | `lib/site-url.ts` |
 | 2.5 Corrida no limite de funis publicados | pendente (risco aceito) | exige duas publicações simultâneas da mesma clínica; avaliar trigger no banco |
 | 2.6 `/f/<slug>` → URL canônica, determinístico | feito | funil publicado mais antigo com o slug (dono do link antes da 0004) |
-| Aplicar 0011 e 0012 em produção | autorização | `docs/audit/DEPLOY_SAFE.md` |
+| Aplicar 0011 e 0012 em produção | feito (2026-10-12) | `docs/audit/DEPLOY_SAFE.md` |
 
 ## Entrega C — Fase 3
 
@@ -85,7 +87,7 @@ Branch: `fix/security-integrity-cliva`. Nada aplicado em produção.
 | Abandono por etapa | feito | só com funil selecionado e só com dados registrados após a 0013 |
 | Preço por procedimento configurável pela clínica | pendente | hoje usa ticket fixo (rotulado como estimativa) |
 | Receita confirmada | pendente | não existe fonte de receita real no sistema |
-| Aplicar 0013 em produção | autorização | `docs/audit/DEPLOY_SAFE.md` |
+| Aplicar 0013 em produção | feito (2026-10-12) | `docs/audit/DEPLOY_SAFE.md` |
 | Bug: `cliva.me/<identificador>` dava 404 para conta só com Link na Bio publicado (ou sem funil publicado) | feito, testado | `0014_public_handle.sql`, `tests/db/public-handle.test.ts`; independe das outras migrations |
 
 ## Próximas entregas
