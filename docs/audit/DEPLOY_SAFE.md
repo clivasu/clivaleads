@@ -1,4 +1,4 @@
-# Plano de deploy seguro — Entregas A, B e C
+# Plano de deploy seguro — Entregas A, B, C e D
 
 Nada deste plano foi executado. Cada passo em produção depende de autorização.
 
@@ -37,6 +37,18 @@ Ordem: **0010 → 0011 → 0012 → 0013 → deploy**, na mesma janela.
 
 Independe das outras: pode ser aplicada antes, sozinha, com o código atual no ar. Só amplia a leitura pública da clínica para quem tem Link na Bio publicado. Rollback: `supabase/rollback/0014_public_handle.rollback.sql`.
 
+### Entrega D (0015)
+
+Ordem: **0015 → variáveis na Vercel → deploy**.
+
+- **0015 com o código antigo** não muda nada (tabela nova e coluna nova com padrão).
+- **Código novo sem a 0015:** captura de leads funciona; o webhook não é enfileirado (sem a tabela) e a opção "incluir respostas" não é gravada. Nada quebra.
+- **Variável `CRON_SECRET`** na Vercel (texto aleatório longo): sem ela, o cron de reenvio responde 401 e as novas tentativas só acontecem com novos leads ou pelo botão Reenviar.
+- **Cron diário** (`vercel.json`, 06:00 UTC): é o máximo do plano Hobby. No plano Pro, trocar para `*/10 * * * *` para reenviar mais rápido.
+- **Funis com pixel** passam a mostrar o aviso de cookies na primeira visita. Funis com ID de pixel inválido salvo antes **não carregam o pixel** e o editor pede correção ao salvar.
+- **GTM** deixa de ser oferecido; IDs salvos ficam guardados.
+- Validação pós-deploy: abrir um funil com pixel, recusar (nenhum script de terceiro na aba Rede), aceitar (Meta/GA4 carregam); configurar webhook para um testador (ex.: webhook.site), **Testar**, responder o funil e ver a entrega em "Últimas entregas".
+
 ## Passo a passo
 
 1. **Backup.** No Supabase: Database → Backups. No plano Free não há backup automático: exporte antes com `pg_dump` (ou Database → Backups → download, se disponível) e guarde o arquivo fora do Supabase.
@@ -67,5 +79,5 @@ Independe das outras: pode ser aplicada antes, sozinha, com o código atual no a
 ## Rollback
 
 - **Código:** reverter o merge na `main` (a Vercel publica a versão anterior).
-- **Banco:** `supabase/rollback/0013_events.rollback.sql` (remove funções e gatilho, mantém colunas e eventos), `0012_schedule.rollback.sql` (não apaga a agenda), `0011_integrity.rollback.sql`, `0010_security_hardening.rollback.sql`, nessa ordem.
+- **Banco:** `supabase/rollback/0015_webhooks.rollback.sql`, `0013_events.rollback.sql` (remove funções e gatilho, mantém colunas e eventos), `0012_schedule.rollback.sql` (não apaga a agenda), `0011_integrity.rollback.sql`, `0010_security_hardening.rollback.sql`, nessa ordem.
 - O rollback da 0010 é só para emergência: reabre as falhas. Não apaga dados; copia as configurações privadas de volta ao funil. Testado em `tests/db/security.test.ts` (bloco ROLLBACK).

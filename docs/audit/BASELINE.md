@@ -72,6 +72,10 @@ Gravidade: **Crítica** (comprometimento de várias clínicas), **Alta** (dado o
 | C7 | Sem identificador de evento: reenvio do lote contava duas vezes. | `lib/tracking.ts` | Baixa | Corrigido (`event_id`) |
 | C8 | Excluir um funil apaga em cascata os leads e eventos dele (`on delete cascade`). A confirmação avisa quantos leads vão junto. | `0001_init.sql`, `delete-flow-button.tsx` | Baixa | Registrado; avaliar arquivar em vez de apagar (decisão de produto) |
 
+| D1 | Aba Configurações mostrava pixels, SEO personalizado, cookies, redirecionamento, webhook, "reiniciar", "voltar", "salvar progresso" e CSS como recursos ativos; nenhum era aplicado. | `builder-client.tsx`, páginas públicas | Média | Corrigido: implementados ou marcados "em breve" |
+| D2 | Webhook validava só o prefixo `https://`: aceitaria `https://169.254.169.254` ou domínio apontando para rede interna (SSRF). Nunca chegou a ser disparado. | `lib/actions/flows.ts` | Alta (latente) | Corrigido (`webhook-core.ts`, `webhook-http.ts`) |
+| D3 | Fontes carregadas de `api.fontshare.com` em todas as páginas, inclusive funis, antes de consentimento. | `app/globals.css` / layout | Baixa | Registrado para a Entrega E |
+
 ## Dívida técnica registrada
 
 - 23 avisos de lint, quase todos regras novas do React Compiler (`set-state-in-effect`, `purity`, `static-components`). Ficaram como aviso para não mudar comportamento às cegas.

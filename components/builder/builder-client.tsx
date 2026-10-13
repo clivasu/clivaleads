@@ -22,6 +22,8 @@ import { DEFAULT_THEME, type FlowTheme, type FontChoice } from "@/lib/theme";
 import { saveFlow } from "@/lib/actions/flows";
 import { applyIdMap } from "@/lib/flow-persistence";
 import { DEFAULT_SETTINGS, pickPersistedSettings, type FunnelSettings } from "@/lib/flow-settings";
+import { GTM_SUPPORTED, normalizePixelId, type PixelKey } from "@/lib/public-funnel-config";
+import { WebhookSettings } from "@/components/builder/webhook-settings";
 import { UploadButton } from "@/components/bio/upload-button";
 import { DeleteFlowButton } from "@/components/flows/delete-flow-button";
 import { beforeAfterFrames } from "@/components/flow-runner/before-after";
@@ -121,6 +123,7 @@ export function BuilderClient({ flow, leads = [], privateSettings }: { flow: Pub
       ? {
           webhookUrl: privateSettings.webhookUrl,
           autoSendLead: privateSettings.autoSendLead,
+          webhookIncludeAnswers: privateSettings.webhookIncludeAnswers,
           notifyEmail: privateSettings.notifyEmail,
           notifyWhatsapp: privateSettings.notifyWhatsapp,
           notifyOnLead: privateSettings.notifyOnLead,
@@ -1579,8 +1582,26 @@ function SwitchRow({ label, desc, on, onChange }: { label: string; desc?: string
   );
 }
 
+function PixelField({ k, label, placeholder, s, setS }: { k: PixelKey; label: string; placeholder: string; s: FunnelSettings; setS: (p: Partial<FunnelSettings>) => void }) {
+  const r = normalizePixelId(k, s[k]);
+  return (
+    <Field label={label}>
+      <input className={cn(inputCls, r.error && "border-rose-300")} value={s[k]} onChange={(e) => setS({ [k]: e.target.value } as Partial<FunnelSettings>)} placeholder={placeholder} aria-invalid={Boolean(r.error)} />
+      {r.error && <p className="mt-1 text-[11px] text-rose-600">{r.error}</p>}
+    </Field>
+  );
+}
+
+function ComingSoon({ items }: { items: string[] }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 border-t pt-2.5 text-xs text-slate-400">
+      {items.map((i) => <span key={i} className="rounded-full bg-slate-100 px-2 py-0.5">{i}</span>)}
+      <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700">em breve</span>
+    </div>
+  );
+}
+
 function SettingsPanel({ s, setS, flowId, handle, hasWebhookSecret = false, hasHeadScripts = false }: { s: FunnelSettings; setS: (p: Partial<FunnelSettings>) => void; slug?: string; flowId: string; handle: string; hasWebhookSecret?: boolean; hasHeadScripts?: boolean }) {
-  const ta = "w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs focus:border-emerald-400 focus:outline-none";
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50 p-6">
       <div className="mx-auto max-w-2xl space-y-5">
@@ -1616,20 +1637,28 @@ function SettingsPanel({ s, setS, flowId, handle, hasWebhookSecret = false, hasH
           <Field label="Número de WhatsApp (destino)"><input className={inputCls} value={s.whatsapp} onChange={(e) => setS({ whatsapp: e.target.value })} placeholder="5561999999999" /></Field>
           <Field label="Mensagem final (complemento)"><input className={inputCls} value={s.finalMessage} onChange={(e) => setS({ finalMessage: e.target.value })} /></Field>
           <Field label="Redirecionar após conversão (URL, opcional)"><input className={inputCls} value={s.redirectUrl} onChange={(e) => setS({ redirectUrl: e.target.value })} placeholder="https://..." /></Field>
-          <div className="mt-1">
-            <SwitchRow label="Reiniciar ao concluir" desc="Volta ao início após o WhatsApp." on={s.restartOnFinish} onChange={(v) => setS({ restartOnFinish: v })} />
-            <SwitchRow label="Permitir voltar" desc="Mostra botão de voltar nas etapas." on={s.allowBack} onChange={(v) => setS({ allowBack: v })} />
-            <SwitchRow label="Salvar progresso" desc="Retoma de onde parou se recarregar." on={s.saveProgress} onChange={(v) => setS({ saveProgress: v })} />
-          </div>
+          <p className="-mt-1 mb-2 text-xs text-slate-400">Depois do clique final (WhatsApp, formulário ou botão), esta página segue para o link. O WhatsApp abre em outra aba.</p>
+          <ComingSoon items={["Reiniciar ao concluir", "Permitir voltar", "Salvar progresso"]} />
         </Section>
 
-        <Section title="Rastreamento (Pixels & Scripts)" desc="Para campanhas de tráfego pago.">
+        <Section title="Rastreamento (Pixels)" desc="Para campanhas de tráfego pago.">
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Meta Pixel ID"><input className={inputCls} value={s.metaPixel} onChange={(e) => setS({ metaPixel: e.target.value })} placeholder="000000000000000" /></Field>
-            <Field label="Google Analytics (GA4)"><input className={inputCls} value={s.ga4} onChange={(e) => setS({ ga4: e.target.value })} placeholder="G-XXXXXXX" /></Field>
-            <Field label="Google Tag Manager"><input className={inputCls} value={s.gtm} onChange={(e) => setS({ gtm: e.target.value })} placeholder="GTM-XXXXXX" /></Field>
-            <Field label="TikTok Pixel"><input className={inputCls} value={s.tiktokPixel} onChange={(e) => setS({ tiktokPixel: e.target.value })} placeholder="CXXXXXXXXXXXX" /></Field>
+            <PixelField k="metaPixel" label="Meta Pixel ID" placeholder="123456789012345" s={s} setS={setS} />
+            <PixelField k="ga4" label="Google Analytics (GA4)" placeholder="G-XXXXXXX" s={s} setS={setS} />
+            <PixelField k="tiktokPixel" label="TikTok Pixel" placeholder="CXXXXXXXXXXXX" s={s} setS={setS} />
+            {GTM_SUPPORTED ? (
+              <PixelField k="gtm" label="Google Tag Manager" placeholder="GTM-XXXXXX" s={s} setS={setS} />
+            ) : (
+              <Field label="Google Tag Manager">
+                <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                  Indisponível: o GTM executa scripts livres, que podem ler as respostas dos pacientes. Use os IDs diretos ao lado.{s.gtm && ` O ID salvo (${s.gtm}) ficou guardado e não é carregado.`}
+                </p>
+              </Field>
+            )}
           </div>
+          <p className="mt-1 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+            Os pixels só carregam depois que o paciente clicar em “Aceitar” no aviso de cookies. Eventos enviados: visita, lead (concluiu o funil) e contato (abriu o WhatsApp). Respostas, nome, telefone, e-mail e score nunca são enviados.
+          </p>
           <Field label="Scripts no <head> (avançado)">
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               Desativado por segurança: scripts livres podem roubar dados dos pacientes (LGPD). Use os campos de pixel acima.
@@ -1639,13 +1668,7 @@ function SettingsPanel({ s, setS, flowId, handle, hasWebhookSecret = false, hasH
         </Section>
 
         <Section title="Integrações (Webhook / CRM)" desc="Envie cada lead automaticamente para seu CRM.">
-          <Field label="URL do webhook"><input className={inputCls} value={s.webhookUrl} onChange={(e) => setS({ webhookUrl: e.target.value })} placeholder="https://seu-crm.com/webhook" /></Field>
-          <Field label="Segredo / token (opcional)">
-            <input className={inputCls} type="password" autoComplete="off" value={s.webhookSecret} onChange={(e) => setS({ webhookSecret: e.target.value })}
-              placeholder={hasWebhookSecret ? "•••••••• configurado (digite para trocar)" : "Opcional"} />
-          </Field>
-          <SwitchRow label="Enviar lead automaticamente" desc="Dispara o webhook a cada conclusão." on={s.autoSendLead} onChange={(v) => setS({ autoSendLead: v })} />
-          <button disabled title="Disponível quando o envio de webhooks for ativado" className="mt-2 cursor-not-allowed rounded-lg border px-3 py-1.5 text-sm font-medium text-slate-400">Testar webhook (em breve)</button>
+          <WebhookSettings s={s} setS={setS} flowId={flowId} hasWebhookSecret={hasWebhookSecret} Toggle={Toggle} />
         </Section>
 
         <Section title="SEO & Compartilhamento">
@@ -1656,6 +1679,7 @@ function SettingsPanel({ s, setS, flowId, handle, hasWebhookSecret = false, hasH
             <Field label="Favicon (URL ou emoji)"><input className={inputCls} value={s.favicon} onChange={(e) => setS({ favicon: e.target.value })} /></Field>
           </div>
           <SwitchRow label="Ocultar dos buscadores (noindex)" on={s.noindex} onChange={(v) => setS({ noindex: v })} />
+          <p className="mt-1 text-xs text-slate-400">Links precisam começar com https://. A URL oficial do funil (canônica) é {`cliva.me/${handle}/${s.slug}`}.</p>
         </Section>
 
         <Section title="Domínio personalizado">
@@ -1668,11 +1692,20 @@ function SettingsPanel({ s, setS, flowId, handle, hasWebhookSecret = false, hasH
         <Section title="Privacidade (LGPD)">
           <Field label="Texto de consentimento"><textarea rows={2} className={inputCls} value={s.consentText} onChange={(e) => setS({ consentText: e.target.value })} /></Field>
           <Field label="URL da política de privacidade"><input className={inputCls} value={s.privacyUrl} onChange={(e) => setS({ privacyUrl: e.target.value })} placeholder="https://..." /></Field>
-          <SwitchRow label="Mostrar banner de cookies" on={s.cookieBanner} onChange={(v) => setS({ cookieBanner: v })} />
+          <SwitchRow
+            label="Mostrar aviso de cookies"
+            desc={s.metaPixel || s.ga4 || s.tiktokPixel ? "Obrigatório com pixel configurado: aparece sempre." : "Sem pixels, mostra só um aviso informativo."}
+            on={s.cookieBanner || Boolean(s.metaPixel || s.ga4 || s.tiktokPixel)}
+            onChange={(v) => setS({ cookieBanner: v })}
+          />
         </Section>
 
         <Section title="Avançado">
-          <Field label="CSS personalizado"><textarea rows={4} className={ta} value={s.customCss} onChange={(e) => setS({ customCss: e.target.value })} placeholder=".brand-btn { ... }" /></Field>
+          <Field label="CSS personalizado">
+            <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+              Em breve. Hoje o visual é ajustado pela aba Design.{s.customCss && " O CSS salvo ficou guardado e não é aplicado."}
+            </p>
+          </Field>
         </Section>
 
         <div className="rounded-2xl border border-rose-200 bg-white p-5 shadow-sm">

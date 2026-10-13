@@ -14,7 +14,7 @@ Branch: `fix/security-integrity-cliva`, com merge na `main` (PR #1, `bdffdaf`) e
 | Next.js 16.3.5 → 16.3.8, `npm audit` de produção zerado | feito, testado | `npm audit --omit=dev`: 0 vulnerabilidades |
 | `npm run lint` (ESLint 9) | feito, testado | 0 erros, 24 avisos registrados (nenhum nos arquivos da Entrega C) |
 | `npm run typecheck` | testado | sem erros |
-| `npm test` (Vitest + Postgres real via PGlite) | feito, testado | 93 testes passando (após a Entrega C e a 0014) |
+| `npm test` (Vitest + Postgres real via PGlite) | feito, testado | 133 testes passando (após a Entrega D) |
 | `npm run build` / `build:local` | testado | build local com webpack passa |
 | CI (GitHub Actions) | feito | `.github/workflows/ci.yml`; roda quando a branch for enviada |
 | 1.1 Sem autoelevação a superadmin | feito, testado | grant por coluna + trigger; teste ANTES/DEPOIS |
@@ -90,9 +90,33 @@ Branch: `fix/security-integrity-cliva`, com merge na `main` (PR #1, `bdffdaf`) e
 | Aplicar 0013 em produção | feito (2026-10-12) | `docs/audit/DEPLOY_SAFE.md` |
 | Bug: `cliva.me/<identificador>` dava 404 para conta só com Link na Bio publicado (ou sem funil publicado) | feito, testado | `0014_public_handle.sql`, `tests/db/public-handle.test.ts`; independe das outras migrations |
 
+## Entrega D — Fase 4
+
+| Item | Situação | Evidência |
+|---|---|---|
+| Pixels Meta, GA4 e TikTok funcionando (antes: só salvos, nada carregava) | feito, testado | `components/flow-runner/marketing-pixels.tsx`; verificado no navegador |
+| IDs de pixel validados por provedor (editor e servidor) | feito, testado | `lib/public-funnel-config.ts` |
+| Pixels só após consentimento; "Recusar" impede carregamento; link "Cookies" para rever | feito, testado | rede: 0 requisições antes de aceitar |
+| Eventos aos pixels sem respostas, contato ou score | feito, testado | rede: só `PageView`, `Lead`, `Contact`, sem parâmetros |
+| GTM desativado (scripts livres) | feito | ID salvo guardado e não carregado |
+| Microsoft Clarity / gravação de sessão | não usado | nenhum script no projeto |
+| SEO do funil: título, descrição, imagem OG, favicon, noindex, canonical | feito, testado | `lib/seo.ts`; rota `/<identificador>/<funil>` |
+| `robots.txt` (painel e APIs fora do índice) | feito | `app/robots.ts` |
+| Redirecionar após conversão (https) | feito | `flow-runner.tsx` |
+| Texto de consentimento e link de privacidade no funil | feito | formulário e rodapé |
+| Webhook: fila durável, idempotente, 6 tentativas com espera crescente | feito, testado | `0015_webhooks.sql`, `lib/integrations/webhook-outbox.ts` |
+| Webhook: assinatura HMAC, segredo gerado e rotacionável, nunca exibido de novo | feito, testado | `X-Cliva-Signature`; `docs/integrations/WEBHOOKS.md` |
+| Webhook: proteção contra SSRF (https público, IP checado depois do DNS, sem redirecionamento) | feito, testado | 30 casos em `tests/unit/integrations.test.ts` |
+| Webhook: respostas do questionário só com opt-in | feito, testado | desligado por padrão |
+| "Testar webhook" real, sem criar lead | feito | `lib/actions/webhooks.ts` |
+| Histórico de entregas e "Reenviar" | feito, testado | RLS: só owner/admin da clínica |
+| Reiniciar ao concluir, Permitir voltar, Salvar progresso, CSS personalizado | em breve | marcados no editor; antes pareciam ativos |
+| Notificação de novo lead por e-mail/WhatsApp | pendente | não aparece no editor; sem envio |
+| Domínio personalizado | em breve | arquitetura em `docs/integrations/CUSTOM_DOMAINS.md` |
+| Aplicar 0015 em produção e `CRON_SECRET` na Vercel | autorização | `docs/audit/DEPLOY_SAFE.md` |
+
 ## Próximas entregas
 
 | Entrega | Itens | Situação |
 |---|---|---|
-| D | pixels com consentimento, webhooks com HMAC/retry/anti-SSRF, SEO (canonical) | pendente |
 | E | medições de performance, fontes, headers de segurança, observabilidade | pendente |

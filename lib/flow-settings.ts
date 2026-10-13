@@ -6,7 +6,7 @@ export interface FunnelSettings {
   name: string; slug: string; procedure: string; description: string; status: "draft" | "published";
   whatsapp: string; finalMessage: string; redirectUrl: string; restartOnFinish: boolean; allowBack: boolean; saveProgress: boolean;
   metaPixel: string; ga4: string; gtm: string; tiktokPixel: string; headScripts: string;
-  webhookUrl: string; webhookSecret: string; autoSendLead: boolean;
+  webhookUrl: string; webhookSecret: string; autoSendLead: boolean; webhookIncludeAnswers: boolean;
   seoTitle: string; seoDescription: string; ogImage: string; favicon: string; noindex: boolean;
   customDomain: string;
   notifyEmail: string; notifyWhatsapp: string; notifyOnLead: boolean;
@@ -18,7 +18,7 @@ export const DEFAULT_SETTINGS: FunnelSettings = {
   name: "", slug: "", procedure: "", description: "", status: "draft",
   whatsapp: "", finalMessage: "", redirectUrl: "", restartOnFinish: false, allowBack: true, saveProgress: true,
   metaPixel: "", ga4: "", gtm: "", tiktokPixel: "", headScripts: "",
-  webhookUrl: "", webhookSecret: "", autoSendLead: false,
+  webhookUrl: "", webhookSecret: "", autoSendLead: false, webhookIncludeAnswers: false,
   seoTitle: "", seoDescription: "", ogImage: "", favicon: "", noindex: false,
   customDomain: "",
   notifyEmail: "", notifyWhatsapp: "", notifyOnLead: true,
@@ -27,7 +27,7 @@ export const DEFAULT_SETTINGS: FunnelSettings = {
 };
 
 // Chaves privadas: nunca gravadas em flows.settings.
-export const PRIVATE_KEYS = ["webhookUrl", "webhookSecret", "autoSendLead", "headScripts", "notifyEmail", "notifyWhatsapp", "notifyOnLead"] as const;
+export const PRIVATE_KEYS = ["webhookUrl", "webhookSecret", "autoSendLead", "webhookIncludeAnswers", "headScripts", "notifyEmail", "notifyWhatsapp", "notifyOnLead"] as const;
 
 // Só aceita do JSON salvo as chaves conhecidas e do tipo certo (dados antigos
 // ou corrompidos não quebram o editor).
@@ -44,6 +44,7 @@ export function pickPersistedSettings(raw: unknown): Partial<FunnelSettings> {
 export interface PrivateSettingsRow {
   webhook_url: string | null;
   auto_send_lead: boolean;
+  webhook_include_answers: boolean;
   notify_email: string | null;
   notify_whatsapp: string | null;
   notify_on_lead: boolean | null;
@@ -60,6 +61,7 @@ export function splitSettings(settings: Record<string, unknown>): { publicSettin
   const privateSettings: PrivateSettingsRow = {
     webhook_url: str(settings?.webhookUrl),
     auto_send_lead: Boolean(settings?.autoSendLead),
+    webhook_include_answers: Boolean(settings?.webhookIncludeAnswers),
     notify_email: str(settings?.notifyEmail),
     notify_whatsapp: str(settings?.notifyWhatsapp),
     notify_on_lead: settings?.notifyOnLead === undefined ? null : Boolean(settings.notifyOnLead),

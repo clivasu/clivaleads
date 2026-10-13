@@ -24,6 +24,11 @@ interface QueuedEvent {
   step_id?: string;
 }
 
+// Conversões repassadas aos pixels da clínica (components/flow-runner/
+// marketing-pixels.tsx), que só escutam com consentimento. Sem dados.
+export const CONVERSION_EVENT = "cliva:conversion";
+export type ConversionKind = "lead" | "contact";
+
 let queue: QueuedEvent[] = [];
 
 // UUID v4. randomUUID só existe em contexto seguro e navegadores recentes;
@@ -93,6 +98,9 @@ export function track(
     ...(payload.step_index !== undefined ? { step_index: payload.step_index } : {}),
     ...(payload.step_id ? { step_id: payload.step_id.slice(0, 64) } : {}),
   });
+  if (type === "flow_completed" || type === "whatsapp_clicked") {
+    window.dispatchEvent(new CustomEvent<ConversionKind>(CONVERSION_EVENT, { detail: type === "flow_completed" ? "lead" : "contact" }));
+  }
   if (TERMINAL.has(type)) flush(true);
   else if (queue.length >= MAX_BATCH) flush(false);
   else if (!timer) timer = setTimeout(() => flush(false), FLUSH_AFTER_MS);

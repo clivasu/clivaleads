@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { getPublicFlow, resolveLegacySlug } from "@/lib/data/flows";
 import { isSupabaseConfigured } from "@/lib/env";
 import { FlowRunner } from "@/components/flow-runner/flow-runner";
+import { MarketingPixels } from "@/components/flow-runner/marketing-pixels";
+import { toPublicConfig } from "@/lib/public-funnel-config";
 
 export const dynamic = "force-dynamic";
 
@@ -38,9 +40,12 @@ export default async function LegacyFlowPage({
   }
   const flow = await getPublicFlow(slug);
   if (!flow || flow.steps.length === 0) notFound();
+  // Demonstração: mesma configuração pública validada das páginas reais.
+  const config = toPublicConfig((flow as { settings?: unknown }).settings);
   return (
     <div className="min-h-[100dvh] bg-white">
-      <FlowRunner flow={flow} />
+      <FlowRunner flow={flow} config={config} />
+      <MarketingPixels config={config} orgId={flow.organization_id} />
     </div>
   );
 }

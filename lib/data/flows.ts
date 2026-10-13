@@ -1,4 +1,6 @@
 import "server-only";
+import { cache } from "react";
+import { toPublicConfig, type PublicFunnelConfig } from "@/lib/public-funnel-config";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/env";
 import { demoFlows, getDemoFlowBySlug as demoBySlug } from "@/lib/demo-data";
@@ -89,6 +91,18 @@ export async function getPublicFlowByHandle(
   return { ...(flow as unknown as PublicFlow), steps: hydrateSteps(flow.steps as unknown[]) };
 }
 
+// Página pública /<handle>/<slug>: funil + configuração pública validada
+// (pixels, SEO, consentimento). O JSON bruto de settings nunca vai ao navegador.
+// cache(): generateMetadata e a página fazem uma única consulta por requisição.
+export const getPublicFunnelPage = cache(async (handle: string, slug: string): Promise<{ flow: PublicFlow; config: PublicFunnelConfig } | null> => {
+  const flow = await getPublicFlowByHandle(handle, slug);
+  if (!flow) return null;
+  if (!isSupabaseConfigured) return { flow, config: toPublicConfig((flow as { settings?: unknown }).settings) };
+  const supabase = await createClient();
+  const { data } = await supabase.from("flows").select("settings").eq("id", flow.id).eq("status", "published").maybeSingle();
+  return { flow, config: toPublicConfig(data?.settings) };
+});
+
 // Lista os funis publicados de uma conta (para a página /<handle>).
 export async function getPublicOrgFunnels(
   handle: string,
@@ -138,6 +152,7 @@ export async function getPublicFlow(slug: string): Promise<PublicFlow | null> {
 export interface FlowPrivateSettingsView {
   webhookUrl: string;
   autoSendLead: boolean;
+  webhookIncludeAnswers: boolean;
   notifyEmail: string;
   notifyWhatsapp: string;
   notifyOnLead: boolean;
@@ -146,7 +161,7 @@ export interface FlowPrivateSettingsView {
 }
 
 export const EMPTY_PRIVATE_SETTINGS: FlowPrivateSettingsView = {
-  webhookUrl: "", autoSendLead: false, notifyEmail: "", notifyWhatsapp: "", notifyOnLead: true,
+  webhookUrl: "", autoSendLead: false, webhookIncludeAnswers: false, notifyEmail: "", notifyWhatsapp: "", notifyOnLead: true,
   hasWebhookSecret: false, hasHeadScripts: false,
 };
 
@@ -162,15 +177,16 @@ export async function getFlowPrivateSettings(flowId: string): Promise<FlowPrivat
   if (!visible) return EMPTY_PRIVATE_SETTINGS;
 
   const { createAdminClient } = await import("@/lib/supabase/server");
-  const { data } = await createAdminClient()
-    .from("flow_private_settings")
-    .select("webhook_url, webhook_secret, auto_send_lead, head_scripts, notify_email, notify_whatsapp, notify_on_lead")
-    .eq("flow_id", flowId)
-    .maybeSingle();
+  const admin = createAdminClient();
+  const base = "webhook_url, webhook_secret, auto_send_lead, head_scripts, notify_email, notify_whatsapp, notify_on_lead";
+  let { data, error } = await admin.from("flow_private_settings").select(`${base}, webhook_include_answers`).eq("flow_id", flowId).maybeSingle();
+  // Banco sem a 0015: lê sem a coluna nova.
+  if (error) ({ data, error } = await admin.from("flow_private_settings").select(base).eq("flow_id", flowId).maybeSingle() as never);
   if (!data) return EMPTY_PRIVATE_SETTINGS;
   return {
     webhookUrl: data.webhook_url ?? "",
     autoSendLead: Boolean(data.auto_send_lead),
+    webhookIncludeAnswers: Boolean((data as { webhook_include_answers?: boolean }).webhook_include_answers),
     notifyEmail: data.notify_email ?? "",
     notifyWhatsapp: data.notify_whatsapp ?? "",
     notifyOnLead: data.notify_on_lead ?? true,
