@@ -57,16 +57,31 @@ const DEMO_LEADS: LeadWithAnswers[] = [
   },
 ];
 
-export async function listLeads(orgId: string): Promise<LeadWithAnswers[]> {
-  if (!isSupabaseConfigured) return DEMO_LEADS;
+export const LEADS_PAGE_SIZE = 50;
+
+export interface LeadListRow {
+  id: string; name?: string | null; phone?: string | null; email?: string | null;
+  procedure: string | null; score: number; status: LeadStatus; created_at: string;
+}
+
+// Lista paginada no banco: só leads com contato (nome, telefone ou e-mail),
+// do mais recente para o mais antigo, com o total exato para a paginação.
+export async function listLeadsPage(orgId: string, page = 1, pageSize = LEADS_PAGE_SIZE): Promise<{ rows: LeadListRow[]; total: number }> {
+  const p = Math.max(1, Math.floor(page));
+  if (!isSupabaseConfigured) {
+    const all = DEMO_LEADS.filter((l) => l.name || l.phone || l.email);
+    return { rows: all.slice((p - 1) * pageSize, p * pageSize), total: all.length };
+  }
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, count } = await supabase
     .from("lead_sessions")
-    .select("*, answers:lead_answers(question_title, answer_value, answer_label, score)")
+    .select("id, name, phone, email, procedure, score, status, created_at", { count: "exact" })
     .eq("organization_id", orgId)
+    .or("name.not.is.null,phone.not.is.null,email.not.is.null")
     .order("created_at", { ascending: false })
-    .limit(200);
-  return (data as unknown as LeadWithAnswers[]) ?? [];
+    .order("id", { ascending: false })
+    .range((p - 1) * pageSize, p * pageSize - 1);
+  return { rows: (data as LeadListRow[]) ?? [], total: count ?? 0 };
 }
 
 // Leads de um funil específico (para a visualização de jornada no editor de fluxo).
@@ -95,16 +110,17 @@ export interface LeadPatch {
 export async function updateLead(id: string, patch: LeadPatch): Promise<boolean> {
   if (!isSupabaseConfigured) return true;
   const supabase = await createClient();
-  const { error } = await supabase.from("lead_sessions").update(patch).eq("id", id);
-  return !error;
+  // .select() mostra se a RLS deixou alterar (sem permissão = 0 linhas, sem erro).
+  const { data, error } = await supabase.from("lead_sessions").update(patch).eq("id", id).select("id");
+  return !error && (data?.length ?? 0) > 0;
 }
 
 // Remove um lead (e suas respostas via cascade no banco).
 export async function deleteLead(id: string): Promise<boolean> {
   if (!isSupabaseConfigured) return true;
   const supabase = await createClient();
-  const { error } = await supabase.from("lead_sessions").delete().eq("id", id);
-  return !error;
+  const { data, error } = await supabase.from("lead_sessions").delete().eq("id", id).select("id");
+  return !error && (data?.length ?? 0) > 0;
 }
 
 export async function getLead(id: string): Promise<LeadWithAnswers | null> {

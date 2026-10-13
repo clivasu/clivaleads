@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Phone, MessageCircle, Calendar, Clock, Pencil, Check, Ban, RotateCcw } from "lucide-react";
+import { X, Phone, MessageCircle, Calendar, Clock, Pencil, Check, Ban } from "lucide-react";
 import type { Appt, Doctor, Patient, Status } from "@/lib/demo-schedule";
 import { STATUS_META, procColor, fmtHour } from "@/lib/demo-schedule";
 import { cn } from "@/lib/utils";

@@ -1,0 +1,17 @@
+-- ROLLBACK da 0012 (agenda no banco).
+--
+-- As tabelas guardam agendamentos e pacientes das clínicas. Por isso este
+-- arquivo NÃO apaga nada. O caminho seguro para desfazer a 0012 é:
+--   1) reverter o CÓDIGO (merge anterior na main);
+--   2) manter as tabelas, com os dados, até decidir o que fazer com eles.
+--
+-- Enquanto as tabelas existirem, o código novo usa a agenda no banco. O
+-- código antigo ignora essas tabelas e volta a guardar no navegador.
+--
+-- Apagar as tabelas só depois de exportar os dados (Table Editor → CSV) e com
+-- autorização explícita:
+--   drop table if exists public.schedule_appointments;
+--   drop table if exists public.schedule_patients;
+--   drop table if exists public.schedule_procedures;
+--   drop table if exists public.schedule_professionals;
+select 'rollback da 0012: reverter o código; tabelas mantidas de propósito' as aviso;

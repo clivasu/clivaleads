@@ -67,13 +67,15 @@ export interface ShareLinks {
   google?: string;
 }
 
+// Eventos do funil (definições em supabase/migrations/0013_events.sql).
+// lead_qualified e appointment_booked são gravados só pelo servidor.
 export type EventType =
   | "page_view"
   | "flow_started"
-  | "question_viewed"
-  | "option_clicked"
+  | "step_view"
+  | "step_completed"
   | "flow_completed"
-  | "flow_disqualified"
+  | "flow_exited"
   | "whatsapp_clicked";
 
 export type ImageStyle = "cover" | "circle" | "float";

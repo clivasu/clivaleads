@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getFlowById } from "@/lib/data/flows";
+import { getFlowById, getFlowPrivateSettings } from "@/lib/data/flows";
 import { listLeadsByFlow } from "@/lib/data/leads";
 import { BuilderClient } from "@/components/builder/builder-client";
 import type { JourneyLead } from "@/lib/flow-journeys";
@@ -15,7 +15,7 @@ export default async function BuilderPage({
   const flow = await getFlowById(id);
   if (!flow) notFound();
 
-  const rows = await listLeadsByFlow(id);
+  const [rows, privateSettings] = await Promise.all([listLeadsByFlow(id), getFlowPrivateSettings(id)]);
   const leads: JourneyLead[] = rows.map((l) => ({
     id: l.id,
     name: l.name,
@@ -24,5 +24,5 @@ export default async function BuilderPage({
     answers: l.answers?.map((a) => ({ question_title: a.question_title })),
   }));
 
-  return <BuilderClient flow={flow} leads={leads} />;
+  return <BuilderClient flow={flow} leads={leads} privateSettings={privateSettings} />;
 }

@@ -16,9 +16,12 @@ import { BLOCK_CATALOG, defaultConfig, type BlockDef } from "@/lib/block-catalog
 import { FlowRunner } from "@/components/flow-runner/flow-runner";
 import { FlowCanvas } from "@/components/builder/flow-canvas";
 import type { JourneyLead } from "@/lib/flow-journeys";
+import type { FlowPrivateSettingsView } from "@/lib/data/flows";
 import { GOTO_EXIT, GOTO_WHATSAPP, applySmartLogic, isNegativeAnswer } from "@/lib/flow-logic";
 import { DEFAULT_THEME, type FlowTheme, type FontChoice } from "@/lib/theme";
 import { saveFlow } from "@/lib/actions/flows";
+import { applyIdMap } from "@/lib/flow-persistence";
+import { DEFAULT_SETTINGS, pickPersistedSettings, type FunnelSettings } from "@/lib/flow-settings";
 import { UploadButton } from "@/components/bio/upload-button";
 import { DeleteFlowButton } from "@/components/flows/delete-flow-button";
 import { beforeAfterFrames } from "@/components/flow-runner/before-after";
@@ -45,29 +48,6 @@ const LABELS = Object.fromEntries(
 function uid() {
   return "s-" + Math.random().toString(36).slice(2, 9);
 }
-
-interface FunnelSettings {
-  name: string; slug: string; procedure: string; description: string; status: "draft" | "published";
-  whatsapp: string; finalMessage: string; redirectUrl: string; restartOnFinish: boolean; allowBack: boolean; saveProgress: boolean;
-  metaPixel: string; ga4: string; gtm: string; tiktokPixel: string; headScripts: string;
-  webhookUrl: string; webhookSecret: string; autoSendLead: boolean;
-  seoTitle: string; seoDescription: string; ogImage: string; favicon: string; noindex: boolean;
-  customDomain: string;
-  notifyEmail: string; notifyWhatsapp: string; notifyOnLead: boolean;
-  consentText: string; privacyUrl: string; cookieBanner: boolean;
-  customCss: string;
-}
-const DEFAULT_SETTINGS: FunnelSettings = {
-  name: "", slug: "", procedure: "", description: "", status: "draft",
-  whatsapp: "", finalMessage: "", redirectUrl: "", restartOnFinish: false, allowBack: true, saveProgress: true,
-  metaPixel: "", ga4: "", gtm: "", tiktokPixel: "", headScripts: "",
-  webhookUrl: "", webhookSecret: "", autoSendLead: false,
-  seoTitle: "", seoDescription: "", ogImage: "", favicon: "", noindex: false,
-  customDomain: "",
-  notifyEmail: "", notifyWhatsapp: "", notifyOnLead: true,
-  consentText: "Ao continuar, você concorda em ser contatado. Seus dados estão protegidos (LGPD).", privacyUrl: "", cookieBanner: false,
-  customCss: "",
-};
 
 /* ---- helpers de árvore (blocos aninhados via children) ---- */
 function regenIds(s: FlowStep): FlowStep {
@@ -123,15 +103,31 @@ function isInSubtree(node: FlowStep, id: string): boolean {
   return (node.children ?? []).some((c) => isInSubtree(c, id));
 }
 
-export function BuilderClient({ flow, leads = [] }: { flow: PublicFlow; leads?: JourneyLead[] }) {
+export function BuilderClient({ flow, leads = [], privateSettings }: { flow: PublicFlow; leads?: JourneyLead[]; privateSettings?: FlowPrivateSettingsView }) {
   const [steps, setSteps] = useState<FlowStep[]>(flow.steps);
   const [selectedId, setSelectedId] = useState<string>(flow.steps[0]?.id ?? "");
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [tab, setTab] = useState<"build" | "design" | "flow" | "settings">("build");
+  // Começa pelo que já foi salvo (flows.settings), depois as colunas do funil
+  // (fonte da verdade) e as integrações privadas (sem o segredo).
   const [settings, setSettings] = useState<FunnelSettings>(() => ({
     ...DEFAULT_SETTINGS,
+    seoTitle: `${flow.procedure ?? flow.name} — ${flow.organization.name}`,
+    seoDescription: flow.description ?? "",
+    ...pickPersistedSettings(flow.settings),
+    ...(privateSettings
+      ? {
+          webhookUrl: privateSettings.webhookUrl,
+          autoSendLead: privateSettings.autoSendLead,
+          notifyEmail: privateSettings.notifyEmail,
+          notifyWhatsapp: privateSettings.notifyWhatsapp,
+          notifyOnLead: privateSettings.notifyOnLead,
+        }
+      : {}),
+    webhookSecret: "", // nunca vem do servidor; preencher = trocar
+    headScripts: "",
     name: flow.name,
     slug: flow.slug,
     procedure: flow.procedure ?? "",
@@ -139,8 +135,6 @@ export function BuilderClient({ flow, leads = [] }: { flow: PublicFlow; leads?: 
     status: flow.status,
     whatsapp: flow.whatsapp_number ?? flow.organization.whatsapp_number ?? "",
     finalMessage: flow.final_message ?? "",
-    seoTitle: `${flow.procedure ?? flow.name} — ${flow.organization.name}`,
-    seoDescription: flow.description ?? "",
   }));
   const setS = (patch: Partial<FunnelSettings>) => { setSettings((prev) => ({ ...prev, ...patch })); setSaved(false); };
 
@@ -163,6 +157,12 @@ export function BuilderClient({ flow, leads = [] }: { flow: PublicFlow; leads?: 
       });
       if (res.ok) {
         setSaved(true);
+        // Etapas novas ganharam id definitivo no servidor: aplica aqui também.
+        const map = res.idMap;
+        if (map && Object.keys(map).length > 0) {
+          setSteps((prev) => applyIdMap(prev, map));
+          setSelectedId((cur) => map[cur] ?? cur);
+        }
       } else {
         setSaveError(res.error ?? "Falha ao salvar.");
       }
@@ -271,7 +271,7 @@ export function BuilderClient({ flow, leads = [] }: { flow: PublicFlow; leads?: 
     const { tree, removed } = removeNode(steps, from);
     if (removed) update(insertIntoId(tree, containerId, removed));
   };
-  const toggleCollapse = (id: string) => setCollapsed((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleCollapse = (id: string) => setCollapsed((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
   const ancestor = useMemo(() => topAncestor(steps, selectedId), [steps, selectedId]);
   const previewFlow: PublicFlow = useMemo(() => ({ ...flow, steps: ancestor ? [ancestor] : [] }), [flow, ancestor]);
@@ -411,7 +411,7 @@ export function BuilderClient({ flow, leads = [] }: { flow: PublicFlow; leads?: 
 
         {tab === "design" && <DesignPanel theme={theme} setT={setT} />}
 
-        {tab === "settings" && <SettingsPanel s={settings} setS={setS} slug={flow.slug} flowId={flow.id} handle={flow.organization.slug} />}
+        {tab === "settings" && <SettingsPanel s={settings} setS={setS} slug={flow.slug} flowId={flow.id} handle={flow.organization.slug} hasWebhookSecret={privateSettings?.hasWebhookSecret} hasHeadScripts={privateSettings?.hasHeadScripts} />}
 
         {tab === "flow" && (
           <FlowCanvas
@@ -741,7 +741,7 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
           </Field>
           <ColorRow label="Cor de fundo" value={c.bg ?? "#ffffff"} onChange={(v) => onChange({ bg: v })} />
           <p className="mt-2 rounded-lg bg-emerald-50 p-2 text-[11px] text-emerald-700">
-            Com esta seção selecionada, os blocos da paleta são adicionados <b>dentro</b> dela. Você também pode arrastar blocos para o "soltar aqui".
+            Com esta seção selecionada, os blocos da paleta são adicionados <b>dentro</b> dela. Você também pode arrastar blocos para o “soltar aqui”.
           </p>
         </>
       )}
@@ -963,7 +963,7 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
                 </label>
               ))}
             </div>
-            <p className="mt-2 text-[11px] text-slate-400">Ex.: 3 tentativas — 1ª "Não foi dessa vez", 2ª "Brinde", 3ª o prêmio principal.</p>
+            <p className="mt-2 text-[11px] text-slate-400">Ex.: 3 tentativas — 1ª “Não foi dessa vez”, 2ª “Brinde”, 3ª o prêmio principal.</p>
             {(c.max_attempts ?? 1) > 1 && (
               <Field label="Texto do botão de girar de novo"><input className={inputCls} value={c.retry_label ?? ""} onChange={(e) => onChange({ retry_label: e.target.value })} placeholder="Girar novamente" /></Field>
             )}
@@ -1235,7 +1235,7 @@ function ChartGrowthEditor({ c, onChange }: { c: FlowStep["config"]; onChange: (
 
       {style === "compare" && (
         <>
-          <p className="mb-1 mt-3 text-xs font-medium text-slate-500">Série "Você"</p>
+          <p className="mb-1 mt-3 text-xs font-medium text-slate-500">Série “Você”</p>
           <div className="mb-3 grid grid-cols-3 gap-2">
             {(c.you_series ?? [0, 0, 0]).map((v, i) => (
               <input key={i} type="number" className={inputCls} value={v} onChange={(e) => {
@@ -1243,7 +1243,7 @@ function ChartGrowthEditor({ c, onChange }: { c: FlowStep["config"]; onChange: (
               }} />
             ))}
           </div>
-          <p className="mb-1 text-xs font-medium text-slate-500">Série "Concorrência"</p>
+          <p className="mb-1 text-xs font-medium text-slate-500">Série “Concorrência”</p>
           <div className="grid grid-cols-3 gap-2">
             {(c.competitor_series ?? [0, 0, 0]).map((v, i) => (
               <input key={i} type="number" className={inputCls} value={v} onChange={(e) => {
@@ -1579,7 +1579,7 @@ function SwitchRow({ label, desc, on, onChange }: { label: string; desc?: string
   );
 }
 
-function SettingsPanel({ s, setS, slug, flowId, handle }: { s: FunnelSettings; setS: (p: Partial<FunnelSettings>) => void; slug: string; flowId: string; handle: string }) {
+function SettingsPanel({ s, setS, flowId, handle, hasWebhookSecret = false, hasHeadScripts = false }: { s: FunnelSettings; setS: (p: Partial<FunnelSettings>) => void; slug?: string; flowId: string; handle: string; hasWebhookSecret?: boolean; hasHeadScripts?: boolean }) {
   const ta = "w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs focus:border-emerald-400 focus:outline-none";
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50 p-6">
@@ -1630,14 +1630,22 @@ function SettingsPanel({ s, setS, slug, flowId, handle }: { s: FunnelSettings; s
             <Field label="Google Tag Manager"><input className={inputCls} value={s.gtm} onChange={(e) => setS({ gtm: e.target.value })} placeholder="GTM-XXXXXX" /></Field>
             <Field label="TikTok Pixel"><input className={inputCls} value={s.tiktokPixel} onChange={(e) => setS({ tiktokPixel: e.target.value })} placeholder="CXXXXXXXXXXXX" /></Field>
           </div>
-          <Field label="Scripts no <head> (avançado)"><textarea rows={3} className={ta} value={s.headScripts} onChange={(e) => setS({ headScripts: e.target.value })} placeholder="<script>...</script>" /></Field>
+          <Field label="Scripts no <head> (avançado)">
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Desativado por segurança: scripts livres podem roubar dados dos pacientes (LGPD). Use os campos de pixel acima.
+              {hasHeadScripts && " O script salvo antes foi guardado e não é mais executado."}
+            </p>
+          </Field>
         </Section>
 
         <Section title="Integrações (Webhook / CRM)" desc="Envie cada lead automaticamente para seu CRM.">
           <Field label="URL do webhook"><input className={inputCls} value={s.webhookUrl} onChange={(e) => setS({ webhookUrl: e.target.value })} placeholder="https://seu-crm.com/webhook" /></Field>
-          <Field label="Segredo / token (opcional)"><input className={inputCls} value={s.webhookSecret} onChange={(e) => setS({ webhookSecret: e.target.value })} /></Field>
+          <Field label="Segredo / token (opcional)">
+            <input className={inputCls} type="password" autoComplete="off" value={s.webhookSecret} onChange={(e) => setS({ webhookSecret: e.target.value })}
+              placeholder={hasWebhookSecret ? "•••••••• configurado (digite para trocar)" : "Opcional"} />
+          </Field>
           <SwitchRow label="Enviar lead automaticamente" desc="Dispara o webhook a cada conclusão." on={s.autoSendLead} onChange={(v) => setS({ autoSendLead: v })} />
-          <button className="mt-2 rounded-lg border px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50">Testar webhook</button>
+          <button disabled title="Disponível quando o envio de webhooks for ativado" className="mt-2 cursor-not-allowed rounded-lg border px-3 py-1.5 text-sm font-medium text-slate-400">Testar webhook (em breve)</button>
         </Section>
 
         <Section title="SEO & Compartilhamento">

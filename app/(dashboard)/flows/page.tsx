@@ -6,8 +6,8 @@ import { DeleteFlowButton } from "@/components/flows/delete-flow-button";
 import { getCurrentOrg } from "@/lib/data/org";
 import { listFlows } from "@/lib/data/flows";
 import { seedTemplateFlows } from "@/lib/actions/flows";
-import { getDashboardData } from "@/lib/data/dashboard";
-import { getLeadInsights } from "@/lib/data/lead-insights";
+import { getFunnelAnalytics } from "@/lib/data/funnel-analytics";
+import { parseFilters } from "@/lib/analytics/filters";
 import { FunnelInsights } from "@/components/dashboard/funnel-insights";
 import { isSupabaseConfigured } from "@/lib/env";
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,9 +31,8 @@ export default async function FlowsPage() {
   const h = await headers();
   const host = h.get("host") ?? "cliva.me";
 
-  // Dados de desempenho dos funis (eventos + leads capturados).
-  const funnelData = await getDashboardData(org.id);
-  const insights = await getLeadInsights(org.id);
+  // Desempenho dos funis nos últimos 30 dias (calculado no banco).
+  const funnelData = await getFunnelAnalytics(org.id, parseFilters({}));
 
   return (
     <div>
@@ -95,7 +94,7 @@ export default async function FlowsPage() {
 
       {/* Desempenho dos funis (dados reais) */}
       <div className="mt-10">
-        <FunnelInsights data={funnelData} insights={insights} />
+        <FunnelInsights data={funnelData} />
       </div>
     </div>
   );

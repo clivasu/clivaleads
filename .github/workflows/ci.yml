@@ -1,0 +1,29 @@
+name: CI
+
+# Qualidade em todo push e pull request. Sem segredos e sem deploy:
+# o build roda em modo demonstração (sem Supabase/Stripe) e nenhuma
+# migration é aplicada daqui.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high

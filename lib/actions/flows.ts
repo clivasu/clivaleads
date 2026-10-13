@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/env";
 import { getCurrentOrg } from "@/lib/data/org";
 import type { FlowStep } from "@/lib/types";
+import { prepareStepsForSave, type IdMap, type StepRow } from "@/lib/flow-persistence";
+import { splitSettings } from "@/lib/flow-settings";
 import { getBillingState } from "@/lib/data/billing";
 
 export interface SaveFlowInput {
@@ -25,19 +27,14 @@ export interface ActionResult {
   ok: boolean;
   error?: string;
   id?: string;
+  idMap?: IdMap; // ids definitivos das etapas novas (editor aplica)
 }
 
-// Achata a árvore para linhas de flow_steps, guardando os filhos (blocos
-// aninhados do container/hero) dentro do próprio config JSONB.
+// Linhas de flow_steps para funis criados a partir de modelos: ids definitivos
+// e referências de lógica (goto) reescritas (ver lib/flow-persistence.ts).
 function serializeSteps(steps: FlowStep[]) {
-  return steps.map((s, i) => ({
-    flow_id: s.flow_id,
-    position: i,
-    type: s.type,
-    config: s.children && s.children.length > 0
-      ? { ...s.config, __children: s.children }
-      : s.config,
-  }));
+  const flowId = steps[0]?.flow_id;
+  return prepareStepsForSave(steps).rows.map((r) => ({ ...r, flow_id: flowId }));
 }
 
 export async function saveFlow(input: SaveFlowInput): Promise<ActionResult> {
@@ -69,42 +66,85 @@ export async function saveFlow(input: SaveFlowInput): Promise<ActionResult> {
     }
   }
 
-  const { error: flowErr } = await supabase
-    .from("flows")
-    .update({
-      name: input.name,
-      slug: input.slug,
-      procedure: input.procedure || null,
-      description: input.description || null,
-      status: input.status,
-      whatsapp_number: input.whatsapp || null,
-      final_message: input.finalMessage || null,
-      cover_image_url: input.coverImageUrl ?? null,
-      settings: input.settings,
-    })
-    .eq("id", input.id);
-
-  if (flowErr) return { ok: false, error: flowErr.message };
-
-  // Substitui as etapas (delete + insert). RLS garante que só o dono altera.
-  const { error: delErr } = await supabase
-    .from("flow_steps")
-    .delete()
-    .eq("flow_id", input.id);
-  if (delErr) return { ok: false, error: delErr.message };
-
-  if (input.steps.length > 0) {
-    const rows = serializeSteps(
-      input.steps.map((s) => ({ ...s, flow_id: input.id })),
-    );
-    const { error: insErr } = await supabase.from("flow_steps").insert(rows);
-    if (insErr) return { ok: false, error: insErr.message };
+  // Integrações e contatos internos não vão para flows.settings (lido pelo
+  // público): ficam em flow_private_settings.
+  const { publicSettings, privateSettings } = splitSettings(input.settings);
+  if (privateSettings.webhook_url && !/^https:\/\//i.test(privateSettings.webhook_url)) {
+    return { ok: false, error: "A URL do webhook precisa começar com https://" };
   }
+
+  const { rows, idMap } = prepareStepsForSave(input.steps);
+  const flowPatch = {
+    name: input.name,
+    slug: input.slug,
+    procedure: input.procedure || null,
+    description: input.description || null,
+    status: input.status,
+    whatsapp_number: input.whatsapp || null,
+    final_message: input.finalMessage || null,
+    cover_image_url: input.coverImageUrl ?? null,
+    settings: publicSettings,
+  };
+
+  // Funil + etapas numa única transação no banco (RLS: só owner/admin).
+  let orgId: string | null = null;
+  const { data: rpcOrg, error: rpcErr } = await supabase.rpc("save_flow", {
+    p_flow_id: input.id,
+    p_flow: flowPatch,
+    p_steps: rows,
+  });
+  if (!rpcErr) {
+    orgId = rpcOrg as string;
+  } else if (rpcErr.code === "PGRST202" || rpcErr.code === "42883") {
+    // Banco ainda sem a migration 0011: caminho antigo (não atômico).
+    const legacy = await saveFlowLegacy(supabase, input.id, flowPatch, rows);
+    if (!legacy.ok) return legacy;
+    orgId = legacy.orgId;
+  } else if (rpcErr.code === "42501") {
+    return { ok: false, error: "Você não tem permissão para editar este funil." };
+  } else {
+    return { ok: false, error: friendlyDbError(rpcErr) };
+  }
+
+  // Passou pela RLS (owner/admin): grava as privadas pelo servidor.
+  const { createAdminClient } = await import("@/lib/supabase/server");
+  const { error: privErr } = await createAdminClient()
+    .from("flow_private_settings")
+    .upsert(
+      { flow_id: input.id, organization_id: orgId, ...privateSettings, updated_at: new Date().toISOString() },
+      { onConflict: "flow_id" },
+    );
+  // Tabela ainda não criada (migration 0010 não aplicada): segue sem as privadas.
+  if (privErr && privErr.code !== "42P01" && privErr.code !== "PGRST205") return { ok: false, error: privErr.message };
 
   revalidatePath(`/flows/${input.id}/builder`);
   revalidatePath(`/f/${input.slug}`);
   revalidatePath("/flows");
-  return { ok: true, id: input.id };
+  return { ok: true, id: input.id, idMap };
+}
+
+function friendlyDbError(e: { code?: string; message: string }): string {
+  if (e.code === "23505") return "Já existe um funil com este endereço (slug). Escolha outro.";
+  return "Não foi possível salvar o funil. Nada foi alterado; tente de novo.";
+}
+
+// Caminho anterior à 0011 (sem transação). Mantido só para a janela de deploy.
+async function saveFlowLegacy(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  flowId: string,
+  flowPatch: Record<string, unknown>,
+  rows: StepRow[],
+): Promise<ActionResult & { orgId: string | null }> {
+  const { data: updated, error } = await supabase.from("flows").update(flowPatch).eq("id", flowId).select("organization_id");
+  if (error) return { ok: false, error: friendlyDbError(error), orgId: null };
+  if (!updated || updated.length === 0) return { ok: false, error: "Você não tem permissão para editar este funil.", orgId: null };
+  const { error: delErr } = await supabase.from("flow_steps").delete().eq("flow_id", flowId);
+  if (delErr) return { ok: false, error: friendlyDbError(delErr), orgId: null };
+  if (rows.length > 0) {
+    const { error: insErr } = await supabase.from("flow_steps").insert(rows.map((r) => ({ ...r, flow_id: flowId })));
+    if (insErr) return { ok: false, error: friendlyDbError(insErr), orgId: null };
+  }
+  return { ok: true, orgId: updated[0].organization_id as string };
 }
 
 export async function createFlow(input: {

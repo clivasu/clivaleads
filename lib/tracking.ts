@@ -3,33 +3,42 @@
 import type { EventType } from "@/lib/types";
 
 // Rastreio em lote: os eventos ficam numa fila e vão juntos para /api/track.
-// Uma visita típica faz 1 a 3 envios, em vez de um por clique.
+// Uma visita típica faz poucos envios, em vez de um por clique.
 //
-// Só são gravados os tipos que os relatórios usam (e que a tabela aceita:
-// a saída "sem interesse" já fica no status "lost" do lead). O caminho de cada lead
-// (etapas e respostas) já fica em lead_sessions/lead_answers, então
-// question_viewed e option_clicked não precisam de uma linha por clique.
-const PERSISTED = new Set<EventType>([
-  "page_view",
-  "flow_started",
-  "flow_completed",
-  "whatsapp_clicked",
-]);
+// Cada evento leva um id único (event_id): se o envio for repetido (retry,
+// sendBeacon + fetch), o banco ignora a cópia. Nenhum evento leva resposta,
+// nome, telefone ou e-mail: só tipo, funil e posição da etapa.
 
-// Fim da visita (ou saída para o WhatsApp): envia na hora.
-const TERMINAL = new Set<EventType>(["flow_completed", "whatsapp_clicked"]);
+// Fim da visita (saída para o WhatsApp, conclusão ou saída): envia na hora.
+const TERMINAL = new Set<EventType>(["flow_completed", "flow_exited", "whatsapp_clicked"]);
 
 const FLUSH_AFTER_MS = 8000;
-const MAX_BATCH = 20;
+const MAX_BATCH = 30;
 
 interface QueuedEvent {
   type: EventType;
+  event_id: string;
   flow_id: string;
   organization_id: string;
-  metadata?: Record<string, unknown>;
+  step_index?: number;
+  step_id?: string;
 }
 
 let queue: QueuedEvent[] = [];
+
+// UUID v4. randomUUID só existe em contexto seguro e navegadores recentes;
+// a reserva usa getRandomValues para nenhum evento ficar sem id.
+function newEventId(): string {
+  const c: Partial<Crypto> | undefined = typeof crypto !== "undefined" ? crypto : undefined;
+  if (typeof c?.randomUUID === "function") return c.randomUUID();
+  const b = new Uint8Array(16);
+  if (typeof c?.getRandomValues === "function") c.getRandomValues(b);
+  else for (let i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256);
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
 let timer: ReturnType<typeof setTimeout> | null = null;
 let listening = false;
 
@@ -69,12 +78,21 @@ export function track(
   payload: {
     flow_id: string;
     organization_id: string;
-    metadata?: Record<string, unknown>;
+    step_index?: number;
+    step_id?: string;
   },
 ) {
-  if (!PERSISTED.has(type) || typeof window === "undefined") return;
+  if (typeof window === "undefined") return;
   listen();
-  queue.push({ type, ...payload });
+  const event_id = newEventId();
+  queue.push({
+    type,
+    event_id,
+    flow_id: payload.flow_id,
+    organization_id: payload.organization_id,
+    ...(payload.step_index !== undefined ? { step_index: payload.step_index } : {}),
+    ...(payload.step_id ? { step_id: payload.step_id.slice(0, 64) } : {}),
+  });
   if (TERMINAL.has(type)) flush(true);
   else if (queue.length >= MAX_BATCH) flush(false);
   else if (!timer) timer = setTimeout(() => flush(false), FLUSH_AFTER_MS);

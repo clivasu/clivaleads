@@ -5,7 +5,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRight,
   ArrowUpRight,
-  MessageCircle,
   Star,
   Check,
   Clock,
@@ -56,7 +55,9 @@ export function FlowRunner({
   const startedRef = useRef(false);
   const completedRef = useRef(false);
   const sessionIdRef = useRef<string | null>(null);
-  const convertedRef = useRef(false);
+  const sessionTokenRef = useRef<string | null>(null); // prova de posse para o PATCH
+  // Identifica este lead em reenvios (retry/refresh) para o servidor não duplicar.
+  const clientRefRef = useRef<string>(typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : "");
 
   const steps = flow.steps;
   const step = steps[index];
@@ -75,64 +76,87 @@ export function FlowRunner({
   const whatsappNumber =
     flow.whatsapp_number || flow.organization.whatsapp_number || "";
 
+  // ---- Rastreio (definições das métricas em supabase/migrations/0013_events.sql) ----
+  const ids = { flow_id: flow.id, organization_id: flow.organization_id };
+  const interactedRef = useRef(false);
+  const viewedRef = useRef<Set<number>>(new Set());
+  const stepDoneRef = useRef<Set<number>>(new Set());
+  const waTrackedRef = useRef(false);
+  type Conversion = "whatsapp" | "final_cta";
+  const pendingConvRef = useRef<Set<Conversion>>(new Set());
+
+  // Visita: a página do funil abriu (uma vez por carregamento).
   useEffect(() => {
     if (preview) return;
     if (startedRef.current) return;
     startedRef.current = true;
-    track("page_view", { flow_id: flow.id, organization_id: flow.organization_id });
-    track("flow_started", { flow_id: flow.id, organization_id: flow.organization_id });
+    track("page_view", ids);
     // preview é constante por montagem; fora das deps de propósito.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flow.id, flow.organization_id]);
 
-  useEffect(() => {
-    if (preview) return;
-    if (step?.type === "question" || step?.type === "multi_choice") {
-      track("question_viewed", {
-        flow_id: flow.id,
-        organization_id: flow.organization_id,
-        metadata: { key: step.config.key, position: step.position },
-      });
-    }
-  }, [index, step, flow.id, flow.organization_id]);
+  // Início: primeira interação real (responder, clicar, avançar), não a abertura.
+  const markStarted = () => {
+    if (preview || interactedRef.current) return;
+    interactedRef.current = true;
+    track("flow_started", ids);
+  };
 
-  // Marca a conversão (clique no botão final) na sessão já registrada.
-  const markConverted = () => {
+  // Etapa vista: uma vez por etapa por visita, só a posição (nunca a resposta).
+  useEffect(() => {
+    if (preview || onExit || !step || viewedRef.current.has(index)) return;
+    viewedRef.current.add(index);
+    track("step_view", { ...ids, step_index: index, step_id: step.id });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index, onExit]);
+
+  // WhatsApp aberto de verdade (uma vez por visita).
+  const trackWhatsapp = () => {
+    if (preview || waTrackedRef.current) return;
+    waTrackedRef.current = true;
+    markStarted();
+    track("whatsapp_clicked", ids);
+  };
+
+  // Marca no lead já gravado o clique no botão final ou no WhatsApp.
+  const markConverted = (action: Conversion) => {
     if (preview || !sessionIdRef.current || sessionIdRef.current === "demo-session") return;
     try {
       void fetch("/api/sessions", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: sessionIdRef.current, whatsapp_clicked: true }),
+        body: JSON.stringify({ id: sessionIdRef.current, token: sessionTokenRef.current ?? "", action }),
         keepalive: true,
       });
     } catch { /* noop */ }
   };
 
-  // Registra a sessão do lead. Insere uma única vez; se `converted`, marca o
-  // clique no botão final (whatsapp_clicked) — mesmo que a inserção já tenha
-  // acontecido ao chegar no último bloco.
-  const persistSession = (finalAnswers: LeadAnswer[], finalContact: ContactInfo, converted = false, disqualified = false) => {
+  // Registra a sessão do lead (uma única vez). `conversion` marca o clique:
+  // "whatsapp" só quando o WhatsApp abre; "final_cta" para formulário,
+  // "Continuar" ou botão do último bloco. `disqualified` = final "sem interesse".
+  const persistSession = (finalAnswers: LeadAnswer[], finalContact: ContactInfo, conversion?: Conversion, disqualified = false) => {
     if (preview) return;
-    if (converted) convertedRef.current = true;
+    markStarted();
+    if (conversion) pendingConvRef.current.add(conversion);
     if (completedRef.current) {
-      if (converted) markConverted();
+      if (conversion) markConverted(conversion);
       return;
     }
     completedRef.current = true;
-    track("flow_completed", { flow_id: flow.id, organization_id: flow.organization_id });
-    const wantConvert = convertedRef.current;
+    track(disqualified ? "flow_exited" : "flow_completed", ids);
+    const sent = new Set(pendingConvRef.current);
     const body = JSON.stringify({
       flow_id: flow.id,
-      organization_id: flow.organization_id,
+      client_ref: clientRefRef.current || undefined,
       procedure: flow.procedure,
       answers: finalAnswers,
       contact: finalContact,
-      whatsapp_clicked: wantConvert,
+      whatsapp_clicked: sent.has("whatsapp"),
+      final_cta_clicked: sent.has("final_cta"),
       disqualified,
       device: detectDevice(),
       browser: detectBrowser(),
-      entry_page: typeof window !== "undefined" ? window.location.pathname : null,
+      entry_page: typeof window !== "undefined" ? window.location.pathname : undefined,
     });
     (async () => {
       try {
@@ -144,15 +168,23 @@ export function FlowRunner({
         });
         const json = await res.json().catch(() => ({}));
         sessionIdRef.current = json?.id ?? null;
-        // Conversão sinalizada enquanto o insert acontecia → aplica agora.
-        if (convertedRef.current && !wantConvert) markConverted();
+        sessionTokenRef.current = json?.token ?? null;
+        // Cliques que aconteceram enquanto o lead era gravado: aplica agora.
+        for (const c of pendingConvRef.current) if (!sent.has(c)) markConverted(c);
       } catch { /* nunca quebrar a experiência do lead */ }
     })();
   };
 
   // Vai para uma etapa aplicando o portão de qualificação dela: se a
   // pontuação atual não alcança o mínimo, desvia para o destino do portão.
-  const navigate = (target: number, currentScore: number) => {
+  // `auto` = avanço sem ação da pessoa (bloco de carregamento): não conta como início.
+  const navigate = (target: number, currentScore: number, auto = false) => {
+    if (!auto) markStarted();
+    // Etapa concluída: uma vez por etapa por visita (voltar e avançar não soma de novo).
+    if (!preview && target > index && step && !stepDoneRef.current.has(index)) {
+      stepDoneRef.current.add(index);
+      track("step_completed", { ...ids, step_index: index, step_id: step.id });
+    }
     let i = Math.max(0, Math.min(target, total - 1));
     const cfg = steps[i]?.config;
     if (cfg && typeof cfg.score_gate_min === "number" && currentScore < cfg.score_gate_min) {
@@ -164,16 +196,16 @@ export function FlowRunner({
   };
   // Destino: id/atalho ("@exit", "@whatsapp"), índice legado ou, sem nada,
   // a próxima etapa do caminho principal (pulando finais alternativos).
-  const go = (dest?: string | number, currentScore = score) => {
+  const go = (dest?: string | number, currentScore = score, auto = false) => {
     if (typeof dest === "string" && dest) {
       const r = resolveGoto(steps, dest);
       if (r === "missing-exit") { setForcedExit(true); return; }
-      if (typeof r === "number") { navigate(r, currentScore); return; }
+      if (typeof r === "number") { navigate(r, currentScore, auto); return; }
     } else if (typeof dest === "number") {
-      navigate(dest, currentScore);
+      navigate(dest, currentScore, auto);
       return;
     }
-    navigate(nextLinear(steps, index), currentScore);
+    navigate(nextLinear(steps, index), currentScore, auto);
   };
   const advance = (dest?: string | number) => go(dest);
 
@@ -181,8 +213,7 @@ export function FlowRunner({
   // O formulário é a exceção: ele registra no envio, com o contato preenchido.
   useEffect(() => {
     if (onExit) {
-      if (!preview) track("flow_disqualified", { flow_id: flow.id, organization_id: flow.organization_id });
-      persistSession(answers, contact, false, true);
+      persistSession(answers, contact, undefined, true);
       return;
     }
     const isLast = index >= mainLast;
@@ -199,12 +230,8 @@ export function FlowRunner({
   };
 
   const pickOption = (blk: FlowStep, opt: QuestionOption) => {
-    track("option_clicked", {
-      flow_id: flow.id,
-      organization_id: flow.organization_id,
-      metadata: { key: blk.config.key, value: opt.value },
-    });
     if (opt.href) {
+      if (/wa\.me|whatsapp\.com/i.test(opt.href)) trackWhatsapp();
       try { window.open(opt.href, "_blank", "noopener"); } catch { /* noop */ }
     }
     pushAnswer(
@@ -230,7 +257,7 @@ export function FlowRunner({
       case "stats": return <StatsStep step={blk} />;
       case "alert": return <AlertStep step={blk} />;
       case "timer": return <TimerStep step={blk} />;
-      case "loading": return <LoadingStep step={blk} onDone={() => advance()} />;
+      case "loading": return <LoadingStep step={blk} onDone={() => go(undefined, score, true)} />;
       case "level": return <LevelStep step={blk} score={score} />;
       case "faq": return <FaqStep step={blk} />;
       case "news": return <NewsStep step={blk} onNext={() => advance()} />;
@@ -247,7 +274,9 @@ export function FlowRunner({
             const ans: LeadAnswer = { question_title: blk.config.title || "", answer_value: b.label, answer_label: b.label, score: 0 };
             // Bloco de botões como etapa final: registra o clique no botão.
             const dest = b.goto || b.next;
-            if (index >= mainLast && dest === undefined) { persistSession([...answers, ans], contact, true); setAnswers((prev) => [...prev, ans]); }
+            const opensWhatsapp = /wa\.me|whatsapp\.com/i.test(b.href ?? "");
+            if (opensWhatsapp) trackWhatsapp();
+            if (index >= mainLast && dest === undefined) { persistSession([...answers, ans], contact, opensWhatsapp ? "whatsapp" : "final_cta"); setAnswers((prev) => [...prev, ans]); }
             else pushAnswer(ans, dest);
           }} />
         );
@@ -260,12 +289,13 @@ export function FlowRunner({
               // Roleta como etapa final: o CTA leva ao destino configurado.
               const all = [...answers, a];
               setAnswers(all);
-              persistSession(all, contact, true);
               const cfg = blk.config;
-              if (cfg.cta_action === "link" && cfg.cta_href) {
-                try { window.open(cfg.cta_href, "_blank", "noopener"); } catch { /* noop */ }
+              const toLink = cfg.cta_action === "link" && Boolean(cfg.cta_href);
+              persistSession(all, contact, toLink ? "final_cta" : "whatsapp");
+              if (toLink) {
+                try { window.open(cfg.cta_href!, "_blank", "noopener"); } catch { /* noop */ }
               } else {
-                track("whatsapp_clicked", { flow_id: flow.id, organization_id: flow.organization_id });
+                trackWhatsapp();
                 const custom = cfg.cta_message?.trim();
                 const msg = custom
                   ? custom.replace(/\{nome\}/gi, contact.name ?? "").replace(/\{premio\}/gi, prize)
@@ -282,7 +312,7 @@ export function FlowRunner({
         const merged = { ...contact, ...cc };
         setContact(merged);
         // Formulário como etapa final: registra o lead com o contato preenchido.
-        if (index >= mainLast) persistSession(answers, merged, true);
+        if (index >= mainLast) persistSession(answers, merged, "final_cta");
         else advance();
       }} />;
       case "whatsapp": return <WhatsappStep step={blk} message={message} href={waUrl} onClick={onWhatsappClick} />;
@@ -298,8 +328,8 @@ export function FlowRunner({
   const waUrl = buildWhatsappUrl(whatsappNumber, message);
 
   const onWhatsappClick = () => {
-    persistSession(answers, contact, true);
-    track("whatsapp_clicked", { flow_id: flow.id, organization_id: flow.organization_id });
+    persistSession(answers, contact, "whatsapp");
+    trackWhatsapp();
   };
 
   const showFooterContinue =
@@ -383,7 +413,7 @@ export function FlowRunner({
           <button
             onClick={() => {
               // No último bloco, o "Continuar" é o botão final: registra a conversão.
-              if (index >= mainLast) persistSession(answers, contact, true);
+              if (index >= mainLast) persistSession(answers, contact, "final_cta");
               else advance();
             }}
             className="brand-btn flex w-full items-center justify-center gap-2 rounded-xl py-4 text-base font-semibold shadow-lg transition-transform active:scale-[0.99]"
@@ -1071,7 +1101,6 @@ function VideoMp4({ url, hide, fake, speed }: { url: string; hide?: boolean; fak
   const exp = speed ?? 0.5;
   return (
     <>
-      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video
         ref={ref}
         src={url}
