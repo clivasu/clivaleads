@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Greeting, TodayLabel } from "@/components/dashboard/greeting";
 import { formatToday, greetingFor } from "@/lib/greeting";
 import {
@@ -8,28 +9,14 @@ import {
   More,
   StatusUp,
   Eye,
-  Edit2,
 } from "iconsax-reactjs";
 import { RevenueChart } from "@/components/dashboard/revenue-chart";
 import { AppointmentDonut } from "@/components/dashboard/appointment-donut";
-import {
-  kpis as demoKpis,
-  todayAppointments as demoAppointments,
-  recentPatients as demoPatients,
-  type KpiCard,
-} from "@/lib/demo-dashboard";
 import { isSupabaseConfigured } from "@/lib/env";
-import { getNavInfo } from "@/lib/data/org";
+import { getCurrentOrg, getNavInfo } from "@/lib/data/org";
+import { getHomeData } from "@/lib/data/home";
 
 export const dynamic = "force-dynamic";
-
-// KPIs zerados para uma clínica que acabou de começar (conta real, sem dados).
-const ZERO_KPIS: KpiCard[] = [
-  { key: "patients", title: "Total de Pacientes", value: "0", subtitle: "Este mês", trend: "0%", trendUp: false },
-  { key: "appointments", title: "Agendamentos", value: "0", subtitle: "Novas marcações", trend: "0%", trendUp: false },
-  { key: "revenue", title: "Receita Mensal", value: "R$ 0", subtitle: "Mês passado", trend: "0%", trendUp: false },
-  { key: "doctors", title: "Profissionais Ativos", value: "0", subtitle: "Cadastre na Agenda", trend: "0%", trendUp: false },
-];
 
 function firstName(full: string): string {
   const t = (full || "").trim();
@@ -57,6 +44,8 @@ const KPI_STYLES: Record<string, { grad: string; icon: React.ReactNode }> = {
 };
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
+  done: { label: "Concluído", cls: "bg-slate-100 text-slate-600" },
+  in_progress: { label: "Em atendimento", cls: "bg-sky-100 text-sky-700" },
   confirmed: { label: "Confirmado", cls: "bg-emerald-100 text-emerald-700" },
   waiting: { label: "Aguardando", cls: "bg-amber-100 text-amber-700" },
   cancelled: { label: "Cancelado", cls: "bg-rose-100 text-rose-700" },
@@ -73,9 +62,12 @@ export default async function DashboardPage() {
   const demo = !isSupabaseConfigured;
   const nav = await getNavInfo();
   const greetName = demo ? "Dra. Sarah" : (firstName(nav.userName) || nav.orgName || "por aqui");
-  const kpis = demo ? demoKpis : ZERO_KPIS;
-  const todayAppointments = demo ? demoAppointments : [];
-  const recentPatients = demo ? demoPatients : [];
+  // Conta real: números da agenda (0016). Demo: vitrine estática.
+  const org = demo ? null : await getCurrentOrg();
+  const home = await getHomeData(org?.id ?? "");
+  const kpis = home.kpis;
+  const todayAppointments = home.today;
+  const recentPatients = home.recent;
 
   return (
     <div className="space-y-6">
@@ -137,9 +129,9 @@ export default async function DashboardPage() {
       {/* Revenue + donut */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <RevenueChart empty={!demo} />
+          <RevenueChart data={home.revenue} />
         </div>
-        <AppointmentDonut empty={!demo} />
+        <AppointmentDonut data={home.donut} />
       </div>
 
       {/* Today's appointments + recent patients */}
@@ -164,14 +156,14 @@ export default async function DashboardPage() {
                 {todayAppointments.map((a) => {
                   const b = STATUS_BADGE[a.status];
                   return (
-                    <tr key={a.patientId} className="border-b last:border-0">
+                    <tr key={a.id} className="border-b last:border-0">
                       <td className="py-3">
                         <p className="font-medium text-slate-800">{a.doctor}</p>
                         <p className="text-xs text-slate-400">{a.specialty}</p>
                       </td>
                       <td className="py-3">
                         <p className="font-medium text-slate-800">{a.patient}</p>
-                        <p className="text-xs text-slate-400">{a.patientId}</p>
+                        <p className="text-xs text-slate-400">{a.tag}</p>
                       </td>
                       <td className="py-3 text-slate-600">{a.time}</td>
                       <td className="py-3">
@@ -180,10 +172,9 @@ export default async function DashboardPage() {
                         </span>
                       </td>
                       <td className="py-3">
-                        <div className="flex items-center justify-end gap-3 text-slate-400">
+                        <Link href="/schedule" aria-label={`Abrir ${a.patient} na agenda`} className="flex items-center justify-end text-slate-400 hover:text-emerald-600">
                           <Eye size={18} color="currentColor" />
-                          <Edit2 size={18} color="currentColor" />
-                        </div>
+                        </Link>
                       </td>
                     </tr>
                   );
@@ -199,7 +190,7 @@ export default async function DashboardPage() {
         <div className="rounded-2xl border bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900">Pacientes recentes</h2>
-            <button className="text-sm font-medium text-emerald-600">Ver todos</button>
+            <Link href="/schedule" className="text-sm font-medium text-emerald-600">Ver agenda</Link>
           </div>
           <div className="flex flex-col gap-4">
             {recentPatients.map((p) => (
@@ -211,10 +202,7 @@ export default async function DashboardPage() {
                   <p className="truncate font-medium text-slate-800">{p.name}</p>
                   <p className="truncate text-xs text-slate-400">{p.condition}</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium text-slate-600">{p.age}</p>
-                  <p className="text-xs text-slate-400">{p.date}</p>
-                </div>
+                <p className="shrink-0 text-xs text-slate-400">{p.date}</p>
               </div>
             ))}
             {recentPatients.length === 0 && (

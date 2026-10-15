@@ -115,6 +115,14 @@ Branch: `fix/security-integrity-cliva`, com merge na `main` (PR #1, `bdffdaf`) e
 | Domínio personalizado | em breve | arquitetura em `docs/integrations/CUSTOM_DOMAINS.md` |
 | Aplicar 0015 em produção e `CRON_SECRET` na Vercel | autorização | `docs/audit/DEPLOY_SAFE.md` |
 
+## Demonstração e Dashboard real (fora do plano da auditoria)
+
+| Item | Situação | Evidência |
+|---|---|---|
+| Dashboard inicial lê a agenda (antes: zeros fixos em conta real) | feito, testado | `0016_dashboard_home.sql`, `lib/data/home.ts` |
+| Preço por procedimento; receita = atendimentos concluídos | feito, testado | `schedule_procedures.price_cents` |
+| Script de demonstração da Dra. Marina (dados fictícios) e remoção | feito, testado | `supabase/seed/`, `tests/db/demo-seed.test.ts` |
+
 ## Próximas entregas
 
 | Entrega | Itens | Situação |

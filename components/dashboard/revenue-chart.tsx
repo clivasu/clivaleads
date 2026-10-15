@@ -1,24 +1,22 @@
 "use client";
 
-import { useState } from "react";
-import { revenueLabels, revenueRanges, type RevenueRange } from "@/lib/demo-dashboard";
-
-const LABELS = revenueLabels;
+import type { HomeData } from "@/lib/data/home";
 
 const W = 640;
 const H = 280;
-const PAD_L = 44;
+const PAD_L = 52;
 const PAD_R = 12;
 const PAD_T = 24;
 const PAD_B = 34;
-const Y_MAX = 36;
 
-function scaleX(i: number, n: number) {
-  return PAD_L + (i / (n - 1)) * (W - PAD_L - PAD_R);
+// Escala "redonda" acima do maior valor (ex.: 56.380 -> 60.000).
+function niceMax(v: number) {
+  if (v <= 0) return 6000;
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  const steps = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
+  return (steps.find((s) => s * p >= v * 1.08) ?? 10) * p;
 }
-function scaleY(v: number) {
-  return PAD_T + (1 - v / Y_MAX) * (H - PAD_T - PAD_B);
-}
+const short = (v: number) => (v >= 1000 ? `R$${(v / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}k` : `R$${Math.round(v)}`);
 
 // Catmull-Rom -> cubic bezier para uma curva suave.
 function smoothPath(pts: { x: number; y: number }[]) {
@@ -38,47 +36,34 @@ function smoothPath(pts: { x: number; y: number }[]) {
   return d;
 }
 
-export function RevenueChart({ empty = false }: { empty?: boolean }) {
-  const [range, setRange] = useState<RevenueRange>("overview");
-  const data = empty ? revenueRanges[range].map(() => 0) : revenueRanges[range];
-  const pts = data.map((v, i) => ({ x: scaleX(i, data.length), y: scaleY(v) }));
+export function RevenueChart({ data }: { data: HomeData["revenue"] }) {
+  const empty = data.length === 0 || data.every((d) => d.value === 0);
+  const series = data.length > 1 ? data : [{ label: "", value: 0 }, { label: "", value: 0 }];
+  const yMax = niceMax(Math.max(...series.map((d) => d.value)));
+  const scaleX = (i: number) => PAD_L + (i / (series.length - 1)) * (W - PAD_L - PAD_R);
+  const scaleY = (v: number) => PAD_T + (1 - v / yMax) * (H - PAD_T - PAD_B);
+  const pts = series.map((d, i) => ({ x: scaleX(i), y: scaleY(d.value) }));
   const line = smoothPath(pts);
   const area = `${line} L ${pts[pts.length - 1].x} ${H - PAD_B} L ${pts[0].x} ${H - PAD_B} Z`;
 
-  const peakIdx = data.indexOf(Math.max(...data));
+  const peakIdx = series.reduce((mi, d, i, arr) => (d.value > arr[mi].value ? i : mi), 0);
   const peak = pts[peakIdx];
   // Mantém o balão do pico dentro do viewBox (não corta nas bordas).
-  const BALLOON_HW = 46; // meia-largura do balão
+  const BALLOON_HW = 50;
   const balloonCX = Math.min(W - PAD_R - BALLOON_HW, Math.max(PAD_L + BALLOON_HW, peak.x));
-  // Se o pico está muito no topo, joga o balão para baixo do ponto.
   const balloonAbove = peak.y - 34 > PAD_T;
   const balloonY = balloonAbove ? peak.y - 34 : peak.y + 12;
   const balloonTextY = balloonAbove ? peak.y - 19 : peak.y + 27;
-  const gridVals = [0, 6, 12, 18, 24, 30, 36];
+  const gridVals = [0, 1, 2, 3, 4, 5, 6].map((k) => (yMax / 6) * k);
 
   return (
     <div className="rounded-2xl border bg-white p-6 shadow-sm">
-      <div className="mb-4 flex items-start justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">Receita</h2>
-          <p className="text-sm text-slate-400">Desempenho dos últimos meses</p>
-        </div>
-        <div className="flex rounded-full bg-slate-100 p-1 text-xs font-medium">
-          {(["overview", "monthly", "yearly"] as RevenueRange[]).map((r) => (
-            <button
-              key={r}
-              onClick={() => setRange(r)}
-              className={`rounded-full px-3 py-1.5 transition-colors ${
-                range === r ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
-              }`}
-            >
-              {r === "overview" ? "Geral" : r === "monthly" ? "Mensal" : "Anual"}
-            </button>
-          ))}
-        </div>
+      <div className="mb-4">
+        <h2 className="text-lg font-semibold text-slate-900">Receita</h2>
+        <p className="text-sm text-slate-400">Atendimentos concluídos por mês</p>
       </div>
 
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Gráfico de receita">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`Receita mensal: ${data.map((d) => `${d.label} ${short(d.value)}`).join(", ")}`}>
         <defs>
           <linearGradient id="revArea" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#84cc16" stopOpacity="0.28" />
@@ -93,7 +78,7 @@ export function RevenueChart({ empty = false }: { empty?: boolean }) {
             <g key={gv}>
               <line x1={PAD_L} y1={y} x2={W - PAD_R} y2={y} stroke="#f1f5f9" strokeWidth={1} />
               <text x={PAD_L - 10} y={y + 4} textAnchor="end" className="fill-slate-400" fontSize={11}>
-                R${gv.toString().padStart(2, "0")}k
+                {short(gv)}
               </text>
             </g>
           );
@@ -111,7 +96,7 @@ export function RevenueChart({ empty = false }: { empty?: boolean }) {
             <g>
               <rect x={balloonCX - BALLOON_HW} y={balloonY} width={BALLOON_HW * 2} height={22} rx={11} fill="#dcfce7" />
               <text x={balloonCX} y={balloonTextY} textAnchor="middle" className="fill-emerald-700" fontSize={11} fontWeight={600}>
-                R$ {(data[peakIdx] * 1000).toLocaleString("pt-BR")}
+                {series[peakIdx].value.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
               </text>
             </g>
           </>
@@ -123,9 +108,9 @@ export function RevenueChart({ empty = false }: { empty?: boolean }) {
         )}
 
         {/* x labels */}
-        {LABELS.map((l, i) => (
-          <text key={l} x={scaleX(i, LABELS.length)} y={H - 10} textAnchor="middle" className="fill-slate-400" fontSize={11}>
-            {l}
+        {series.map((d, i) => (
+          <text key={`${d.label}-${i}`} x={scaleX(i)} y={H - 10} textAnchor="middle" className="fill-slate-400" fontSize={11}>
+            {d.label}
           </text>
         ))}
       </svg>

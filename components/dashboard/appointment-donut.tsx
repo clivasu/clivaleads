@@ -1,13 +1,11 @@
-import { appointmentStats } from "@/lib/demo-dashboard";
+import type { HomeData } from "@/lib/data/home";
 
 const R = 70;
 const CIRC = 2 * Math.PI * R;
 const GAP = 8; // espaço entre segmentos (px de circunferência)
 
-export function AppointmentDonut({ empty = false }: { empty?: boolean }) {
-  const { total, segments } = empty
-    ? { total: 0, segments: appointmentStats.segments.map((s) => ({ ...s, value: 0 })) }
-    : appointmentStats;
+export function AppointmentDonut({ data }: { data: HomeData["donut"] }) {
+  const { total, segments } = data;
   let offset = 0;
 
   return (
@@ -17,24 +15,14 @@ export function AppointmentDonut({ empty = false }: { empty?: boolean }) {
 
       <div className="flex flex-col items-center">
         <div className="relative">
-          <svg viewBox="0 0 200 200" className="h-52 w-52 -rotate-90">
+          <svg viewBox="0 0 200 200" className="h-52 w-52 -rotate-90" role="img" aria-label={`Consultas do mês: ${segments.map((s) => `${s.label} ${s.value}`).join(", ")}`}>
             <circle cx="100" cy="100" r={R} fill="none" stroke="#f1f5f9" strokeWidth="22" />
             {total > 0 && segments.map((seg) => {
-              const arc = total > 0 ? (seg.value / total) * CIRC : 0;
+              const arc = (seg.value / total) * CIRC;
               const dash = `${Math.max(arc - GAP, 0)} ${CIRC - Math.max(arc - GAP, 0)}`;
               const el = (
-                <circle
-                  key={seg.label}
-                  cx="100"
-                  cy="100"
-                  r={R}
-                  fill="none"
-                  stroke={seg.color}
-                  strokeWidth="22"
-                  strokeLinecap="round"
-                  strokeDasharray={dash}
-                  strokeDashoffset={-offset}
-                />
+                <circle key={seg.label} cx="100" cy="100" r={R} fill="none" stroke={seg.color} strokeWidth="22"
+                  strokeLinecap="round" strokeDasharray={dash} strokeDashoffset={-offset} />
               );
               offset += arc;
               return el;
@@ -50,7 +38,7 @@ export function AppointmentDonut({ empty = false }: { empty?: boolean }) {
           {segments.map((seg) => (
             <div key={seg.label} className="flex items-center gap-2">
               <span className="h-2.5 w-2.5 rounded-full" style={{ background: seg.color }} />
-              <span className="text-xs text-slate-500">{seg.label}</span>
+              <span className="text-xs text-slate-500">{seg.label} <b className="text-slate-700">{seg.value}</b></span>
             </div>
           ))}
         </div>
