@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { UploadButton } from "@/components/bio/upload-button";
 import { createClient } from "@/lib/supabase/client";
+import { syncOrgNameFromOwner } from "@/lib/actions/org";
 
 // Foto de perfil e nome de quem usa a conta (ficam nos dados do usuário).
 export function ProfileForm({ name: initialName, avatarUrl: initialAvatar, email }: { name: string; avatarUrl: string | null; email: string }) {
@@ -20,14 +21,17 @@ export function ProfileForm({ name: initialName, avatarUrl: initialAvatar, email
 
   const initials = (name || email || "?").split(" ").slice(0, 2).map((s) => s.charAt(0).toUpperCase()).join("");
 
-  const save = (nextAvatar = avatar) =>
+  // syncName: ao salvar o nome (não ao trocar só a foto), o nome da clínica
+  // no topo do menu acompanha o da dona da conta.
+  const save = (nextAvatar = avatar, syncName = false) =>
     start(async () => {
       setMsg(null);
       const supabase = createClient();
       const { data, error } = await supabase.auth.updateUser({ data: { full_name: name.trim(), avatar_url: nextAvatar ?? "" } });
       if (error) { setMsg({ ok: false, text: error.message }); return; }
       if (data.user) await supabase.from("profiles").update({ full_name: name.trim() || null }).eq("id", data.user.id);
-      setMsg({ ok: true, text: "Perfil atualizado." });
+      const synced = syncName && name.trim() ? (await syncOrgNameFromOwner(name)).ok : false;
+      setMsg({ ok: true, text: synced ? "Perfil atualizado. O nome no topo do menu também." : "Perfil atualizado." });
       router.refresh();
     });
 
@@ -53,7 +57,7 @@ export function ProfileForm({ name: initialName, avatarUrl: initialAvatar, email
           </div>
         </div>
 
-        <form className="mt-6 flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); save(); }}>
+        <form className="mt-6 flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); save(avatar, true); }}>
           <div className="grid gap-2">
             <Label htmlFor="profile-name">Seu nome</Label>
             <Input id="profile-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Dra. Bárbara" />

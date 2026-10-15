@@ -52,3 +52,26 @@ export async function updateOrg(input: UpdateOrgInput): Promise<{ ok: boolean; e
   revalidatePath("/flows");
   return { ok: true, handle };
 }
+
+// O topo do menu mostra o nome da clínica. Quando a DONA da conta salva o
+// próprio nome no perfil, a clínica passa a ter o mesmo nome.
+export async function syncOrgNameFromOwner(name: string): Promise<{ ok: boolean }> {
+  const clean = name.trim().slice(0, 120);
+  if (!isSupabaseConfigured || !clean) return { ok: false };
+  const org = await getCurrentOrg();
+  if (!org) return { ok: false };
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false };
+  const { data: m } = await supabase
+    .from("organization_members")
+    .select("role")
+    .eq("organization_id", org.id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (m?.role !== "owner") return { ok: false };
+  const { error } = await supabase.from("organizations").update({ name: clean }).eq("id", org.id);
+  if (error) return { ok: false };
+  revalidatePath("/", "layout");
+  return { ok: true };
+}

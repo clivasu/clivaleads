@@ -25,12 +25,14 @@ Documento técnico de apoio. Não substitui avaliação jurídica: as respostas 
 3. **Segredos e contatos internos fora do funil público** (`flow_private_settings`).
 4. **Isolamento entre clínicas** reforçado no banco (RLS + grants), testado em `tests/db/security.test.ts`.
 5. **Logs sem dados pessoais:** as APIs públicas registram só códigos de erro.
-6. **Pixels (Meta, GA4, GTM, TikTok):** os campos existem no editor, mas **não estão ativos** (nenhum script é carregado). Ao ativar (Entrega D): nunca enviar respostas, nome, telefone, e-mail ou score; carregar só após consentimento quando exigido; avaliar à parte qualquer gravação de sessão (ex.: Microsoft Clarity) em formulários de saúde.
+6. **Pixels (Entrega D):** Meta, GA4 e TikTok por ID validado; carregam **só depois de "Aceitar"** no aviso de cookies do funil (obrigatório quando há pixel; "Recusar" impede qualquer carregamento). Eventos enviados: visita, `Lead` (concluiu o funil) e `Contact` (abriu o WhatsApp), **sem parâmetros**. Meta com `autoConfig` desligado e sem correspondência avançada; GA4 sem Google Signals e sem personalização de anúncios. Verificado no navegador: nenhuma requisição antes do consentimento; depois, nenhuma resposta ou dado de contato nas URLs dos pixels. **GTM desativado** (executa scripts livres configurados fora da Cliva). **Microsoft Clarity e gravação de sessão: não usados** no projeto.
+7. **Webhooks (Entrega D):** conteúdo mínimo (contato, procedimento, interesse, origem); respostas do questionário só com opt-in da clínica; assinatura HMAC; destino só `https` público (proteção contra SSRF); histórico sem dados do paciente. Ver `docs/integrations/WEBHOOKS.md`.
+8. **Escolha de cookies** guardada só no navegador do paciente (`localStorage`, por clínica), sem dado pessoal.
 
 ## Pendências (próximas entregas)
 
-- **Exclusão de lead** (direito de eliminação): hoje a exclusão não funciona por falta de policy de DELETE. Corrigir na Entrega B.
+- **Fontes externas:** o site carrega fontes de `api.fontshare.com`, o que envia o IP do visitante a terceiros antes de qualquer consentimento. Hospedar localmente (Entrega E).
 - **Retenção:** definir prazo de guarda dos leads e dos eventos por clínica (sugestão inicial: eventos brutos 13 meses, agregados depois).
 - **Consentimento registrado:** o texto de consentimento do formulário é exibido, mas a escolha não é gravada com data/versão. Avaliar com jurídico se a base legal escolhida exige registro.
 - **Exportação dos dados de um paciente** a pedido da clínica.
-- **Webhooks:** payload mínimo, assinatura HMAC e opt-in explícito para envio de respostas (Entrega D).
+- **Notificação por e-mail/WhatsApp de novo lead:** campos guardados, envio ainda não existe (marcado "em breve").

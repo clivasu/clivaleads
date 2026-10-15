@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, after, type NextRequest } from "next/server";
 import { cookies, headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/env";
@@ -8,6 +8,7 @@ import { issueLeadToken, verifyLeadToken } from "@/lib/security/lead-token";
 import { clientIp, rateLimit } from "@/lib/security/rate-limit";
 import { scoreAnswers, totalFrom } from "@/lib/security/scoring";
 import { tierFromScore } from "@/lib/scoring";
+import { enqueueLeadWebhook, processDelivery, processDueDeliveries } from "@/lib/integrations/webhook-outbox";
 import type { FlowStep } from "@/lib/types";
 
 // Captura de leads dos funis públicos (sem login do paciente).
@@ -155,6 +156,19 @@ export async function POST(request: NextRequest) {
     });
     if (evError && evError.code !== "23505") console.warn("[sessions] evento lead_qualified não gravado", evError.code);
   }
+
+  // Webhook do CRM: entra na fila agora e é enviado depois da resposta ao
+  // paciente (nunca atrasa nem quebra o funil). Aproveita para tentar de novo
+  // entregas antigas que estejam vencidas.
+  const deliveryId = await enqueueLeadWebhook(supabase, { organizationId: organization_id, flowId: flow.id, leadId: session.id });
+  after(async () => {
+    try {
+      if (deliveryId) await processDelivery(supabase, deliveryId);
+      await processDueDeliveries(supabase, 5);
+    } catch (e) {
+      console.error("[webhook] falha ao processar fila", (e as { code?: string })?.code ?? "erro");
+    }
+  });
 
   return NextResponse.json({ ok: true, id: session.id, token: issueLeadToken(session.id), score });
 }

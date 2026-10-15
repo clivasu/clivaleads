@@ -39,15 +39,19 @@ import { track, detectBrowser, detectDevice } from "@/lib/tracking";
 import { BeforeAfterView } from "@/components/flow-runner/before-after";
 import { cn } from "@/lib/utils";
 import { EXIT_DEFAULTS, GOTO_EXIT, lastMainIndex, nextLinear, resolveGoto } from "@/lib/flow-logic";
+import type { PublicFunnelConfig } from "@/lib/public-funnel-config";
+import { CookieSettingsLink } from "@/components/flow-runner/marketing-pixels";
 
 export function FlowRunner({
   flow,
   preview = false,
   theme,
+  config,
 }: {
   flow: PublicFlow;
   preview?: boolean;
   theme?: Partial<FlowTheme>;
+  config?: PublicFunnelConfig; // configuração pública validada (só nas páginas públicas)
 }) {
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<LeadAnswer[]>([]);
@@ -84,6 +88,17 @@ export function FlowRunner({
   const waTrackedRef = useRef(false);
   type Conversion = "whatsapp" | "final_cta";
   const pendingConvRef = useRef<Set<Conversion>>(new Set());
+  const redirectedRef = useRef(false);
+
+  // "Redirecionar após conversão": leva a página para o link da clínica
+  // (https validado no servidor) logo depois do clique final. O WhatsApp abre
+  // em outra aba; esta segue para o link.
+  const redirectAfterConversion = () => {
+    const url = config?.redirectUrl;
+    if (preview || !url || redirectedRef.current) return;
+    redirectedRef.current = true;
+    setTimeout(() => { window.location.assign(url); }, 900);
+  };
 
   // Visita: a página do funil abriu (uma vez por carregamento).
   useEffect(() => {
@@ -137,7 +152,7 @@ export function FlowRunner({
   const persistSession = (finalAnswers: LeadAnswer[], finalContact: ContactInfo, conversion?: Conversion, disqualified = false) => {
     if (preview) return;
     markStarted();
-    if (conversion) pendingConvRef.current.add(conversion);
+    if (conversion) { pendingConvRef.current.add(conversion); redirectAfterConversion(); }
     if (completedRef.current) {
       if (conversion) markConverted(conversion);
       return;
@@ -308,7 +323,7 @@ export function FlowRunner({
           }} />
         );
       }
-      case "form": return <FormStep step={blk} onSubmit={(cc) => {
+      case "form": return <FormStep step={blk.config.consent || !config?.consent.text ? blk : { ...blk, config: { ...blk.config, consent: config.consent.text } }} onSubmit={(cc) => {
         const merged = { ...contact, ...cc };
         setContact(merged);
         // Formulário como etapa final: registra o lead com o contato preenchido.
@@ -423,7 +438,13 @@ export function FlowRunner({
         </footer>
       )}
 
-      <p className="pt-6 text-center text-[11px] text-slate-300">Feito com Cliva</p>
+      <div className="flex items-center justify-center gap-3 pt-6 text-[11px] text-slate-300">
+        <span>Feito com Cliva</span>
+        {config?.consent.privacyUrl && (
+          <a href={config.consent.privacyUrl} target="_blank" rel="noopener noreferrer" className="text-slate-400 underline-offset-2 hover:underline">Privacidade</a>
+        )}
+        {config?.consent.banner && <CookieSettingsLink />}
+      </div>
     </div>
   );
 }

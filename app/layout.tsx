@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Poppins, Libre_Franklin, Roboto, PT_Serif, Playfair_Display, Dancing_Script } from "next/font/google";
 import "./globals.css";
+import { siteUrl } from "@/lib/site-url";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -16,6 +17,7 @@ const dancing = Dancing_Script({ subsets: ["latin"], weight: ["400", "600", "700
 const fontVars = `${inter.variable} ${poppins.variable} ${franklin.variable} ${roboto.variable} ${ptSerif.variable} ${playfair.variable} ${dancing.variable}`;
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl()),
   title: "Cliva — Funis de pré-atendimento para clínicas",
   description:
     "Transforme leads frios de anúncios em contatos qualificados antes do WhatsApp.",

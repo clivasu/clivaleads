@@ -7,6 +7,8 @@ import { getCurrentOrg } from "@/lib/data/org";
 import type { FlowStep } from "@/lib/types";
 import { prepareStepsForSave, type IdMap, type StepRow } from "@/lib/flow-persistence";
 import { splitSettings } from "@/lib/flow-settings";
+import { validateWebhookUrl } from "@/lib/integrations/webhook-core";
+import { normalizePublicSettings } from "@/lib/public-funnel-config";
 import { getBillingState } from "@/lib/data/billing";
 
 export interface SaveFlowInput {
@@ -69,9 +71,13 @@ export async function saveFlow(input: SaveFlowInput): Promise<ActionResult> {
   // Integrações e contatos internos não vão para flows.settings (lido pelo
   // público): ficam em flow_private_settings.
   const { publicSettings, privateSettings } = splitSettings(input.settings);
-  if (privateSettings.webhook_url && !/^https:\/\//i.test(privateSettings.webhook_url)) {
-    return { ok: false, error: "A URL do webhook precisa começar com https://" };
+  if (privateSettings.webhook_url) {
+    const check = validateWebhookUrl(privateSettings.webhook_url);
+    if (!check.ok) return { ok: false, error: `Webhook: ${check.error}` };
   }
+  // Pixels, SEO e links públicos: só valores válidos (IDs, https).
+  const normalized = normalizePublicSettings(publicSettings);
+  if (normalized.errors.length > 0) return { ok: false, error: normalized.errors[0] };
 
   const { rows, idMap } = prepareStepsForSave(input.steps);
   const flowPatch = {
@@ -83,7 +89,7 @@ export async function saveFlow(input: SaveFlowInput): Promise<ActionResult> {
     whatsapp_number: input.whatsapp || null,
     final_message: input.finalMessage || null,
     cover_image_url: input.coverImageUrl ?? null,
-    settings: publicSettings,
+    settings: normalized.settings,
   };
 
   // Funil + etapas numa única transação no banco (RLS: só owner/admin).
@@ -108,12 +114,16 @@ export async function saveFlow(input: SaveFlowInput): Promise<ActionResult> {
 
   // Passou pela RLS (owner/admin): grava as privadas pelo servidor.
   const { createAdminClient } = await import("@/lib/supabase/server");
-  const { error: privErr } = await createAdminClient()
+  const privRow = { flow_id: input.id, organization_id: orgId, ...privateSettings, updated_at: new Date().toISOString() };
+  let { error: privErr } = await createAdminClient()
     .from("flow_private_settings")
-    .upsert(
-      { flow_id: input.id, organization_id: orgId, ...privateSettings, updated_at: new Date().toISOString() },
-      { onConflict: "flow_id" },
-    );
+    .upsert(privRow, { onConflict: "flow_id" });
+  // Banco sem a 0015 (coluna webhook_include_answers): grava sem ela.
+  if (privErr && (privErr.code === "42703" || privErr.code === "PGRST204")) {
+    const { webhook_include_answers: _omit, ...legacy } = privRow;
+    void _omit;
+    ({ error: privErr } = await createAdminClient().from("flow_private_settings").upsert(legacy, { onConflict: "flow_id" }));
+  }
   // Tabela ainda não criada (migration 0010 não aplicada): segue sem as privadas.
   if (privErr && privErr.code !== "42P01" && privErr.code !== "PGRST205") return { ok: false, error: privErr.message };
 

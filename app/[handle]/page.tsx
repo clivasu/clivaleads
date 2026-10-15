@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { getPublicOrgFunnels } from "@/lib/data/flows";
 import { getPublicBioByHandle } from "@/lib/data/bio";
 import { BioRenderer } from "@/components/bio/bio-renderer";
+import { siteUrl } from "@/lib/site-url";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +15,10 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { handle } = await params;
   const bio = await getPublicBioByHandle(handle);
-  if (bio) return { title: bio.config.name, description: bio.config.tagline };
+  const canonical = `${siteUrl()}/${handle.toLowerCase()}`;
+  if (bio) return { title: bio.config.name, description: bio.config.tagline, alternates: { canonical } };
   const data = await getPublicOrgFunnels(handle);
-  return { title: data ? data.org.name : "Página não encontrada" };
+  return data ? { title: data.org.name, alternates: { canonical } } : { title: "Página não encontrada", robots: { index: false } };
 }
 
 export default async function HandleIndexPage({
