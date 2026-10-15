@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Sparkles, Minus, Maximize2, Play, Pause, BarChart3, X } from "lucide-react";
+import { Plus, Sparkles, Minus, Maximize2, Play, Pause, BarChart3, X, Users } from "lucide-react";
 import type { FlowStep, StepType } from "@/lib/types";
 import { BLOCK_CATALOG } from "@/lib/block-catalog";
 import { computeFlowMetrics, type JourneyLead, buildJourneys } from "@/lib/flow-journeys";
@@ -152,11 +152,10 @@ export function FlowCanvas({
   const journeys = useMemo(() => buildJourneys(steps, leads), [steps, leads]);
   const hasLeads = leads.length > 0;
 
-  /* ---------------- simulação: bolinhas seguindo a linha + borda do card ---------------- */
+  /* ---------------- simulação: bolinhas seguindo as linhas ---------------- */
   const [playing, setPlaying] = useState(false);
   const [runId, setRunId] = useState(0);
   const ballEls = useRef<(HTMLDivElement | null)[]>([]);
-  const traceEls = useRef<(SVGRectElement | null)[]>([]);
 
   const animBalls: AnimBall[] = useMemo(() => {
     return journeys.slice(0, MAX_BALLS).map((j, idx) => {
@@ -179,18 +178,14 @@ export function FlowCanvas({
     const start = performance.now();
     const loop = (now: number) => {
       const t = (now - start) % cycle;
-      traceEls.current.forEach((el) => { if (el) el.style.opacity = "0"; });
       animBalls.forEach((b, bi) => {
         const el = ballEls.current[bi];
         if (!el) return;
         const local = t - b.delay;
         if (local < 0 || local > b.total) { el.style.opacity = "0"; return; }
         const ph = phaseAt(b, local);
-        if (ph.kind === "card") {
-          el.style.opacity = "0";
-          const tr = traceEls.current[ph.node];
-          if (tr) { tr.style.stroke = b.color; tr.style.opacity = "1"; tr.style.strokeDashoffset = String(Math.max(0, 1 - ph.prog)); }
-        } else if (ph.kind === "line") {
+        // Dentro do card a bolinha some (sem luz na borda) e reaparece na próxima linha.
+        if (ph.kind === "line") {
           const pt = bezierAt(b.segs[ph.seg], ph.prog);
           el.style.opacity = "1";
           el.style.transform = `translate(${pt.x}px, ${pt.y}px) translate(-50%, -50%)`;
@@ -371,6 +366,7 @@ export function FlowCanvas({
           {nodes.map((n) => {
             const m = metrics.perStep[n.i];
             const cor = m && m.dropPct >= 15 ? "text-rose-600" : m && m.dropPct >= 8 ? "text-amber-600" : "text-emerald-600";
+            const stoppedHeads = m ? [...m.exits.map((e) => ({ ...e, completed: false })), ...m.completed.map((e) => ({ ...e, completed: true }))] : [];
             return (
             <div key={n.step.id} className="absolute" style={{ left: n.x, top: n.y, width: NODE_W }}>
               <div
@@ -435,21 +431,24 @@ export function FlowCanvas({
                 {!n.isChoice && <span className="absolute -right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border-2 border-white bg-slate-300" />}
               </div>
 
+              {/* Bloco de saída abaixo — cabecinhas 3D de quem parou aqui */}
+              {stoppedHeads.length > 0 && (
+                <div className="mt-2 rounded-lg border border-slate-200 bg-white/95 px-2 py-1.5 shadow-sm">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {stoppedHeads.slice(0, 5).map((h, hi) => (
+                      <span key={h.id + hi} className="flex items-center gap-1" title={`${h.name} — ${h.completed ? "concluiu" : "saiu aqui"}`}>
+                        <Head3D completed={h.completed} />
+                        <span className="max-w-[52px] truncate text-[10px] font-medium text-slate-600">{h.name}</span>
+                      </span>
+                    ))}
+                    {stoppedHeads.length > 5 && (
+                      <span className="text-[10px] font-semibold text-slate-400">+{stoppedHeads.length - 5}</span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           );})}
-
-          {/* Overlay de animação: borda dos cards se completando (por cima) */}
-          <svg width={bounds.w} height={bounds.h} className="pointer-events-none absolute left-0 top-0 z-10 overflow-visible">
-            {nodes.map((n, i) => (
-              <rect
-                key={"tr" + n.step.id}
-                ref={(el) => { traceEls.current[i] = el; }}
-                x={n.x} y={n.y} width={NODE_W} height={n.h} rx={12}
-                fill="none" strokeWidth={2.5} pathLength={1} strokeLinecap="round"
-                style={{ strokeDasharray: 1, strokeDashoffset: 1, opacity: 0, stroke: "#6366f1" }}
-              />
-            ))}
-          </svg>
 
           {/* Overlay de animação: bolinhas percorrendo as linhas */}
           <div className="pointer-events-none absolute left-0 top-0 z-10">
@@ -468,6 +467,22 @@ export function FlowCanvas({
         </div>
       </div>
     </div>
+  );
+}
+
+// Cabecinha 3D (verde = concluiu / vermelho = saiu do fluxo).
+function Head3D({ completed }: { completed: boolean }) {
+  const c = completed ? { a: "#34d399", b: "#059669" } : { a: "#fb7185", b: "#e11d48" };
+  return (
+    <span
+      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+      style={{
+        background: `radial-gradient(circle at 32% 28%, ${c.a}, ${c.b})`,
+        boxShadow: `inset 0 1px 1.5px rgba(255,255,255,.55), inset 0 -2px 3px rgba(0,0,0,.28), 0 1.5px 3px rgba(0,0,0,.25)`,
+      }}
+    >
+      <Users className="h-2.5 w-2.5 text-white/95" />
+    </span>
   );
 }
 
