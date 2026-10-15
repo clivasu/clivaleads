@@ -66,11 +66,28 @@ describe("demonstração Dra. Marina", () => {
     expect(aug).toBeLessThan(75000);
     expect(home.kpis.professionals).toBe(1);
 
+    // dashboard por período: soma da série = faturamento; agosto inteiro por mês
+    const per = await as(db, { role: "authenticated", userId: owner.userId }, async (q) =>
+      (await q<{ p: { kpis: Record<string, number>; series: { bucket: string; revenue_cents: number | null; done: number | null }[]; donut: Record<string, number> } }>(
+        `select dashboard_period($1, '2026-08-01T03:00:00Z', '2026-09-01T03:00:00Z', 'day') as p`, [owner.orgId])).rows[0].p);
+    expect(per.series.length).toBe(31);
+    expect(per.series.reduce((a, x) => a + (x.revenue_cents ?? 0), 0)).toBe(per.kpis.revenue_cents);
+    expect(per.kpis.revenue_cents / 100).toBe(aug);
+    expect(per.series.find((x) => x.bucket === "2026-08-02")!.done).toBe(0); // domingo
+    const yr = await as(db, { role: "authenticated", userId: owner.userId }, async (q) =>
+      (await q<{ p: { series: { bucket: string; revenue_cents: number | null }[] } }>(
+        `select dashboard_period($1, '2026-01-01T03:00:00Z', '2027-01-01T03:00:00Z', 'month') as p`, [owner.orgId])).rows[0].p);
+    expect(yr.series.map((x) => x.bucket.slice(0, 7))).toContain("2026-08");
+    expect(yr.series.find((x) => x.bucket.startsWith("2026-12"))!.revenue_cents).toBeNull(); // futuro: linha para hoje
+
     // outra clínica não enxerga o dashboard da Dra. Marina, nem pedindo o id
     const spy = await as(db, { role: "authenticated", userId: other.userId }, async (q) =>
       (await q<{ h: { kpis: Record<string, number>; today: unknown[] } }>(`select dashboard_home($1) as h`, [owner.orgId])).rows[0].h);
     expect(spy.kpis).toMatchObject({ patients: 0, appointments: 0, revenue_cents: 0 });
     expect(spy.today).toEqual([]);
+    const spyPer = await as(db, { role: "authenticated", userId: other.userId }, async (q) =>
+      (await q<{ p: { kpis: Record<string, number> } }>(`select dashboard_period($1, '2026-08-01T03:00:00Z', '2026-09-01T03:00:00Z') as p`, [owner.orgId])).rows[0].p);
+    expect(spyPer.kpis).toMatchObject({ revenue_cents: 0, appointments: 0 });
 
     // outra clínica intacta
     const otherRows = await one<{ n: number }>(`select (select count(*) from flows where organization_id = $1) + (select count(*) from schedule_appointments where organization_id = $1) as n`, [other.orgId]);

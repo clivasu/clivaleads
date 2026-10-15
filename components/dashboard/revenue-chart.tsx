@@ -1,119 +1,98 @@
 "use client";
 
+import { useTransition } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { HomeData } from "@/lib/data/home";
+import type { DashBucket } from "@/lib/dashboard-period";
 
-const W = 640;
-const H = 280;
-const PAD_L = 52;
-const PAD_R = 12;
-const PAD_T = 24;
-const PAD_B = 34;
-
-// Escala "redonda" acima do maior valor (ex.: 56.380 -> 60.000).
-function niceMax(v: number) {
-  if (v <= 0) return 6000;
-  const p = Math.pow(10, Math.floor(Math.log10(v)));
-  const steps = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
-  return (steps.find((s) => s * p >= v * 1.08) ?? 10) * p;
-}
+// Faturamento (atendimentos concluídos × preço) e quantidade de atendimentos
+// ao longo do período, por dia, mês ou ano. A linha termina no dia de hoje.
+const C = { revenue: "#16a34a", done: "#4a3aa7", grid: "#e9edf2", axis: "#94a3b8" };
+const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const short = (v: number) => (v >= 1000 ? `R$${(v / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}k` : `R$${Math.round(v)}`);
 
-// Catmull-Rom -> cubic bezier para uma curva suave.
-function smoothPath(pts: { x: number; y: number }[]) {
-  if (pts.length < 2) return "";
-  let d = `M ${pts[0].x} ${pts[0].y}`;
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[i - 1] ?? pts[i];
-    const p1 = pts[i];
-    const p2 = pts[i + 1];
-    const p3 = pts[i + 2] ?? p2;
-    const c1x = p1.x + (p2.x - p0.x) / 6;
-    const c1y = p1.y + (p2.y - p0.y) / 6;
-    const c2x = p2.x - (p3.x - p1.x) / 6;
-    const c2y = p2.y - (p3.y - p1.y) / 6;
-    d += ` C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p2.x} ${p2.y}`;
-  }
-  return d;
+function label(bucket: string, unit: DashBucket, long = false) {
+  const [y, m, d] = bucket.split("-");
+  if (unit === "year") return y;
+  if (unit === "month") return long ? `${MONTHS[Number(m) - 1]}/${y}` : MONTHS[Number(m) - 1];
+  return long ? `${d}/${m}/${y}` : `${d}/${m}`;
 }
 
-export function RevenueChart({ data }: { data: HomeData["revenue"] }) {
-  const empty = data.length === 0 || data.every((d) => d.value === 0);
-  const series = data.length > 1 ? data : [{ label: "", value: 0 }, { label: "", value: 0 }];
-  const yMax = niceMax(Math.max(...series.map((d) => d.value)));
-  const scaleX = (i: number) => PAD_L + (i / (series.length - 1)) * (W - PAD_L - PAD_R);
-  const scaleY = (v: number) => PAD_T + (1 - v / yMax) * (H - PAD_T - PAD_B);
-  const pts = series.map((d, i) => ({ x: scaleX(i), y: scaleY(d.value) }));
-  const line = smoothPath(pts);
-  const area = `${line} L ${pts[pts.length - 1].x} ${H - PAD_B} L ${pts[0].x} ${H - PAD_B} Z`;
+const UNITS: [DashBucket, string][] = [["day", "Dia"], ["month", "Mês"], ["year", "Ano"]];
 
-  const peakIdx = series.reduce((mi, d, i, arr) => (d.value > arr[mi].value ? i : mi), 0);
-  const peak = pts[peakIdx];
-  // Mantém o balão do pico dentro do viewBox (não corta nas bordas).
-  const BALLOON_HW = 50;
-  const balloonCX = Math.min(W - PAD_R - BALLOON_HW, Math.max(PAD_L + BALLOON_HW, peak.x));
-  const balloonAbove = peak.y - 34 > PAD_T;
-  const balloonY = balloonAbove ? peak.y - 34 : peak.y + 12;
-  const balloonTextY = balloonAbove ? peak.y - 19 : peak.y + 27;
-  const gridVals = [0, 1, 2, 3, 4, 5, 6].map((k) => (yMax / 6) * k);
+export function RevenueChart({ series, bucket, totals }: Pick<HomeData, "series" | "bucket" | "totals">) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const [pending, start] = useTransition();
+  const empty = series.every((p) => !p.revenue && !p.done);
+
+  const setUnit = (u: DashBucket) => {
+    const q = new URLSearchParams(params.toString());
+    q.set("agrupar", u);
+    start(() => router.push(`${pathname}?${q.toString()}`, { scroll: false }));
+  };
 
   return (
     <div className="rounded-2xl border bg-white p-6 shadow-sm">
-      <div className="mb-4">
-        <h2 className="text-lg font-semibold text-slate-900">Receita</h2>
-        <p className="text-sm text-slate-400">Atendimentos concluídos por mês</p>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">Faturamento × atendimentos</h2>
+          <p className="text-sm text-slate-400">
+            <b className="font-semibold text-slate-700">{brl(totals.revenue)}</b> em <b className="font-semibold text-slate-700">{totals.done.toLocaleString("pt-BR")}</b> atendimentos concluídos no período
+          </p>
+        </div>
+        <div className={`flex rounded-full bg-slate-100 p-1 text-xs font-medium ${pending ? "opacity-60" : ""}`} role="group" aria-label="Agrupar por">
+          {UNITS.map(([u, l]) => (
+            <button key={u} type="button" aria-pressed={bucket === u} onClick={() => setUnit(u)}
+              className={`rounded-full px-3 py-1.5 transition-colors ${bucket === u ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}>
+              {l}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`Receita mensal: ${data.map((d) => `${d.label} ${short(d.value)}`).join(", ")}`}>
-        <defs>
-          <linearGradient id="revArea" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#84cc16" stopOpacity="0.28" />
-            <stop offset="100%" stopColor="#84cc16" stopOpacity="0" />
-          </linearGradient>
-        </defs>
+      <div className="mb-2 flex gap-4 text-xs text-slate-500">
+        <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: C.revenue }} /> Faturamento</span>
+        <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: C.done }} /> Atendimentos</span>
+      </div>
 
-        {/* gridlines + y labels */}
-        {gridVals.map((gv) => {
-          const y = scaleY(gv);
-          return (
-            <g key={gv}>
-              <line x1={PAD_L} y1={y} x2={W - PAD_R} y2={y} stroke="#f1f5f9" strokeWidth={1} />
-              <text x={PAD_L - 10} y={y + 4} textAnchor="end" className="fill-slate-400" fontSize={11}>
-                {short(gv)}
-              </text>
-            </g>
-          );
-        })}
-
-        {/* área + linha */}
-        <path d={area} fill="url(#revArea)" />
-        <path d={line} fill="none" stroke="#84cc16" strokeWidth={3} strokeLinecap="round" />
-
-        {/* pico + balão (só quando há dados) */}
-        {!empty && (
-          <>
-            <line x1={peak.x} y1={peak.y} x2={peak.x} y2={H - PAD_B} stroke="#cbd5e1" strokeWidth={1} strokeDasharray="3 3" />
-            <circle cx={peak.x} cy={peak.y} r={5} fill="#84cc16" stroke="#fff" strokeWidth={2} />
-            <g>
-              <rect x={balloonCX - BALLOON_HW} y={balloonY} width={BALLOON_HW * 2} height={22} rx={11} fill="#dcfce7" />
-              <text x={balloonCX} y={balloonTextY} textAnchor="middle" className="fill-emerald-700" fontSize={11} fontWeight={600}>
-                {series[peakIdx].value.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
-              </text>
-            </g>
-          </>
-        )}
-        {empty && (
-          <text x={W / 2} y={H / 2} textAnchor="middle" className="fill-slate-300" fontSize={13} fontWeight={500}>
-            Sem receita registrada ainda
-          </text>
-        )}
-
-        {/* x labels */}
-        {series.map((d, i) => (
-          <text key={`${d.label}-${i}`} x={scaleX(i)} y={H - 10} textAnchor="middle" className="fill-slate-400" fontSize={11}>
-            {d.label}
-          </text>
-        ))}
-      </svg>
+      {empty ? (
+        <p className="flex h-[260px] items-center justify-center text-sm text-slate-400">Nenhum atendimento concluído neste período.</p>
+      ) : (
+        <ResponsiveContainer width="100%" height={260}>
+          <ComposedChart data={series} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="revFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={C.revenue} stopOpacity={0.22} />
+                <stop offset="100%" stopColor={C.revenue} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid stroke={C.grid} vertical={false} />
+            <XAxis dataKey="bucket" tickFormatter={(b: string) => label(b, bucket)} tick={{ fill: C.axis, fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={14} />
+            <YAxis yAxisId="r" tickFormatter={short} tick={{ fill: C.axis, fontSize: 11 }} tickLine={false} axisLine={false} width={56} />
+            <YAxis yAxisId="n" orientation="right" allowDecimals={false} tick={{ fill: C.axis, fontSize: 11 }} tickLine={false} axisLine={false} width={32} />
+            <Tooltip
+              content={({ active, label: l, payload }) => {
+                if (!active || !payload?.length) return null;
+                const p = payload[0]?.payload as { revenue: number | null; done: number | null };
+                return (
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs shadow-lg">
+                    <p className="mb-1 font-semibold text-slate-900">{label(String(l), bucket, true)}</p>
+                    <p className="flex items-center gap-2 text-slate-600"><span className="h-2 w-2 rounded-full" style={{ background: C.revenue }} />Faturamento: <b className="text-slate-900">{brl(p.revenue ?? 0)}</b></p>
+                    <p className="flex items-center gap-2 text-slate-600"><span className="h-2 w-2 rounded-full" style={{ background: C.done }} />Atendimentos: <b className="text-slate-900">{p.done ?? 0}</b></p>
+                    {p.done ? <p className="mt-1 text-slate-400">Ticket médio: {brl((p.revenue ?? 0) / p.done)}</p> : null}
+                  </div>
+                );
+              }}
+            />
+            <Area yAxisId="r" type="monotone" dataKey="revenue" stroke={C.revenue} strokeWidth={2.5} fill="url(#revFill)" connectNulls={false} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff" }} />
+            <Line yAxisId="n" type="monotone" dataKey="done" stroke={C.done} strokeWidth={2} dot={false} connectNulls={false} activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff" }} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      )}
     </div>
   );
 }

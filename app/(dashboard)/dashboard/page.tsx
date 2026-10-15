@@ -15,6 +15,8 @@ import { AppointmentDonut } from "@/components/dashboard/appointment-donut";
 import { isSupabaseConfigured } from "@/lib/env";
 import { getCurrentOrg, getNavInfo } from "@/lib/data/org";
 import { getHomeData } from "@/lib/data/home";
+import { resolveDashPeriod } from "@/lib/dashboard-period";
+import { PeriodPicker } from "@/components/dashboard/period-picker";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +53,7 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   cancelled: { label: "Cancelado", cls: "bg-rose-100 text-rose-700" },
 };
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   // Fuso de Brasília no servidor; o navegador ajusta para a hora local.
   const TZ = "America/Sao_Paulo";
   const now = new Date();
@@ -62,9 +64,10 @@ export default async function DashboardPage() {
   const demo = !isSupabaseConfigured;
   const nav = await getNavInfo();
   const greetName = demo ? "Dra. Sarah" : (firstName(nav.userName) || nav.orgName || "por aqui");
-  // Conta real: números da agenda (0016). Demo: vitrine estática.
+  // Conta real: números da agenda (0016/0017) no período escolhido. Demo: vitrine.
+  const period = resolveDashPeriod(await searchParams, now);
   const org = demo ? null : await getCurrentOrg();
-  const home = await getHomeData(org?.id ?? "");
+  const home = await getHomeData(org?.id ?? "", period);
   const kpis = home.kpis;
   const todayAppointments = home.today;
   const recentPatients = home.recent;
@@ -88,6 +91,15 @@ export default async function DashboardPage() {
             Clínica aberta
           </span>
         </div>
+      </div>
+
+      {/* Período (indicadores, gráfico e consultas seguem a escolha) */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-slate-800">{period.label}</h2>
+          <p className="text-xs text-slate-400">Faturamento conta só atendimentos concluídos.</p>
+        </div>
+        <PeriodPicker current={period.key} de={period.de} ate={period.ate} agrupar={period.bucketAuto ? null : period.bucket} compareLabel={period.compareLabel} />
       </div>
 
       {/* KPI cards (clínica) */}
@@ -129,9 +141,9 @@ export default async function DashboardPage() {
       {/* Revenue + donut */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <RevenueChart data={home.revenue} />
+          <RevenueChart series={home.series} bucket={home.bucket} totals={home.totals} />
         </div>
-        <AppointmentDonut data={home.donut} />
+        <AppointmentDonut data={home.donut} subtitle={period.label} />
       </div>
 
       {/* Today's appointments + recent patients */}

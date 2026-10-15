@@ -4,14 +4,14 @@ const R = 70;
 const CIRC = 2 * Math.PI * R;
 const GAP = 8; // espaço entre segmentos (px de circunferência)
 
-export function AppointmentDonut({ data }: { data: HomeData["donut"] }) {
+export function AppointmentDonut({ data, subtitle = "Este mês" }: { data: HomeData["donut"]; subtitle?: string }) {
   const { total, segments } = data;
   let offset = 0;
 
   return (
     <div className="rounded-2xl border bg-white p-6 shadow-sm">
       <h2 className="text-lg font-semibold text-slate-900">Consultas</h2>
-      <p className="mb-4 text-sm text-slate-400">Distribuição deste mês</p>
+      <p className="mb-4 text-sm text-slate-400">{subtitle}</p>
 
       <div className="flex flex-col items-center">
         <div className="relative">
@@ -34,11 +34,15 @@ export function AppointmentDonut({ data }: { data: HomeData["donut"] }) {
           </div>
         </div>
 
-        <div className="mt-5 flex w-full items-center justify-center gap-5">
+        {/* legenda em 3 colunas: cabe no cartão em qualquer largura */}
+        <div className="mt-5 grid w-full grid-cols-3 gap-2">
           {segments.map((seg) => (
-            <div key={seg.label} className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full" style={{ background: seg.color }} />
-              <span className="text-xs text-slate-500">{seg.label} <b className="text-slate-700">{seg.value}</b></span>
+            <div key={seg.label} className="flex min-w-0 flex-col items-center text-center">
+              <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: seg.color }} />
+                <span className="truncate">{seg.label}</span>
+              </span>
+              <b className="text-sm text-slate-800">{seg.value}</b>
             </div>
           ))}
         </div>
