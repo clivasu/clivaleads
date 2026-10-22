@@ -40,6 +40,7 @@ export type StepType =
   | "chart_growth" // gráfico cartesiano animado (Você vs Concorrência)
   | "exit" // final alternativo: sem interesse / fora do perfil (só por desvio)
   | "chart_gauge" // gráfico circular animado (%)
+  | "booking" // agendamento online: paciente escolhe dia/horário livre da agenda
   | "cta" // chamada para ação
   | "result" // resultado personalizado por score
   | "whatsapp"; // envio final para o WhatsApp
@@ -153,6 +154,13 @@ export interface ContactInfo {
 
 // Shape of flow_steps.config (JSONB) por tipo de bloco. Permissivo de propósito.
 export interface StepConfig {
+  // booking (agendamento online)
+  booking_procedure?: string;     // nome do procedimento (igual ao da Agenda)
+  booking_duration?: number;      // minutos; vazio = duração do procedimento na Agenda
+  booking_professional?: string;  // "any" ou id do profissional
+  booking_ask_contact?: boolean;  // pedir nome/WhatsApp no bloco se ainda não houver
+  booking_success_title?: string;
+  booking_success_body?: string;
   key?: string;
   title?: string;
   subtitle?: string;

@@ -5,7 +5,9 @@ import { getScheduleData } from "@/lib/data/schedule";
 
 export const dynamic = "force-dynamic";
 
-export default async function SchedulePage() {
+export default async function SchedulePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const raw = (await searchParams).data;
+  const initialDate = Array.isArray(raw) ? raw[0] : raw;
   const org = await getCurrentOrg();
   const initial = org && isSupabaseConfigured ? await getScheduleData(org.id) : undefined;
   return (
@@ -15,7 +17,7 @@ export default async function SchedulePage() {
         <p className="text-sm text-slate-500">Agendamentos por profissional.</p>
       </div>
       {/* Banco (0012) quando disponível; senão a agenda antiga no navegador. Demo mostra exemplos. */}
-      <ScheduleBoard demo={!isSupabaseConfigured} storageKey={org?.id} initial={initial} />
+      <ScheduleBoard demo={!isSupabaseConfigured} storageKey={org?.id} initial={initial} initialDate={initialDate} />
     </div>
   );
 }

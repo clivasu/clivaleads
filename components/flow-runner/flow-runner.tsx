@@ -41,6 +41,7 @@ import { cn } from "@/lib/utils";
 import { EXIT_DEFAULTS, GOTO_EXIT, lastMainIndex, nextLinear, resolveGoto } from "@/lib/flow-logic";
 import type { PublicFunnelConfig } from "@/lib/public-funnel-config";
 import { CookieSettingsLink } from "@/components/flow-runner/marketing-pixels";
+import { BookingStep } from "@/components/flow-runner/booking-step";
 
 export function FlowRunner({
   flow,
@@ -60,6 +61,7 @@ export function FlowRunner({
   const completedRef = useRef(false);
   const sessionIdRef = useRef<string | null>(null);
   const sessionTokenRef = useRef<string | null>(null); // prova de posse para o PATCH
+  const bookingRef = useRef<{ id: string; token: string } | null>(null); // agendamento feito no bloco "Agendamento"
   // Identifica este lead em reenvios (retry/refresh) para o servidor não duplicar.
   const clientRefRef = useRef<string>(typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : "");
 
@@ -169,6 +171,7 @@ export function FlowRunner({
       whatsapp_clicked: sent.has("whatsapp"),
       final_cta_clicked: sent.has("final_cta"),
       disqualified,
+      booking: bookingRef.current ?? undefined,
       device: detectDevice(),
       browser: detectBrowser(),
       entry_page: typeof window !== "undefined" ? window.location.pathname : undefined,
@@ -295,6 +298,31 @@ export function FlowRunner({
             else pushAnswer(ans, dest);
           }} />
         );
+      case "booking": return (
+        <BookingStep
+          step={blk}
+          flowId={flow.id}
+          clinicName={flow.organization.name}
+          preview={preview}
+          contact={contact}
+          getLead={() => (sessionIdRef.current && sessionTokenRef.current && sessionIdRef.current !== "demo-session" ? { id: sessionIdRef.current, token: sessionTokenRef.current } : null)}
+          onDone={(b) => {
+            if (b.token) bookingRef.current = { id: b.id, token: b.token };
+            const merged = { ...contact, name: contact.name || b.name, phone: contact.phone || b.phone };
+            setContact(merged);
+            const [y, m, d] = b.date.split("-");
+            const ans: LeadAnswer = {
+              question_title: blk.config.title || "Agendamento",
+              answer_value: `${b.date} ${b.time}`,
+              answer_label: `${d}/${m}/${y} às ${b.time} — ${b.procedure}`,
+              score: 0,
+            };
+            // Agendamento como etapa final: registra o lead já agendado.
+            if (index >= mainLast) { const all = [...answers, ans]; setAnswers(all); persistSession(all, merged, "final_cta"); }
+            else pushAnswer(ans);
+          }}
+        />
+      );
       case "spin_wheel": {
         const isLast = index >= mainLast;
         return (

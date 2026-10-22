@@ -3,6 +3,7 @@ import { getFlowById, getFlowPrivateSettings } from "@/lib/data/flows";
 import { listLeadsByFlow } from "@/lib/data/leads";
 import { BuilderClient } from "@/components/builder/builder-client";
 import type { JourneyLead } from "@/lib/flow-journeys";
+import { getBookingOptions } from "@/lib/data/booking";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export default async function BuilderPage({
   const flow = await getFlowById(id);
   if (!flow) notFound();
 
-  const [rows, privateSettings] = await Promise.all([listLeadsByFlow(id), getFlowPrivateSettings(id)]);
+  const [rows, privateSettings, bookingOptions] = await Promise.all([listLeadsByFlow(id), getFlowPrivateSettings(id), getBookingOptions(flow.organization_id)]);
   const leads: JourneyLead[] = rows.map((l) => ({
     id: l.id,
     name: l.name,
@@ -24,5 +25,5 @@ export default async function BuilderPage({
     answers: l.answers?.map((a) => ({ question_title: a.question_title })),
   }));
 
-  return <BuilderClient flow={flow} leads={leads} privateSettings={privateSettings} />;
+  return <BuilderClient flow={flow} leads={leads} privateSettings={privateSettings} bookingOptions={bookingOptions} />;
 }

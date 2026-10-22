@@ -8,6 +8,8 @@ import { BillingCard } from "@/components/billing/billing-card";
 import { ProfileForm } from "@/components/settings/profile-form";
 import { createClient } from "@/lib/supabase/server";
 import { getBillingState, getUsage } from "@/lib/data/billing";
+import { getBookingSettings } from "@/lib/data/booking";
+import { BookingSettingsForm, type ProcedureRow } from "@/components/settings/booking-settings-form";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +25,18 @@ export default async function SettingsPage() {
   const billing = await getBillingState(org.id);
   const { data: { user } } = isSupabaseConfigured ? await (await createClient()).auth.getUser() : { data: { user: null } };
   const usage = billing.enabled ? await getUsage(org.id) : null;
+  const booking = await getBookingSettings(org.id);
+  let procedures: ProcedureRow[] = [];
+  if (isSupabaseConfigured) {
+    const { data } = await (await createClient()).from("schedule_procedures").select("name, duration_min, price_cents").eq("organization_id", org.id).order("name");
+    procedures = ((data ?? []) as ProcedureRow[]).map((p) => ({ name: p.name, duration_min: p.duration_min ?? 60, price_cents: p.price_cents ?? null }));
+  }
 
   return (
     <div className="mx-auto max-w-xl">
       <header className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Configurações</h1>
-        <p className="text-sm text-slate-500">Identidade, identificador público e white-label da clínica.</p>
+        <p className="text-sm text-slate-500">Identidade, identificador público, agendamento online e white-label da clínica.</p>
       </header>
 
       {!isSupabaseConfigured ? (
@@ -56,6 +64,7 @@ export default async function SettingsPage() {
             />
           )}
           <OrgSettingsForm org={org} baseUrl={baseUrl} />
+          <BookingSettingsForm initial={booking.settings} procedures={procedures} available={booking.available} />
           <ChangePasswordForm />
         </>
       )}

@@ -1,4 +1,5 @@
-import { SearchNormal1, Notification, Calendar } from "iconsax-reactjs";
+import { SearchNormal1, Notification } from "iconsax-reactjs";
+import { BookingNotifications } from "@/components/dashboard/booking-notifications";
 
 export function Topbar() {
   return (
@@ -24,13 +25,7 @@ export function Topbar() {
           <Notification size={20} variant="Bulk" color="#475569" />
           <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white" />
         </button>
-        <button
-          aria-label="Agenda"
-          className="relative flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition-colors hover:bg-slate-200"
-        >
-          <Calendar size={20} variant="Bulk" color="#475569" />
-          <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white" />
-        </button>
+        <BookingNotifications />
       </div>
     </header>
   );
