@@ -37,7 +37,7 @@ function startOfWeek(d: Date) {
 type View = "day" | "week" | "month";
 type ColorOf = (name: string) => string;
 
-export function ScheduleBoard({ demo = true, storageKey, initial }: { demo?: boolean; storageKey?: string; initial?: ScheduleData }) {
+export function ScheduleBoard({ demo = true, storageKey, initial, initialDate }: { demo?: boolean; storageKey?: string; initial?: ScheduleData; initialDate?: string }) {
   // Três modos: demonstração (exemplos), banco (0012 aplicada) e navegador
   // (legado, enquanto a 0012 não estiver aplicada).
   const dbMode = !demo && Boolean(initial?.available);
@@ -97,7 +97,13 @@ export function ScheduleBoard({ demo = true, storageKey, initial }: { demo?: boo
     try { localStorage.setItem(key, JSON.stringify({ docs, procs, appts, patients: extraPatients })); } catch { /* noop */ }
   }, [key, docs, procs, appts, extraPatients]);
   const [view, setView] = useState<View>("day");
-  const [cursor, setCursor] = useState(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
+  // Abre no dia pedido (?data=AAAA-MM-DD, ex.: notificação de agendamento).
+  const [cursor, setCursor] = useState(() => {
+    const d = initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate) ? new Date(`${initialDate}T00:00:00`) : new Date();
+    if (Number.isNaN(d.getTime())) return (() => { const x = new Date(); x.setHours(0, 0, 0, 0); return x; })();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
   const [docFilter, setDocFilter] = useState<string>("all");
   const [procFilter, setProcFilter] = useState<Set<string>>(new Set());
   const [showFilters, setShowFilters] = useState(false);

@@ -79,6 +79,7 @@ export const BLOCK_CATALOG: BlockDef[] = [
   { type: "chart_gauge", label: "Gráfico circular", group: "Prova", isNew: true },
   { type: "faq", label: "FAQ", group: "Prova" },
 
+  { type: "booking", label: "Agendamento (horários livres)", group: "Conversão", isNew: true },
   { type: "spin_wheel", label: "Roleta (gamificação)", group: "Conversão", isNew: true },
   { type: "loading", label: "Análise (loading)", group: "Conversão" },
   { type: "timer", label: "Timer", group: "Conversão" },
@@ -91,6 +92,17 @@ export const BLOCK_CATALOG: BlockDef[] = [
 // Config inicial de cada bloco ao ser adicionado (para o preview não ficar vazio).
 export function defaultConfig(type: StepType): StepConfig {
   switch (type) {
+    case "booking":
+      return {
+        title: "Escolha o melhor horário para sua avaliação",
+        subtitle: "Horários livres da agenda da clínica, atualizados agora.",
+        booking_procedure: "Avaliação",
+        booking_professional: "any",
+        booking_ask_contact: true,
+        button_label: "Continuar",
+        booking_success_title: "Horário reservado!",
+        booking_success_body: "A clínica vai confirmar com você pelo WhatsApp.",
+      };
     case "container":
       return { title: "", container_layout: "vertical", gap: 12, columns: 2, pad: 0 };
     case "hero":

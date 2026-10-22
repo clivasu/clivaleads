@@ -9,6 +9,7 @@ import { clientIp, rateLimit } from "@/lib/security/rate-limit";
 import { scoreAnswers, totalFrom } from "@/lib/security/scoring";
 import { tierFromScore } from "@/lib/scoring";
 import { enqueueLeadWebhook, processDelivery, processDueDeliveries } from "@/lib/integrations/webhook-outbox";
+import { linkLead } from "@/lib/booking/server";
 import type { FlowStep } from "@/lib/types";
 
 // Captura de leads dos funis públicos (sem login do paciente).
@@ -155,6 +156,11 @@ export async function POST(request: NextRequest) {
       organization_id, flow_id: flow.id, session_id, type: "lead_qualified", lead_session_id: session.id, metadata: {},
     });
     if (evError && evError.code !== "23505") console.warn("[sessions] evento lead_qualified não gravado", evError.code);
+  }
+
+  // Agendou no bloco "Agendamento" antes do fim do funil: liga ao lead.
+  if (body.booking && verifyLeadToken(`booking:${body.booking.id}`, body.booking.token)) {
+    await linkLead(supabase, organization_id, session.id, body.booking.id);
   }
 
   // Webhook do CRM: entra na fila agora e é enviado depois da resposta ao

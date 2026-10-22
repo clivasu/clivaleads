@@ -123,6 +123,16 @@ Branch: `fix/security-integrity-cliva`, com merge na `main` (PR #1, `bdffdaf`) e
 | Preço por procedimento; receita = atendimentos concluídos | feito, testado | `schedule_procedures.price_cents` |
 | Script de demonstração da Dra. Marina (dados fictícios) e remoção | feito, testado | `supabase/seed/`, `tests/db/demo-seed.test.ts` |
 
+## Agendamento online (fora do plano da auditoria)
+
+| Item | Situação | Evidência |
+|---|---|---|
+| Bloco "Agendamento" no funil com horários livres reais | feito, testado | `components/flow-runner/booking-step.tsx`, `lib/booking/slots.ts` |
+| Regras por clínica (horário, pausa, antecedência, janela, feriados, bloqueios, confirmação) | feito, testado | Configurações; `0018_online_booking.sql` |
+| Sem horário duplo (concorrência) e sem pedido duplicado | feito, testado | `tests/db/booking.test.ts` |
+| Notificações no calendário do topo (contagem de não lidas) | feito, testado | `components/dashboard/booking-notifications.tsx`; RLS testada |
+| Aplicar 0018 em produção | autorização | `docs/integrations/AGENDAMENTO_ONLINE.md` |
+
 ## Próximas entregas
 
 | Entrega | Itens | Situação |

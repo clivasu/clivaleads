@@ -35,6 +35,8 @@ export const sessionCreateSchema = z.object({
   whatsapp_clicked: z.boolean().optional(),
   final_cta_clicked: z.boolean().optional(),
   disqualified: z.boolean().optional(),
+  // agendamento feito no bloco "Agendamento" antes de o lead ser gravado
+  booking: z.object({ id: uuid, token: z.string().min(10).max(200) }).optional(),
 });
 export type SessionCreate = z.infer<typeof sessionCreateSchema>;
 
@@ -81,3 +83,23 @@ export async function readJsonLimited(request: Request): Promise<{ ok: true; dat
     return { ok: false, status: 400 };
   }
 }
+
+// Agendamento online (bloco "Agendamento" do funil).
+const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+export const bookingSlotsSchema = z.object({
+  flow_id: uuid,
+  step_id: z.string().min(1).max(64),
+  from: ymd,
+  days: z.coerce.number().int().min(1).max(14).default(7),
+});
+export const bookingCreateSchema = z.object({
+  flow_id: uuid,
+  step_id: z.string().min(1).max(64),
+  date: ymd,
+  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  booking_ref: uuid, // gerado no navegador: reenvio não duplica
+  name: text(120).pipe(z.string().min(2)),
+  phone: text(40).transform((v) => v.replace(/\D/g, "")).pipe(z.string().min(10).max(13)),
+  email: z.union([z.string().trim().email().max(200), z.literal("")]).optional(),
+  lead: z.object({ id: uuid, token: z.string().min(10).max(200) }).optional(),
+});

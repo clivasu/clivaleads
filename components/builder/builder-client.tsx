@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
+  CalendarCheck2,
   Flag, Type, Image as ImageIcon, Video, GalleryHorizontal, Images,
   AlertTriangle, Newspaper, ListChecks, CircleDot, Star, ClipboardList,
   Quote, BarChart3, Gauge, TrendingUp, PieChart, HelpCircle, Loader,
@@ -24,6 +25,10 @@ import { applyIdMap } from "@/lib/flow-persistence";
 import { DEFAULT_SETTINGS, pickPersistedSettings, type FunnelSettings } from "@/lib/flow-settings";
 import { GTM_SUPPORTED, normalizePixelId, type PixelKey } from "@/lib/public-funnel-config";
 import { WebhookSettings } from "@/components/builder/webhook-settings";
+import type { BookingOptions } from "@/lib/data/booking";
+
+// Profissionais e procedimentos da Agenda (para o bloco "Agendamento").
+const BookingOptionsCtx = createContext<BookingOptions>({ professionals: [], procedures: [] });
 import { UploadButton } from "@/components/bio/upload-button";
 import { DeleteFlowButton } from "@/components/flows/delete-flow-button";
 import { beforeAfterFrames } from "@/components/flow-runner/before-after";
@@ -40,6 +45,7 @@ const ICONS: Record<StepType, React.ElementType> = {
   faq: HelpCircle, loading: Loader, timer: TimerIcon, result: Sparkles,
   cta: MousePointerClick, whatsapp: MessageCircle, spin_wheel: Gift,
   buttons: SquareStack, audio: Volume2, container: LayoutGrid, hero: LayoutTemplate, exit: HeartOff,
+  booking: CalendarCheck2,
 };
 const ACCEPTS_CHILDREN = (t: StepType) => t === "container" || t === "hero";
 // Rótulo canônico por type (ignora presets, que compartilham o mesmo type).
@@ -105,7 +111,7 @@ function isInSubtree(node: FlowStep, id: string): boolean {
   return (node.children ?? []).some((c) => isInSubtree(c, id));
 }
 
-export function BuilderClient({ flow, leads = [], privateSettings }: { flow: PublicFlow; leads?: JourneyLead[]; privateSettings?: FlowPrivateSettingsView }) {
+export function BuilderClient({ flow, leads = [], privateSettings, bookingOptions = { professionals: [], procedures: [] } }: { flow: PublicFlow; leads?: JourneyLead[]; privateSettings?: FlowPrivateSettingsView; bookingOptions?: BookingOptions }) {
   const [steps, setSteps] = useState<FlowStep[]>(flow.steps);
   const [selectedId, setSelectedId] = useState<string>(flow.steps[0]?.id ?? "");
   const [saved, setSaved] = useState(false);
@@ -451,9 +457,11 @@ export function BuilderClient({ flow, leads = [], privateSettings }: { flow: Pub
           <div className="w-72 shrink-0 overflow-y-auto border-l p-4">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Editar bloco</p>
             {selected ? (
+<BookingOptionsCtx.Provider value={bookingOptions}>
               <LogicCtx.Provider value={{ steps, currentId: selected.id, ensureExit }}>
                 <Inspector step={selected} onChange={patchConfig} />
               </LogicCtx.Provider>
+              </BookingOptionsCtx.Provider>
             ) : <p className="text-sm text-slate-400">Nenhum bloco selecionado.</p>}
           </div>
         )}
@@ -635,7 +643,7 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
           <input className={inputCls} value={c.title ?? ""} onChange={(e) => onChange({ title: e.target.value })} />
         </Field>
       )}
-      {["start", "question", "multi_choice", "rating", "stats", "level", "chart_growth", "chart_gauge", "form", "news", "spin_wheel", "container", "hero"].includes(t) && (
+      {["start", "question", "multi_choice", "rating", "stats", "level", "chart_growth", "chart_gauge", "form", "news", "spin_wheel", "container", "hero", "booking"].includes(t) && (
         <Field label="Subtítulo">
           <input className={inputCls} value={c.subtitle ?? ""} onChange={(e) => onChange({ subtitle: e.target.value })} />
         </Field>
@@ -893,6 +901,9 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
           </Field>
         </>
       )}
+
+      {/* Agendamento */}
+      {t === "booking" && <BookingInspector c={c} onChange={onChange} />}
 
       {/* Roleta */}
       {t === "spin_wheel" && (
@@ -1274,8 +1285,48 @@ function SizeField({ label, value, onChange }: { label: string; value: string; o
   );
 }
 
+function BookingInspector({ c, onChange }: { c: FlowStep["config"]; onChange: (p: Partial<FlowStep["config"]>) => void }) {
+  const opts = useContext(BookingOptionsCtx);
+  const proc = opts.procedures.find((p) => p.name.toLowerCase() === (c.booking_procedure ?? "").toLowerCase());
+  return (
+    <div className="space-y-3">
+      <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+        O paciente vê só horários livres da sua Agenda e o agendamento entra nela na hora. Horário de funcionamento, feriados e antecedência ficam em Configurações → Agendamento online.
+      </p>
+      <Field label="Procedimento">
+        <input className={inputCls} list="booking-procs" value={c.booking_procedure ?? ""} onChange={(e) => onChange({ booking_procedure: e.target.value })} placeholder="Ex.: Avaliação" />
+        <datalist id="booking-procs">{opts.procedures.map((p) => <option key={p.name} value={p.name} />)}</datalist>
+        {!proc && (c.booking_procedure ?? "").trim() && opts.procedures.length > 0 && (
+          <p className="mt-1 text-[11px] text-amber-700">Não existe na Agenda com esse nome: o agendamento entra assim mesmo, com a duração abaixo.</p>
+        )}
+      </Field>
+      <Field label="Duração (minutos)">
+        <input className={inputCls} type="number" min={5} max={720} step={5} value={c.booking_duration ?? ""} onChange={(e) => onChange({ booking_duration: e.target.value ? Number(e.target.value) : undefined })}
+          placeholder={proc ? `${proc.duration_min} (da Agenda)` : "60"} />
+      </Field>
+      <Field label="Profissional">
+        <select className={inputCls} value={c.booking_professional ?? "any"} onChange={(e) => onChange({ booking_professional: e.target.value })}>
+          <option value="any">Qualquer profissional livre</option>
+          {opts.professionals.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        {opts.professionals.length === 0 && <p className="mt-1 text-[11px] text-amber-700">Cadastre ao menos um profissional na Agenda para liberar horários.</p>}
+      </Field>
+      <ToggleRow label="Pedir nome e WhatsApp no bloco" desc="Só aparece se o funil ainda não pediu antes." on={c.booking_ask_contact ?? true} onChange={(v) => onChange({ booking_ask_contact: v })} />
+      <Field label="Título da confirmação">
+        <input className={inputCls} value={c.booking_success_title ?? ""} onChange={(e) => onChange({ booking_success_title: e.target.value })} placeholder="Horário reservado!" />
+      </Field>
+      <Field label="Texto da confirmação">
+        <input className={inputCls} value={c.booking_success_body ?? ""} onChange={(e) => onChange({ booking_success_body: e.target.value })} placeholder="A clínica vai confirmar com você pelo WhatsApp." />
+      </Field>
+      <Field label="Botão depois de agendar">
+        <input className={inputCls} value={c.button_label ?? ""} onChange={(e) => onChange({ button_label: e.target.value })} placeholder="Continuar" />
+      </Field>
+    </div>
+  );
+}
+
 function defaultAllowed(t: StepType) {
-  const withTitle = ["start", "text", "image", "video", "carousel", "before_after", "question", "multi_choice", "rating", "stats", "level", "chart_growth", "chart_gauge", "faq", "form", "news", "cta", "whatsapp", "timer", "spin_wheel", "buttons", "audio", "container", "hero", "exit"];
+  const withTitle = ["start", "text", "image", "video", "carousel", "before_after", "question", "multi_choice", "rating", "stats", "level", "chart_growth", "chart_gauge", "faq", "form", "news", "cta", "whatsapp", "timer", "spin_wheel", "buttons", "audio", "container", "hero", "exit", "booking"];
   return withTitle.includes(t) ? { title: true } : {};
 }
 
