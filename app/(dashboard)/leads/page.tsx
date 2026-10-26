@@ -5,6 +5,8 @@ import { getCurrentOrg } from "@/lib/data/org";
 import { LEADS_PAGE_SIZE, listLeadsPage } from "@/lib/data/leads";
 import { Card, CardContent } from "@/components/ui/card";
 import { LeadsTable } from "@/components/leads/leads-table";
+import { NewLeadButton } from "@/components/leads/new-lead-button";
+import { getBookingOptions } from "@/lib/data/booking";
 
 export const dynamic = "force-dynamic";
 
@@ -14,18 +16,21 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const raw = (await searchParams).pagina;
   const page = Math.max(1, Number.parseInt(Array.isArray(raw) ? raw[0] : raw ?? "1", 10) || 1);
   // Somente leads que deixaram contato (nome, telefone ou e-mail), paginados no banco.
-  const { rows: leads, total } = await listLeadsPage(org.id, page);
+  const [{ rows: leads, total }, opts] = await Promise.all([listLeadsPage(org.id, page), getBookingOptions(org.id)]);
   const pages = Math.max(1, Math.ceil(total / LEADS_PAGE_SIZE));
   const first = total === 0 ? 0 : (page - 1) * LEADS_PAGE_SIZE + 1;
   const last = Math.min(total, page * LEADS_PAGE_SIZE);
 
   return (
     <div>
-      <header className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Leads</h1>
-        <p className="text-sm text-slate-500">
-          {total.toLocaleString("pt-BR")} contato{total === 1 ? "" : "s"} capturado{total === 1 ? "" : "s"} · abra para ver o diagnóstico.
-        </p>
+      <header className="mb-8 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Leads</h1>
+          <p className="text-sm text-slate-500">
+            {total.toLocaleString("pt-BR")} contato{total === 1 ? "" : "s"} capturado{total === 1 ? "" : "s"} · abra para ver o diagnóstico.
+          </p>
+        </div>
+        <NewLeadButton procedures={opts.procedures.map((p) => p.name)} />
       </header>
 
       <Card>

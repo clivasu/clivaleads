@@ -2,7 +2,8 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/env";
 import { fromTimestamp } from "@/lib/schedule-time";
-import { AVATAR_COLORS, initialsFrom, type Appt, type Doctor, type Patient, type Procedure, type Status } from "@/lib/demo-schedule";
+import { AVATAR_COLORS, initialsFrom, type Appt, type Doctor, type LeadPick, type Patient, type Procedure, type Status } from "@/lib/demo-schedule";
+import { cleanAnamnesis, healthAlerts } from "@/lib/patients";
 
 // Agenda da clínica vinda do banco (0012), no formato que a tela já usa.
 export interface ScheduleData {
@@ -11,9 +12,10 @@ export interface ScheduleData {
   procs: Procedure[];
   patients: Patient[];
   appts: Appt[];
+  leads: LeadPick[]; // leads recentes ainda não agendados
 }
 
-const EMPTY: ScheduleData = { available: false, docs: [], procs: [], patients: [], appts: [] };
+const EMPTY: ScheduleData = { available: false, docs: [], procs: [], patients: [], appts: [], leads: [] };
 const missing = (code?: string) => code === "42P01" || code === "PGRST205";
 
 export async function getScheduleData(orgId: string): Promise<ScheduleData> {
@@ -23,19 +25,23 @@ export async function getScheduleData(orgId: string): Promise<ScheduleData> {
   const from = new Date(Date.now() - 90 * 86400000).toISOString();
   const to = new Date(Date.now() + 365 * 86400000).toISOString();
 
-  const [profs, procs, pats, appts] = await Promise.all([
+  const [profs, procs, pats, appts, leads] = await Promise.all([
     supabase.from("schedule_professionals").select("id, name, initials, avatar_color, active").eq("organization_id", orgId).order("created_at"),
-    supabase.from("schedule_procedures").select("name, color").eq("organization_id", orgId).order("created_at"),
-    supabase.from("schedule_patients").select("id, name, phone, notes, created_at").eq("organization_id", orgId).order("name").limit(5000),
+    supabase.from("schedule_procedures").select("*").eq("organization_id", orgId).order("created_at"),
+    supabase.from("schedule_patients").select("*").eq("organization_id", orgId).order("name").limit(5000),
     supabase.from("schedule_appointments")
       .select("id, professional_id, patient_id, patient_name, procedure_name, starts_at, ends_at, status, is_return")
       .eq("organization_id", orgId).gte("starts_at", from).lte("starts_at", to).order("starts_at").limit(3000),
+    supabase.from("lead_sessions").select("id, name, phone, procedure, score, created_at")
+      .eq("organization_id", orgId).in("status", ["new", "qualified", "whatsapp"]).not("name", "is", null)
+      .order("created_at", { ascending: false }).limit(300),
   ]);
   if ([profs, procs, pats, appts].some((r) => r.error && missing(r.error.code))) return EMPTY;
 
-  const patients: Patient[] = (pats.data ?? []).map((p) => ({
-    id: p.id, name: p.name, phone: p.phone ?? "", age: 0, gender: "F", since: String(p.created_at).slice(0, 10),
-    tags: [], notes: p.notes ?? "", history: [],
+  // tags = alertas de saúde da ficha (alergia, gestante…), mostrados na Agenda.
+  const patients: Patient[] = ((pats.data ?? []) as Record<string, unknown>[]).map((p) => ({
+    id: p.id as string, name: p.name as string, phone: (p.phone as string) ?? "", age: 0, gender: "F", since: String(p.created_at).slice(0, 10),
+    tags: healthAlerts(cleanAnamnesis(p.anamnesis)), notes: (p.notes as string) ?? "", history: [],
   }));
   const apptRows = appts.data ?? [];
   // Agendamento sem paciente vinculado (ex.: paciente removido): paciente só de exibição.
@@ -48,7 +54,9 @@ export async function getScheduleData(orgId: string): Promise<ScheduleData> {
     docs: (profs.data ?? []).filter((d) => d.active).map((d, i) => ({
       id: d.id, name: d.name, initials: d.initials || initialsFrom(d.name), avatarColor: d.avatar_color || AVATAR_COLORS[i % AVATAR_COLORS.length],
     })),
-    procs: (procs.data ?? []).map((p) => ({ name: p.name, color: p.color })),
+    procs: ((procs.data ?? []) as { name: string; color: string; duration_min?: number }[]).map((p) => ({ name: p.name, color: p.color, duration: p.duration_min })),
+    leads: ((leads.data ?? []) as { id: string; name: string | null; phone: string | null; procedure: string | null; score: number; created_at: string }[])
+      .filter((l) => l.name).map((l) => ({ id: l.id, name: l.name!, phone: l.phone ?? "", procedure: l.procedure, score: l.score ?? 0, created_at: l.created_at })),
     patients,
     appts: apptRows.map((a) => {
       const s = fromTimestamp(a.starts_at);

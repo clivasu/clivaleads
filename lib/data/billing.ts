@@ -89,7 +89,7 @@ export async function getUsage(orgId: string): Promise<Usage> {
     supabase.from("flows").select("id", { count: "exact", head: true })
       .eq("organization_id", orgId).eq("status", "published"),
     supabase.from("lead_sessions").select("id", { count: "exact", head: true })
-      .eq("organization_id", orgId).gte("created_at", monthStartISO()),
+      .eq("organization_id", orgId).not("flow_id", "is", null).gte("created_at", monthStartISO()), // só leads dos funis
   ]);
   return { publishedFlows: flows.count ?? 0, leadsThisMonth: leads.count ?? 0 };
 }

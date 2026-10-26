@@ -18,6 +18,7 @@ import {
   LogoutCurve,
   ShieldTick,
   type IconProps,
+  Profile,
 } from "iconsax-reactjs";
 import { ClivaLogo } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
@@ -41,6 +42,7 @@ const GROUPS: NavGroup[] = [
     label: "Gestão",
     items: [
       { href: "/schedule", label: "Agenda", Icon: Calendar },
+      { href: "/patients", label: "Pacientes", Icon: Profile },
       { href: "/flows", label: "Funis", Icon: Filter },
       { href: "/bio", label: "Link na Bio", Icon: Link21 },
       { href: "/leads", label: "Leads", Icon: Profile2User },

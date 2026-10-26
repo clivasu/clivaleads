@@ -41,6 +41,7 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/analytics") ||
     path.startsWith("/settings") ||
     path.startsWith("/schedule") ||
+    path.startsWith("/patients") ||
     path.startsWith("/assinar");
 
   if (!user && isPrivate) {
