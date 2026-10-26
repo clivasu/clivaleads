@@ -15,6 +15,17 @@ export interface Doctor {
 export interface Procedure {
   name: string;
   color: string; // hex — cor do procedimento
+  duration?: number; // minutos (Configurações → Agendamento online)
+}
+
+// Lead recente dos funis (para escolher no "Novo agendamento").
+export interface LeadPick {
+  id: string;
+  name: string;
+  phone: string;
+  procedure: string | null;
+  score: number;
+  created_at: string;
 }
 
 export interface Patient {

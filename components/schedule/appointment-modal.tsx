@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { X, Plus, Trash2, Settings2 } from "lucide-react";
-import type { Appt, Doctor, Patient, Procedure, Status } from "@/lib/demo-schedule";
+import { useEffect, useMemo, useState } from "react";
+import { X, Plus, Trash2, Settings2, UserRound, Sparkles, AlertTriangle } from "lucide-react";
+import type { Appt, Doctor, LeadPick, Patient, Procedure, Status } from "@/lib/demo-schedule";
 import { patients as demoPatients, STATUS_META, DAY_START, DAY_END, fmtHour, PROC_COLORS } from "@/lib/demo-schedule";
 
 export interface ApptDraft {
@@ -15,6 +15,9 @@ export interface ApptDraft {
   duration: number; // minutos
   status: Status;
   isReturn: boolean;
+  patientId?: string; // paciente escolhido na busca
+  leadId?: string;    // lead escolhido na busca (vira paciente; lead fica "agendado")
+  phone?: string;
 }
 
 const inputCls = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none";
@@ -23,10 +26,11 @@ const slots: number[] = [];
 for (let h = DAY_START; h < DAY_END; h += 0.5) slots.push(h);
 
 export function AppointmentModal({
-  initial, doctors, procedures, patients = demoPatients, onClose, onSave, onDelete,
+  initial, doctors, procedures, patients = demoPatients, leads = [], onClose, onSave, onDelete,
   onAddDoctor, onDeleteDoctor, onAddProcedure, onDeleteProcedure,
 }: {
   patients?: Patient[];
+  leads?: LeadPick[];
   initial: Partial<ApptDraft> & { id?: string };
   doctors: Doctor[];
   procedures: Procedure[];
@@ -47,7 +51,37 @@ export function AppointmentModal({
     duration: initial.duration ?? 60,
     status: initial.status ?? "registered",
     isReturn: initial.isReturn ?? false,
+    patientId: initial.patientId,
+    leadId: initial.leadId,
+    phone: initial.phone,
   });
+  const [pickOpen, setPickOpen] = useState(false);
+  const term = d.patientName.trim().toLowerCase();
+  const digits = term.replace(/\D/g, "");
+  const match = (name: string, phone: string) => !term || name.toLowerCase().includes(term) || (digits.length >= 3 && phone.includes(digits));
+  const patientHits = useMemo(() => patients.filter((p) => !p.id.startsWith("nome:") && match(p.name, p.phone)).slice(0, 6),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [patients, term]);
+  const leadHits = useMemo(() => leads.filter((l) => match(l.name, l.phone)).slice(0, 8),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [leads, term]);
+  const linkedLead = d.leadId ? leads.find((l) => l.id === d.leadId) : null;
+  const linkedPatient = d.patientId ? patients.find((p) => p.id === d.patientId) : null;
+
+  // Lead escolhido: preenche nome, telefone, procedimento (se existir na Agenda) e duração.
+  const pickLead = (l: LeadPick) => {
+    const proc = procedures.find((p) => p.name.toLowerCase() === (l.procedure ?? "").toLowerCase());
+    setD((prev) => ({
+      ...prev, patientName: l.name, phone: l.phone, leadId: l.id, patientId: undefined,
+      ...(proc ? { procedure: proc.name, ...(proc.duration ? { duration: proc.duration } : {}) } : {}),
+      isReturn: false,
+    }));
+    setPickOpen(false);
+  };
+  const pickPatient = (p: Patient) => {
+    setD((prev) => ({ ...prev, patientName: p.name, phone: p.phone, patientId: p.id, leadId: undefined, isReturn: true }));
+    setPickOpen(false);
+  };
   const set = (p: Partial<ApptDraft>) => setD((prev) => ({ ...prev, ...p }));
   const isEdit = Boolean(initial.id);
 
@@ -88,11 +122,56 @@ export function AppointmentModal({
         </div>
 
         <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
-          <label className="mb-3 block">
+          <div className="relative mb-3">
             <span className="mb-1 block text-xs font-medium text-slate-500">Paciente</span>
-            <input list="pt-list" className={inputCls} value={d.patientName} onChange={(e) => set({ patientName: e.target.value })} placeholder="Nome do paciente" />
-            <datalist id="pt-list">{patients.map((p) => <option key={p.id} value={p.name} />)}</datalist>
-          </label>
+            <input
+              className={inputCls}
+              value={d.patientName}
+              onFocus={() => setPickOpen(true)}
+              onBlur={() => setTimeout(() => setPickOpen(false), 150)}
+              onChange={(e) => { set({ patientName: e.target.value, patientId: undefined, leadId: undefined }); setPickOpen(true); }}
+              placeholder="Buscar paciente ou lead (nome ou telefone)"
+              role="combobox" aria-expanded={pickOpen} aria-controls="appt-patient-list" aria-autocomplete="list"
+            />
+            {(linkedLead || linkedPatient) && (
+              <div className="mt-1.5 flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs text-emerald-800">
+                {linkedLead ? <Sparkles className="h-3.5 w-3.5" /> : <UserRound className="h-3.5 w-3.5" />}
+                <span className="min-w-0 flex-1 truncate">
+                  {linkedLead ? `Lead do funil · ${linkedLead.procedure ?? "sem procedimento"} · interesse ${linkedLead.score}` : `Paciente cadastrado${linkedPatient?.phone ? ` · ${linkedPatient.phone}` : ""}`}
+                </span>
+                {linkedPatient && linkedPatient.tags.length > 0 && <span title={linkedPatient.tags.join(" · ")} className="flex items-center gap-0.5 font-semibold text-rose-600"><AlertTriangle className="h-3.5 w-3.5" /> {linkedPatient.tags.length}</span>}
+                <button type="button" onClick={() => set({ patientId: undefined, leadId: undefined })} className="rounded p-0.5 hover:bg-emerald-100" aria-label="Desvincular"><X className="h-3 w-3" /></button>
+              </div>
+            )}
+            {pickOpen && (patientHits.length > 0 || leadHits.length > 0) && (
+              <div id="appt-patient-list" role="listbox" className="absolute left-0 right-0 z-10 mt-1 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
+                {leadHits.length > 0 && <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Leads dos funis (a agendar)</p>}
+                {leadHits.map((l) => (
+                  <button key={l.id} type="button" role="option" aria-selected={d.leadId === l.id} onMouseDown={(e) => e.preventDefault()} onClick={() => pickLead(l)}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-emerald-50">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-600"><Sparkles className="h-3.5 w-3.5" /></span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-slate-800">{l.name}</span>
+                      <span className="block truncate text-[11px] text-slate-500">{l.procedure ?? "—"} · {new Date(l.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}</span>
+                    </span>
+                    <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${l.score >= 61 ? "bg-emerald-50 text-emerald-700" : l.score >= 31 ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}>{l.score}</span>
+                  </button>
+                ))}
+                {patientHits.length > 0 && <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Pacientes</p>}
+                {patientHits.map((p) => (
+                  <button key={p.id} type="button" role="option" aria-selected={d.patientId === p.id} onMouseDown={(e) => e.preventDefault()} onClick={() => pickPatient(p)}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-emerald-50">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700"><UserRound className="h-3.5 w-3.5" /></span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-slate-800">{p.name}</span>
+                      {p.phone && <span className="block truncate text-[11px] text-slate-500">{p.phone}</span>}
+                    </span>
+                    {p.tags.length > 0 && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-500" aria-label="Tem alerta de saúde" />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Procedimento + gerenciar */}
           <div className="mb-3">

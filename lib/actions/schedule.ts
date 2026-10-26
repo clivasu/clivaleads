@@ -94,17 +94,43 @@ const apptSchema = z.object({
   end: hour,
   status: z.enum(STATUSES),
   isReturn: z.boolean(),
+  patientId: uuid.optional(),   // paciente escolhido na busca
+  leadId: uuid.optional(),      // lead escolhido na busca (vira paciente e fica "agendado")
+  phone: z.string().max(40).optional(),
 });
 export type AppointmentInput = z.infer<typeof apptSchema>;
 
-async function patientIdFor(c: NonNullable<Awaited<ReturnType<typeof ctx>>>, patientName: string): Promise<string | null> {
+type Ctx = NonNullable<Awaited<ReturnType<typeof ctx>>>;
+
+async function patientIdFor(c: Ctx, a: { patientName: string; patientId?: string; leadId?: string; phone?: string }): Promise<string | null> {
+  // 1) paciente escolhido na busca (precisa ser desta clínica)
+  if (a.patientId) {
+    const { data } = await c.supabase.from("schedule_patients").select("id").eq("organization_id", c.org.id).eq("id", a.patientId).maybeSingle();
+    if (data) return data.id;
+  }
+  const phone = (a.phone ?? "").replace(/\D/g, "");
+  // 2) lead escolhido: reaproveita a ficha ligada ao lead ou com o mesmo telefone
+  if (a.leadId) {
+    const { data: byLead } = await c.supabase.from("schedule_patients").select("id").eq("organization_id", c.org.id).eq("lead_session_id", a.leadId).limit(1);
+    if (byLead?.[0]) return byLead[0].id;
+  }
+  if (phone.length >= 10) {
+    const { data: byPhone } = await c.supabase.from("schedule_patients").select("id").eq("organization_id", c.org.id).eq("phone", phone).limit(1);
+    if (byPhone?.[0]) return byPhone[0].id;
+  }
+  // 3) mesmo nome (comportamento antigo)
   const { data: found } = await c.supabase
     .from("schedule_patients").select("id").eq("organization_id", c.org.id)
-    .ilike("name", patientName.replace(/[%_]/g, "\\$&")).limit(1);
+    .ilike("name", a.patientName.replace(/[%_]/g, "\\$&")).limit(1);
   if (found?.[0]) return found[0].id;
-  const { data: created } = await c.supabase
-    .from("schedule_patients").insert({ organization_id: c.org.id, name: patientName }).select("id").single();
-  return created?.id ?? null;
+  // 4) novo paciente (com ligação ao lead quando houver)
+  const base: Record<string, unknown> = { organization_id: c.org.id, name: a.patientName, phone: phone || null };
+  const first = await c.supabase.from("schedule_patients")
+    .insert(a.leadId ? { ...base, lead_session_id: a.leadId, source: "Funil da Cliva" } : base).select("id").single();
+  if (first.data) return first.data.id;
+  if (!a.leadId) return null;
+  const retry = await c.supabase.from("schedule_patients").insert(base).select("id").single(); // banco sem a 0019
+  return retry.data?.id ?? null;
 }
 
 // Cria ou atualiza (mesmo id). O banco recusa sobreposição de horário.
@@ -114,7 +140,7 @@ export async function saveAppointment(input: AppointmentInput): Promise<Schedule
   const c = await ctx();
   if (!c) return { ok: false, error: "Faça login." };
   const a = v.data;
-  const patient_id = await patientIdFor(c, a.patientName);
+  const patient_id = await patientIdFor(c, a);
   const { error } = await c.supabase.from("schedule_appointments").upsert({
     id: a.id,
     organization_id: c.org.id,
@@ -126,8 +152,15 @@ export async function saveAppointment(input: AppointmentInput): Promise<Schedule
     ends_at: toTimestamp(a.date, a.end),
     status: a.status,
     is_return: a.isReturn,
+    ...(a.leadId ? { lead_session_id: a.leadId } : {}),
   }, { onConflict: "id" });
-  return error ? { ok: false, error: friendly(error) } : done(a.id);
+  if (error) return { ok: false, error: friendly(error) };
+  // Lead agendado: sai da lista de "a agendar" e conta como agendamento.
+  if (a.leadId) {
+    await c.supabase.from("lead_sessions").update({ status: "scheduled" }).eq("id", a.leadId).eq("organization_id", c.org.id).in("status", ["new", "qualified", "whatsapp", "lost"]);
+    revalidatePath("/leads");
+  }
+  return done(a.id);
 }
 
 export async function deleteAppointment(id: string): Promise<ScheduleResult> {
@@ -210,7 +243,7 @@ export async function importLocalSchedule(payload: LegacySchedule): Promise<Impo
     const starts_at = toTimestamp(a.date, a.start);
     const dedupe = `${prof}|${starts_at}|${key(pName)}`;
     if (seen.has(dedupe)) { s.skippedDuplicates++; continue; }
-    const patient_id = await patientIdFor(c, pName);
+    const patient_id = await patientIdFor(c, { patientName: pName });
     const { error } = await c.supabase.from("schedule_appointments").insert({
       organization_id: c.org.id, professional_id: prof, patient_id, patient_name: pName, procedure_name: a.procedure,
       starts_at, ends_at: toTimestamp(a.date, a.end), status: a.status, is_return: a.isReturn ?? false,

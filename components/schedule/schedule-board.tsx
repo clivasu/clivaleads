@@ -5,7 +5,7 @@ import {
   Calendar as CalIcon, ArrowLeft2, ArrowRight2, Filter, ArrowDown2, Add,
 } from "iconsax-reactjs";
 import { Bell, X, Repeat, MoreVertical, Pencil, Trash2, CalendarClock, Plus, UserPlus, Stethoscope } from "lucide-react";
-import {
+import { type LeadPick,
   doctors as seedDoctors, patients as seedPatients, PROCEDURES as seedProcedures,
   STATUS_META, DAY_START, DAY_END, fmtHour, iso, addDays, seedAppointments,
   patientById as findSeedPatient, AVATAR_COLORS, PROC_COLORS, initialsFrom,
@@ -47,6 +47,7 @@ export function ScheduleBoard({ demo = true, storageKey, initial, initialDate }:
   const [docs, setDocs] = useState<Doctor[]>(demo ? seedDoctors : dbMode ? initial!.docs : []);
   const [procs, setProcs] = useState<Procedure[]>(demo ? seedProcedures : dbMode ? initial!.procs : []);
   const [extraPatients, setExtraPatients] = useState<Patient[]>(dbMode ? initial!.patients : []);
+  const [leads, setLeads] = useState<LeadPick[]>(dbMode ? initial!.leads ?? [] : []);
   const [syncError, setSyncError] = useState<string | null>(null);
 
   // Banco: a cada atualização vinda do servidor, a tela passa a refletir o banco.
@@ -56,6 +57,7 @@ export function ScheduleBoard({ demo = true, storageKey, initial, initialDate }:
     setDocs(initial.docs);
     setProcs(initial.procs);
     setExtraPatients(initial.patients);
+    setLeads(initial.leads ?? []);
   }, [dbMode, initial]);
   // Outros dispositivos/usuários: atualiza ao voltar para a aba e a cada minuto.
   useEffect(() => {
@@ -143,18 +145,27 @@ export function ScheduleBoard({ demo = true, storageKey, initial, initialDate }:
     );
 
   const saveDraft = (d: ApptDraft) => {
-    let patient = (demo ? seedPatients.find((p) => p.name === d.patientName) : undefined)
-      ?? extraPatients.find((p) => p.name.toLowerCase() === d.patientName.trim().toLowerCase());
+    let patient = (d.patientId ? extraPatients.find((p) => p.id === d.patientId) : undefined)
+      ?? (demo ? seedPatients.find((p) => p.name === d.patientName) : undefined)
+      ?? (d.leadId ? undefined : extraPatients.find((p) => p.name.toLowerCase() === d.patientName.trim().toLowerCase()));
     if (!patient) {
-      patient = { id: "np" + Date.now(), name: d.patientName.trim(), phone: "55", age: 30, gender: "F", since: iso(new Date()), tags: ["Novo"], notes: "", history: [] };
+      patient = { id: "np" + Date.now(), name: d.patientName.trim(), phone: d.phone ?? "", age: 30, gender: "F", since: iso(new Date()), tags: [], notes: "", history: [] };
       setExtraPatients((p) => [...p, patient!]);
     }
+    // Lead agendado sai da lista de "a agendar".
+    if (d.leadId) setLeads((prev) => prev.filter((l) => l.id !== d.leadId));
     const before = appts;
     const appt = draftToAppt(d, patient.id, d.id ?? newId());
     setAppts((prev) => (d.id ? prev.map((a) => (a.id === d.id ? appt : a)) : [...prev, appt]));
     if (dbMode) {
       persist(
-        () => saveAppointment({ id: appt.id, doctorId: appt.doctorId, patientName: patient!.name, procedure: appt.procedure, date: appt.date, start: appt.start, end: appt.end, status: appt.status, isReturn: appt.isReturn }),
+        () => saveAppointment({
+          id: appt.id, doctorId: appt.doctorId, patientName: patient!.name, procedure: appt.procedure, date: appt.date, start: appt.start, end: appt.end,
+          status: appt.status, isReturn: appt.isReturn,
+          ...(d.patientId && /^[0-9a-f-]{36}$/i.test(d.patientId) ? { patientId: d.patientId } : {}),
+          ...(d.leadId ? { leadId: d.leadId } : {}),
+          ...(d.phone ? { phone: d.phone } : {}),
+        }).then((r) => { if (r.ok && (d.leadId || !d.patientId)) router.refresh(); return r; }),
         () => setAppts(before),
       );
     }
@@ -387,6 +398,7 @@ export function ScheduleBoard({ demo = true, storageKey, initial, initialDate }:
           doctors={docs}
           procedures={procs}
           patients={demo ? seedPatients : extraPatients.filter((p) => !p.id.startsWith("nome:"))}
+          leads={leads}
           onClose={() => setModal(null)}
           onSave={saveDraft}
           onDelete={modal.id ? () => deleteAppt(modal.id!) : undefined}

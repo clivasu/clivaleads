@@ -133,6 +133,18 @@ Branch: `fix/security-integrity-cliva`, com merge na `main` (PR #1, `bdffdaf`) e
 | Notificações no calendário do topo (contagem de não lidas) | feito, testado | `components/dashboard/booking-notifications.tsx`; RLS testada |
 | Aplicar 0018 em produção | autorização | `docs/integrations/AGENDAMENTO_ONLINE.md` |
 
+## Fichas de pacientes e lead manual (fora do plano da auditoria)
+
+| Item | Situação | Evidência |
+|---|---|---|
+| Página Pacientes (busca por nome/telefone/CPF, atendimentos, último e próximo) | feito | `app/(dashboard)/patients` |
+| Ficha completa: dados pessoais, endereço, emergência, anamnese, alertas de saúde, consentimento LGPD | feito, testado | `lib/patients.ts`, `components/patients/patient-chart.tsx` |
+| Histórico de atendimentos e origem (lead do funil e respostas) | feito | aba Atendimentos / Origem |
+| CPF validado e único por clínica | feito, testado | `0019_patient_records.sql`, `tests/db/patients.test.ts` |
+| Lead manual (página Leads) fora das métricas e da cota do plano | feito, testado | RLS `source = 'manual'` |
+| Novo agendamento: busca de pacientes e leads, preenchimento automático | feito | `components/schedule/appointment-modal.tsx` |
+| Aplicar 0019 em produção | autorização | `supabase/deploy/APLICAR_0019.sql` |
+
 ## Próximas entregas
 
 | Entrega | Itens | Situação |

@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
         .from("lead_sessions")
         .select("id", { count: "exact", head: true })
         .eq("organization_id", organization_id)
+        .not("flow_id", "is", null) // leads manuais não contam na cota do plano
         .gte("created_at", monthStartISO());
       if ((count ?? 0) >= billing.plan.leadsPerMonth) return fail(402, "lead_limit");
     }

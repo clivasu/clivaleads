@@ -1,6 +1,7 @@
 "use client";
 
-import { X, Phone, MessageCircle, Calendar, Clock, Pencil, Check, Ban } from "lucide-react";
+import Link from "next/link";
+import { X, Phone, MessageCircle, Calendar, Clock, Pencil, Check, Ban, FileText, AlertTriangle } from "lucide-react";
 import type { Appt, Doctor, Patient, Status } from "@/lib/demo-schedule";
 import { STATUS_META, procColor, fmtHour } from "@/lib/demo-schedule";
 import { cn } from "@/lib/utils";
@@ -41,19 +42,27 @@ export function PatientPanel({
             </span>
             <div>
               <h3 className="text-lg font-bold text-slate-900">{patient.name}</h3>
-              <p className="text-sm text-slate-500">
-                {patient.age} anos · {patient.gender === "F" ? "Feminino" : "Masculino"}
-              </p>
+              {patient.age > 0 && (
+                <p className="text-sm text-slate-500">
+                  {patient.age} anos · {patient.gender === "F" ? "Feminino" : "Masculino"}
+                </p>
+              )}
+              {patient.phone && patient.age === 0 && <p className="text-sm text-slate-500">{patient.phone}</p>}
             </div>
           </div>
 
           <div className="mt-3 flex flex-wrap gap-2">
             {appt.isReturn && <Badge className="bg-amber-100 text-amber-700">Retorno</Badge>}
             {patient.tags.map((t) => (
-              <Badge key={t} className="bg-slate-100 text-slate-600">{t}</Badge>
+              <Badge key={t} className="bg-rose-50 text-rose-700"><AlertTriangle className="mr-1 inline h-3 w-3" />{t}</Badge>
             ))}
-            <Badge className="bg-slate-100 text-slate-500">Paciente desde {new Date(patient.since).getFullYear()}</Badge>
+            {patient.since && <Badge className="bg-slate-100 text-slate-500">Paciente desde {new Date(patient.since).getFullYear()}</Badge>}
           </div>
+          {/^[0-9a-f-]{36}$/i.test(patient.id) && (
+            <Link href={`/patients/${patient.id}`} className="mt-3 flex items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100">
+              <FileText className="h-4 w-4" /> Abrir ficha completa
+            </Link>
+          )}
 
           {/* Contato */}
           <div className="mt-4 flex gap-2">

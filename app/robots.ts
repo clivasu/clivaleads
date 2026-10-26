@@ -3,7 +3,7 @@ import { siteUrl } from "@/lib/site-url";
 
 // Páginas públicas (site, links das clínicas e funis) podem ser indexadas;
 // painel, APIs e rotas de login não. Funil com "noindex" usa a meta tag.
-const PRIVATE = ["/dashboard", "/flows", "/leads", "/analytics", "/schedule", "/settings", "/admin", "/bio", "/assinar", "/redefinir-senha"];
+const PRIVATE = ["/dashboard", "/flows", "/leads", "/analytics", "/schedule", "/patients", "/settings", "/admin", "/bio", "/assinar", "/redefinir-senha"];
 
 export default function robots(): MetadataRoute.Robots {
   return {
