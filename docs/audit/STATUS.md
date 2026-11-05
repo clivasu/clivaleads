@@ -145,6 +145,18 @@ Branch: `fix/security-integrity-cliva`, com merge na `main` (PR #1, `bdffdaf`) e
 | Novo agendamento: busca de pacientes e leads, preenchimento automático | feito | `components/schedule/appointment-modal.tsx` |
 | Aplicar 0019 em produção | autorização | `supabase/deploy/APLICAR_0019.sql` |
 
+## App no celular e segurança (nov/2026)
+
+| Item | Situação | Evidência |
+|---|---|---|
+| Next 16.4.5 (corrige GHSA-2464-fhr4-w9xw, GHSA-673q-mjm6-r5xr, GHSA-p3m5-59mp-jv5r) | feito, testado | `npm audit`: sem críticas |
+| Otimizador de imagens sem domínios externos | feito | nenhuma tela usa `next/image` |
+| Zod < 4.6.6 (GHSA-mrhx-c7xc-m3w5, alta) | pendente | exige migrar para Zod 4; APIs públicas já limitam o corpo a 64 KB |
+| App instalável (PWA), sem dados no aparelho | feito, testado | `docs/integrations/APP_CELULAR.md`, `tests/unit/pwa.test.ts` |
+| Navegação no celular (antes não existia menu) | feito | `components/dashboard/mobile-nav.tsx` |
+| "Sair" encerra a sessão (antes só abria /login) | feito | `components/dashboard/sign-out-button.tsx` |
+| Instalação em aparelho real | pendente | conferir depois do deploy (Android e iPhone) |
+
 ## Próximas entregas
 
 | Entrega | Itens | Situação |

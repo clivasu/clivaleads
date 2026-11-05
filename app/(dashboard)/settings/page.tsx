@@ -8,6 +8,7 @@ import { BillingCard } from "@/components/billing/billing-card";
 import { ProfileForm } from "@/components/settings/profile-form";
 import { createClient } from "@/lib/supabase/server";
 import { getBillingState, getUsage } from "@/lib/data/billing";
+import { InstallAppCard } from "@/components/settings/install-app-card";
 import { getBookingSettings } from "@/lib/data/booking";
 import { BookingSettingsForm, type ProcedureRow } from "@/components/settings/booking-settings-form";
 
@@ -38,6 +39,8 @@ export default async function SettingsPage() {
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Configurações</h1>
         <p className="text-sm text-slate-500">Identidade, identificador público, agendamento online e white-label da clínica.</p>
       </header>
+
+      <InstallAppCard />
 
       {!isSupabaseConfigured ? (
         <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">

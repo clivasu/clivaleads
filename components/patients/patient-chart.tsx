@@ -309,7 +309,7 @@ export function PatientChart({ data, isNew = false }: { data: PatientChartData; 
 
       {/* Salvar (fixo no rodapé) */}
       {tab === "ficha" && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-white/95 px-4 py-3 backdrop-blur md:left-auto md:right-6 md:bottom-6 md:rounded-2xl md:border md:shadow-xl">
+        <div className="fixed inset-x-0 bottom-[calc(60px+env(safe-area-inset-bottom))] z-30 border-t bg-white/95 px-4 py-3 backdrop-blur md:left-auto md:right-6 md:bottom-6 md:rounded-2xl md:border md:shadow-xl">
           <div className="flex items-center justify-end gap-3">
             {msg && <p role="status" className={cn("text-sm", msg.ok ? "text-emerald-600" : "text-rose-600")}>{msg.text}</p>}
             <button onClick={save} disabled={pending || !f.name.trim()} className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-50">
