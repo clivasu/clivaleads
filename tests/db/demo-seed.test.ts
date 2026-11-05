@@ -25,7 +25,9 @@ describe("demonstração Dra. Marina", () => {
       select f.slug, to_char(l.created_at at time zone 'America/Sao_Paulo', 'YYYY-MM') as m, count(*)::int as n
       from lead_sessions l join flows f on f.id = l.flow_id where l.organization_id = $1 group by 1, 2 order by 1, 2`, [owner.orgId]);
     console.log("leads por funil/mês:", JSON.stringify(perMonth));
-    for (const r of perMonth) expect(r.n).toBeGreaterThan(200);
+    // Só meses já encerrados: o mês corrente depende de quantos dias passaram.
+    const thisMonth = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }).slice(0, 7);
+    for (const r of perMonth.filter((x) => x.m < thisMonth)) expect(r.n).toBeGreaterThan(200);
 
     // todos com nome e telefone; nenhum anônimo
     const anon = await one<{ n: number }>(`select count(*)::int as n from lead_sessions where organization_id = $1 and (coalesce(name, '') = '' or coalesce(phone, '') = '')`, [owner.orgId]);
