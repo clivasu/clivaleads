@@ -6,7 +6,9 @@ import { z } from "zod";
 
 export const MAX_BODY_BYTES = 64 * 1024;
 
-const uuid = z.string().uuid();
+// z.guid() mantém a regra do Zod 3 (só o formato 8-4-4-4-12). z.uuid() e .uuid() recusam
+// ids como os do seed (22222222-0000-0000-0000-000000000001), que o Postgres aceita.
+const uuid = z.guid();
 const text = (max: number) => z.string().trim().max(max);
 
 export const answerSchema = z.object({
@@ -61,7 +63,7 @@ const trackEvent = z.object({
 });
 export const trackSchema = z.union([
   z.object({ events: z.array(z.unknown()).max(50) }),
-  trackEvent.passthrough(),
+  trackEvent.loose(),
 ]);
 export const trackEventSchema = trackEvent;
 

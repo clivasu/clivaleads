@@ -114,7 +114,7 @@ export function cleanAnamnesis(raw: unknown): Anamnesis {
 const opt = (max: number) => z.string().trim().max(max).optional().transform((v) => (v ? v : null));
 
 export const patientSchema = z.object({
-  id: z.string().uuid().optional(),
+  id: z.guid().optional(), // não .uuid(): o Zod 4 recusaria ids válidos no Postgres, como os do seed
   name: z.string().trim().min(2, "Informe o nome completo").max(160),
   phone: z.string().optional().transform((v) => { const d = onlyDigits(v ?? ""); return d ? d : null; })
     .refine((v) => v === null || (v.length >= 10 && v.length <= 13), "Telefone com DDD"),
@@ -132,7 +132,7 @@ export const patientSchema = z.object({
     cep: opt(9), street: opt(160), number: opt(20), complement: opt(80), district: opt(80), city: opt(80), state: opt(2),
   }).partial().default({}),
   emergency_contact: z.object({ name: opt(120), phone: opt(20), relation: opt(40) }).partial().default({}),
-  anamnesis: z.record(z.union([z.string(), z.boolean()])).default({}).transform(cleanAnamnesis),
+  anamnesis: z.record(z.string(), z.union([z.string(), z.boolean()])).default({}).transform(cleanAnamnesis),
   consent: z.boolean().default(false),
 });
 export type PatientInput = z.input<typeof patientSchema>;
