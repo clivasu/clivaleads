@@ -17,7 +17,9 @@ export interface ScheduleResult {
   id?: string;
 }
 
-const uuid = z.string().uuid();
+// z.guid() mantém a regra do Zod 3 (só o formato 8-4-4-4-12). z.uuid() e .uuid() recusam
+// ids como os do seed (22222222-0000-0000-0000-000000000001), que o Postgres aceita.
+const uuid = z.guid();
 const name = z.string().trim().min(1).max(120);
 const STATUSES = ["registered", "confirmed", "in_progress", "done", "cancelled"] as const;
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
