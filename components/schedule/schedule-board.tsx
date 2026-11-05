@@ -279,10 +279,10 @@ export function ScheduleBoard({ demo = true, storageKey, initial, initialDate }:
       {dbMode && storageKey && <LocalImportBanner orgKey={storageKey} />}
 
       {/* tabs */}
-      <div className="flex items-center gap-6 border-b px-6">
+      <div className="flex flex-wrap items-center gap-x-6 border-b px-4 sm:px-6">
         <button onClick={() => setTab("cal")} className={cn("border-b-2 py-4 text-sm font-semibold", tab === "cal" ? "border-emerald-500 text-emerald-600" : "border-transparent text-slate-400")}>Calendário</button>
         <button onClick={() => setTab("hist")} className={cn("border-b-2 py-4 text-sm font-medium", tab === "hist" ? "border-emerald-500 text-emerald-600" : "border-transparent text-slate-400")}>Histórico</button>
-        <button onClick={() => setModal({ date: iso(cursor) })} className="my-2 ml-auto flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600">
+        <button onClick={() => setModal({ date: iso(cursor) })} className="my-2 flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-500 sm:ml-auto sm:w-auto px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600">
           <Add size={18} color="#fff" /> Novo agendamento
         </button>
       </div>

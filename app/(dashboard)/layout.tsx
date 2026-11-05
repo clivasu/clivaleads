@@ -1,5 +1,8 @@
 import Link from "next/link";
+import type { Metadata, Viewport } from "next";
 import { Sidebar } from "@/components/dashboard/sidebar";
+import { MobileNav } from "@/components/dashboard/mobile-nav";
+import { PwaInit } from "@/components/pwa/pwa-init";
 import { Topbar } from "@/components/dashboard/topbar";
 import { isSupabaseConfigured } from "@/lib/env";
 import { redirect } from "next/navigation";
@@ -8,6 +11,13 @@ import { getBillingState } from "@/lib/data/billing";
 import { isStripeConfigured } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
+
+// App instalável só a partir do painel (funis públicos não oferecem a Cliva).
+export const metadata: Metadata = {
+  manifest: "/app.webmanifest",
+  appleWebApp: { capable: true, title: "Cliva", statusBarStyle: "default" },
+};
+export const viewport: Viewport = { themeColor: "#f3f5f7", viewportFit: "cover" };
 
 export default async function DashboardLayout({
   children,
@@ -55,12 +65,14 @@ export default async function DashboardLayout({
           </div>
         )}
         {/* Conteúdo num painel branco de cantos arredondados sobre o fundo neutro. */}
-        <main className="flex flex-1 flex-col px-3 pb-3 md:pl-0 md:pr-4 md:pb-4">
-          <div className="flex-1 overflow-hidden rounded-[28px] border border-slate-200/70 bg-white px-6 py-6 shadow-[0_1px_3px_rgba(15,23,42,0.04)] md:px-8 md:py-7">
+        <main className="flex flex-1 flex-col px-3 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pl-0 md:pr-4 md:pb-4">
+          <div className="flex-1 overflow-hidden rounded-[28px] border border-slate-200/70 bg-white px-4 py-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] md:px-8 md:py-7">
             <div className="mx-auto max-w-7xl">{children}</div>
           </div>
         </main>
       </div>
+      <MobileNav orgName={nav.orgName} userName={nav.userName} isAdmin={nav.isAdmin} />
+      <PwaInit />
     </div>
   );
 }

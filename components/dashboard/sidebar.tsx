@@ -21,6 +21,7 @@ import {
   Profile,
 } from "iconsax-reactjs";
 import { ClivaLogo } from "@/components/brand/logo";
+import { SignOutButton } from "./sign-out-button";
 import { cn } from "@/lib/utils";
 
 type NavIcon = FC<IconProps>;
@@ -245,13 +246,9 @@ export function Sidebar({ orgName, userName, userRole, isAdmin, avatarUrl, orgLo
                   {userRole || "Proprietário"}
                 </span>
               </span>
-              <Link
-                href="/login"
-                aria-label="Sair"
-                className="text-slate-400 transition-colors hover:text-red-500"
-              >
+              <SignOutButton className="text-slate-400 transition-colors hover:text-red-500 disabled:opacity-50">
                 <LogoutCurve size={20} color="currentColor" />
-              </Link>
+              </SignOutButton>
             </>
           )}
         </div>
