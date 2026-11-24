@@ -19,13 +19,14 @@ import { FlowCanvas } from "@/components/builder/flow-canvas";
 import type { JourneyLead } from "@/lib/flow-journeys";
 import type { FlowPrivateSettingsView } from "@/lib/data/flows";
 import { GOTO_EXIT, GOTO_WHATSAPP, applySmartLogic, isNegativeAnswer } from "@/lib/flow-logic";
-import { DEFAULT_THEME, type FlowTheme, type FontChoice } from "@/lib/theme";
+import { DEFAULT_THEME, normalizeTheme, type FlowTheme, type FontChoice } from "@/lib/theme";
 import { saveFlow } from "@/lib/actions/flows";
 import { applyIdMap } from "@/lib/flow-persistence";
 import { safeFileUrl } from "@/lib/funnel-form";
 import { DEFAULT_SETTINGS, pickPersistedSettings, type FunnelSettings } from "@/lib/flow-settings";
 import { GTM_SUPPORTED, normalizePixelId, type PixelKey } from "@/lib/public-funnel-config";
 import { WebhookSettings } from "@/components/builder/webhook-settings";
+import { BookingHoursEditor } from "@/components/builder/booking-hours-editor";
 import type { BookingOptions } from "@/lib/data/booking";
 
 // Profissionais e procedimentos da Agenda (para o bloco "Agendamento").
@@ -148,6 +149,23 @@ export function BuilderClient({ flow, leads = [], privateSettings, bookingOption
   }));
   const setS = (patch: Partial<FunnelSettings>) => { setSettings((prev) => ({ ...prev, ...patch })); setSaved(false); };
 
+  // Design: guarda só o que foi mudado; o resto segue a cor e o logo da clínica.
+  const [themePatch, setThemePatch] = useState<Partial<FlowTheme>>(() => normalizeTheme((flow.settings as { theme?: unknown } | null | undefined)?.theme));
+  const theme = useMemo<FlowTheme>(() => ({
+    ...DEFAULT_THEME,
+    primaryColor: flow.organization.primary_color ?? DEFAULT_THEME.primaryColor,
+    logoUrl: flow.organization.logo_url ?? undefined,
+    ...themePatch,
+  }), [flow.organization.primary_color, flow.organization.logo_url, themePatch]);
+  const setT = (patch: Partial<FlowTheme>) => {
+    setThemePatch((prev) => {
+      const next = { ...prev, ...patch };
+      if (!next.logoUrl) delete next.logoUrl; // vazio = logo da clínica
+      return next;
+    });
+    setSaved(false);
+  };
+
   async function handleSave() {
     setSaving(true);
     setSaveError(null);
@@ -162,7 +180,7 @@ export function BuilderClient({ flow, leads = [], privateSettings, bookingOption
         whatsapp: settings.whatsapp,
         finalMessage: settings.finalMessage,
         coverImageUrl: settings.ogImage || flow.cover_image_url,
-        settings: settings as unknown as Record<string, unknown>,
+        settings: { ...settings, theme: themePatch } as unknown as Record<string, unknown>,
         steps,
       });
       if (res.ok) {
@@ -182,15 +200,6 @@ export function BuilderClient({ flow, leads = [], privateSettings, bookingOption
       setSaving(false);
     }
   }
-  const [theme, setTheme] = useState<FlowTheme>({
-    ...DEFAULT_THEME,
-    primaryColor: flow.organization.primary_color ?? DEFAULT_THEME.primaryColor,
-    logoUrl: flow.organization.logo_url ?? undefined,
-  });
-  const setT = (patch: Partial<FlowTheme>) => {
-    setTheme((prev) => ({ ...prev, ...patch }));
-    setSaved(false);
-  };
   const dragId = useRef<string | null>(null);
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -353,9 +362,16 @@ export function BuilderClient({ flow, leads = [], privateSettings, bookingOption
             saving && "opacity-60",
           )}
         >
-          {saving ? "Salvando..." : saveError ? "Erro — tentar de novo" : saved ? <><Check className="h-4 w-4" /> Salvo</> : "Salvar"}
+          {saving ? "Salvando..." : saveError ? "Tentar de novo" : saved ? <><Check className="h-4 w-4" /> Salvo</> : "Salvar"}
         </button>
       </div>
+      {saveError && (
+        <div role="alert" className="flex items-start gap-2 border-b border-rose-200 bg-rose-50 px-5 py-3 text-sm text-rose-800">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <p className="min-w-0 flex-1"><b>Não foi salvo.</b> {saveError}</p>
+          {/plano/i.test(saveError) && <Link href="/settings" className="shrink-0 font-semibold underline underline-offset-2">Ver plano</Link>}
+        </div>
+      )}
 
       <div className="flex min-h-0 flex-1">
         {tab === "build" && (
@@ -473,7 +489,7 @@ export function BuilderClient({ flow, leads = [], privateSettings, bookingOption
 
 /* ------------------------------ Design ------------------------------ */
 
-const COLOR_PRESETS = ["#7C3AED", "#16A34A", "#0EA5E9", "#EC4899", "#F59E0B", "#0F172A", "#EF4444", "#14B8A6"];
+const COLOR_PRESETS = ["#7C3AED", "#16A34A", "#0EA5E9", "#EC4899", "#F59E0B", "#0F172A", "#EF4444", "#14B8A6", "#946C28"];
 
 function ColorRow({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
@@ -1333,6 +1349,7 @@ function BookingInspector({ c, onChange }: { c: FlowStep["config"]; onChange: (p
         </select>
         {opts.professionals.length === 0 && <p className="mt-1 text-[11px] text-amber-700">Cadastre ao menos um profissional na Agenda para liberar horários.</p>}
       </Field>
+      <BookingHoursEditor c={c} duration={Math.min(720, Math.max(5, Number(c.booking_duration) || proc?.duration_min || 60))} onChange={onChange} />
       <ToggleRow label="Pedir nome e WhatsApp no bloco" desc="Só aparece se o funil ainda não pediu antes." on={c.booking_ask_contact ?? true} onChange={(v) => onChange({ booking_ask_contact: v })} />
       <Field label="Título da confirmação">
         <input className={inputCls} value={c.booking_success_title ?? ""} onChange={(e) => onChange({ booking_success_title: e.target.value })} placeholder="Horário reservado!" />

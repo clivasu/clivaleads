@@ -1,3 +1,5 @@
+import { normalizeTheme, type FlowTheme } from "@/lib/theme";
+
 // Configuração pública do funil: o que a página do paciente pode usar.
 // Derivada de flows.settings no servidor, só com valores validados. Nada de
 // HTML/JS livre: pixels por provedor permitido e ID no formato do provedor.
@@ -62,6 +64,8 @@ export function normalizePublicSettings(raw: Record<string, unknown>): { setting
   out.seoTitle = clip(raw.seoTitle, 120);
   out.seoDescription = clip(raw.seoDescription, 300);
   out.consentText = clip(raw.consentText, 400);
+  const theme = normalizeTheme(raw.theme);
+  if (Object.keys(theme).length > 0) out.theme = theme; else delete out.theme;
   return { settings: out, errors };
 }
 
@@ -70,6 +74,7 @@ export interface PublicFunnelConfig {
   consent: { required: boolean; banner: boolean; text: string; privacyUrl: string | null };
   seo: { title: string | null; description: string | null; ogImage: string | null; favicon: { url: string } | { emoji: string } | null; noindex: boolean };
   redirectUrl: string | null;
+  theme: Partial<FlowTheme>; // aba Design (vazio = cor e logo da clínica)
 }
 
 export const EMPTY_PUBLIC_CONFIG: PublicFunnelConfig = {
@@ -77,6 +82,7 @@ export const EMPTY_PUBLIC_CONFIG: PublicFunnelConfig = {
   consent: { required: false, banner: false, text: "", privacyUrl: null },
   seo: { title: null, description: null, ogImage: null, favicon: null, noindex: false },
   redirectUrl: null,
+  theme: {},
 };
 
 // Na leitura (página pública): só o que é válido; o resto é ignorado.
@@ -106,5 +112,6 @@ export function toPublicConfig(raw: unknown): PublicFunnelConfig {
       noindex: s.noindex === true,
     },
     redirectUrl: safeHttpsUrl(s.redirectUrl),
+    theme: normalizeTheme(s.theme),
   };
 }

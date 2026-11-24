@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { holidayName } from "@/lib/booking/holidays";
-import { computeSlots, DEFAULT_BOOKING_SETTINGS, isOfferedSlot, normalizeBookingSettings, type Busy } from "@/lib/booking/slots";
+import { applyBlockHours, computeSlots, DEFAULT_BOOKING_SETTINGS, isOfferedSlot, normalizeBlockHours, normalizeBookingSettings, openDaysLabel, type Busy } from "@/lib/booking/slots";
 
 const S = DEFAULT_BOOKING_SETTINGS;
 const NOW = new Date("2026-10-22T11:00:00Z"); // qui 22/10/2026, 08:00 em Brasília
@@ -69,5 +69,51 @@ describe("horários livres", () => {
     expect(s.max_days_ahead).toBe(30);
     expect(s.hours[0]).toMatchObject({ open: true, start: "08:00", end: "12:00" });
     expect(s.blocked_dates).toEqual(["2026-12-24"]);
+  });
+});
+
+describe("dias e horários do próprio bloco", () => {
+  const closed = { open: false, ranges: [] };
+  const week = (o: Record<number, { start: string; end: string }[]>) => Array.from({ length: 7 }, (_, i) => (o[i] ? { open: true, ranges: o[i] } : closed));
+  const slots = (date: string, c: Parameters<typeof applyBlockHours>[1], busy: Busy[] = []) =>
+    computeSlots({ settings: applyBlockHours(S, c), from: date, to: date, duration: 60, professionals: P, busy, now: NOW })[0];
+
+  // ter 27/10 e qui 29/10/2026; sáb 31/10
+  const c = { booking_hours: week({ 2: [{ start: "19:00", end: "21:00" }], 6: [{ start: "08:00", end: "10:00" }, { start: "14:00", end: "16:00" }] }), booking_slot_minutes: 60 };
+
+  it("só os dias marcados abrem, nos períodos marcados, mesmo fora do horário da clínica", () => {
+    expect(slots("2026-10-27", c).slots.map((x) => x.time)).toEqual(["19:00", "20:00"]);
+    expect(slots("2026-10-31", c).slots.map((x) => x.time)).toEqual(["08:00", "09:00", "14:00", "15:00"]);
+    expect(slots("2026-10-29", c).closed).toBe("Fechado");
+  });
+
+  it("servidor recusa horário fora do bloco e respeita a agenda e os feriados da clínica", () => {
+    const base = { settings: applyBlockHours(S, c), from: "2026-10-27", to: "2026-10-27", duration: 60, professionals: P, busy: [] as Busy[], now: NOW };
+    expect(isOfferedSlot({ ...base, date: "2026-10-27", time: "10:00" })).toEqual([]);
+    expect(isOfferedSlot({ ...base, date: "2026-10-27", time: "19:00" })).toEqual(P);
+    const busy = [{ professional_id: P[0], start: new Date("2026-10-27T22:00:00Z"), end: new Date("2026-10-27T23:00:00Z") }]; // 19h-20h
+    expect(slots("2026-10-27", c, busy).slots.map((x) => x.time)).toEqual(["20:00"]);
+    expect(slots("2026-11-02", { booking_hours: week({ 1: [{ start: "09:00", end: "12:00" }] }) }).closed).toMatch(/Feriado/);
+  });
+
+  it("sem configuração (ou inválida) vale o horário da clínica", () => {
+    for (const raw of [undefined, [], "x", [1, 2]]) expect(applyBlockHours(S, { booking_hours: raw as never })).toEqual(S);
+    expect(applyBlockHours(S, { booking_slot_minutes: 7 }).slot_minutes).toBe(S.slot_minutes);
+  });
+
+  it("limpa períodos inválidos, ordena e junta os que se sobrepõem", () => {
+    const n = normalizeBlockHours(week({ 1: [{ start: "14:00", end: "16:00" }, { start: "09:00", end: "11:00" }, { start: "10:00", end: "12:00" }, { start: "18:00", end: "17:00" }, { start: "aa", end: "12:00" }] }))!;
+    expect(n[1]).toEqual({ open: true, ranges: [{ start: "09:00", end: "12:00" }, { start: "14:00", end: "16:00" }] });
+    expect(normalizeBlockHours(week({ 3: [{ start: "18:00", end: "17:00" }] }))![3]).toEqual({ open: false, ranges: [] });
+  });
+
+  it("texto dos dias disponíveis", () => {
+    const o = (...i: number[]) => Array.from({ length: 7 }, (_, k) => ({ open: i.includes(k) }));
+    expect(openDaysLabel(o(2, 4))).toBe("terça e quinta");
+    expect(openDaysLabel(o(1, 2, 3, 4, 5))).toBe("segunda a sexta");
+    expect(openDaysLabel(o(1, 3, 5))).toBe("segunda, quarta e sexta");
+    expect(openDaysLabel(o(0, 6))).toBe("sábado e domingo");
+    expect(openDaysLabel(o(0, 1, 2, 3, 4, 5, 6))).toBe("todos os dias");
+    expect(openDaysLabel(o())).toBe("");
   });
 });

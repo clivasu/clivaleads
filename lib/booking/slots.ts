@@ -1,9 +1,10 @@
 import { holidayName } from "./holidays";
+import type { BookingBlockDay, StepConfig } from "@/lib/types";
 
 // Agendamento online: regras da clínica e cálculo de horários livres.
 // Tudo no fuso de Brasília (UTC-3, sem horário de verão desde 2019).
 
-export interface DayHours { open: boolean; start: string; end: string; break_start?: string | null; break_end?: string | null }
+export interface DayHours { open: boolean; start: string; end: string; break_start?: string | null; break_end?: string | null; ranges?: { start: string; end: string }[] }
 export interface BookingSettings {
   enabled: boolean;
   hours: DayHours[];          // 0 = domingo … 6 = sábado
@@ -100,6 +101,69 @@ export function closedReason(s: BookingSettings, date: string, today: string): s
   return null;
 }
 
+const SLOT_STEPS = [15, 20, 30, 45, 60, 90, 120];
+export const BLOCK_MAX_RANGES = 6;
+
+// Dias/horários definidos no próprio bloco: períodos válidos, em ordem e sem
+// sobreposição. undefined = o bloco usa o horário da clínica.
+export function normalizeBlockHours(raw: unknown): BookingBlockDay[] | undefined {
+  if (!Array.isArray(raw) || raw.length !== 7) return undefined;
+  return raw.map((d) => {
+    const day = (d && typeof d === "object" ? d : {}) as Partial<BookingBlockDay>;
+    const sorted = (Array.isArray(day.ranges) ? day.ranges : [])
+      .filter((r) => r && HHMM.test(r.start ?? "") && HHMM.test(r.end ?? "") && toMin(r.end) > toMin(r.start))
+      .map((r) => ({ start: r.start, end: r.end }))
+      .sort((a, b) => toMin(a.start) - toMin(b.start))
+      .slice(0, BLOCK_MAX_RANGES);
+    const ranges: { start: string; end: string }[] = [];
+    for (const r of sorted) {
+      const last = ranges.at(-1);
+      if (last && toMin(r.start) <= toMin(last.end)) { if (toMin(r.end) > toMin(last.end)) last.end = r.end; }
+      else ranges.push(r);
+    }
+    return { open: Boolean(day.open) && ranges.length > 0, ranges };
+  });
+}
+
+// Regras da clínica com os dias/horários do bloco por cima. Feriados, datas
+// bloqueadas, antecedência e janela continuam sendo os da clínica.
+export function applyBlockHours(s: BookingSettings, c: Pick<StepConfig, "booking_hours" | "booking_slot_minutes">): BookingSettings {
+  const block = normalizeBlockHours(c.booking_hours);
+  const step = Number(c.booking_slot_minutes);
+  return {
+    ...s,
+    ...(SLOT_STEPS.includes(step) ? { slot_minutes: step } : {}),
+    ...(block ? { hours: block.map((d, i) => ({ ...s.hours[i], open: d.open, ranges: d.ranges, break_start: null, break_end: null })) } : {}),
+  };
+}
+
+// Horários de início possíveis num dia (minutos desde 00:00).
+export function startMinutes(h: DayHours, duration: number, step: number): number[] {
+  const out: number[] = [];
+  const windows = h.ranges ?? [{ start: h.start, end: h.end }];
+  const bs = h.break_start ? toMin(h.break_start) : null, be = h.break_end ? toMin(h.break_end) : null;
+  for (const w of windows) {
+    for (let m = toMin(w.start); m + duration <= toMin(w.end); m += step) {
+      if (bs !== null && be !== null && m < be && m + duration > bs) continue; // invade a pausa
+      out.push(m);
+    }
+  }
+  return out;
+}
+export const minutesToHHMM = (m: number) => toHHMM(m);
+
+// "terça e quinta", "segunda a sexta": dias abertos, para a tela do paciente.
+export function openDaysLabel(hours: Pick<DayHours, "open">[]): string {
+  const names = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+  const idx = [1, 2, 3, 4, 5, 6, 0].filter((i) => hours[i]?.open);
+  if (idx.length === 0) return "";
+  if (idx.length === 7) return "todos os dias";
+  const pos = idx.map((i) => (i + 6) % 7);
+  if (idx.length >= 3 && pos.every((p, k) => k === 0 || p === pos[k - 1] + 1)) return `${names[idx[0]]} a ${names[idx.at(-1)!]}`;
+  const list = idx.map((i) => names[i]);
+  return list.length === 1 ? list[0] : `${list.slice(0, -1).join(", ")} e ${list.at(-1)}`;
+}
+
 // Horários livres entre `from` e `to` (inclusive) para um atendimento de
 // `duration` minutos. Um horário vale se pelo menos um profissional estiver
 // livre no intervalo inteiro. Respeita pausa, antecedência e janela máxima.
@@ -117,10 +181,7 @@ export function computeSlots(p: {
     const day: DaySlots = { date, weekday: wd, closed, slots: [] };
     if (!closed && p.professionals.length > 0) {
       const h = s.hours[wd];
-      const open = toMin(h.start), close = toMin(h.end);
-      const bs = h.break_start ? toMin(h.break_start) : null, be = h.break_end ? toMin(h.break_end) : null;
-      for (let m = open; m + duration <= close; m += s.slot_minutes) {
-        if (bs !== null && be !== null && m < be && m + duration > bs) continue; // invade a pausa
+      for (const m of startMinutes(h, duration, s.slot_minutes)) {
         const start = localToUtc(date, toHHMM(m));
         if (start.getTime() < earliest) continue;
         const end = new Date(start.getTime() + duration * 60000);

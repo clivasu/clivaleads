@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarCheck2, CalendarPlus, ChevronLeft, ChevronRight, Clock, Loader2, UserRound } from "lucide-react";
 import type { ContactInfo, FlowStep } from "@/lib/types";
-import { addDays, brToday, computeSlots, DEFAULT_BOOKING_SETTINGS } from "@/lib/booking/slots";
+import { addDays, applyBlockHours, brToday, computeSlots, DEFAULT_BOOKING_SETTINGS, openDaysLabel } from "@/lib/booking/slots";
 
 // Bloco "Agendamento": o paciente escolhe um horário livre da Agenda da
 // clínica. Os horários vêm do servidor (regras + agenda real); no editor e no
@@ -25,9 +25,9 @@ const newRef = () =>
     ? crypto.randomUUID()
     : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (Number(c) ^ (Math.random() * 16) >> (Number(c) / 4)).toString(16));
 
-function demoDays(from: string): Day[] {
-  return computeSlots({ settings: DEFAULT_BOOKING_SETTINGS, from, to: addDays(from, PAGE - 1), duration: 60, professionals: ["demo"], busy: [], now: new Date() })
-    .map((d) => ({ date: d.date, weekday: d.weekday, closed: d.closed, slots: d.slots.filter((_, i) => i % 3 !== 1).map((s) => s.time) }));
+function demoDays(from: string, c: FlowStep["config"]): Day[] {
+  return computeSlots({ settings: applyBlockHours(DEFAULT_BOOKING_SETTINGS, c), from, to: addDays(from, PAGE - 1), duration: Number(c.booking_duration) || 60, professionals: ["demo"], busy: [], now: new Date() })
+    .map((d) => ({ date: d.date, weekday: d.weekday, closed: d.closed, slots: d.slots.filter((_, i) => c.booking_hours || i % 3 !== 1).map((s) => s.time) }));
 }
 
 function prettyDate(date: string) {
@@ -59,7 +59,8 @@ export function BookingStep({
   const c = step.config;
   const [from, setFrom] = useState(() => brToday(new Date()));
   const [days, setDays] = useState<Day[] | null>(null);
-  const [meta, setMeta] = useState({ procedure: c.booking_procedure || "Avaliação", duration: Number(c.booking_duration) || 60, maxAhead: 30, noPros: false });
+  const [meta, setMeta] = useState({ procedure: c.booking_procedure || "Avaliação", duration: Number(c.booking_duration) || 60, maxAhead: 30, noPros: false, openDays: openDaysLabel(applyBlockHours(DEFAULT_BOOKING_SETTINGS, c).hours) });
+  const autoHops = useRef(0); // pula sozinho semanas sem horário (até 8), só na abertura
   const [date, setDate] = useState<string | null>(null);
   const [time, setTime] = useState<string | null>(null);
   const [name, setName] = useState(contact.name ?? "");
@@ -73,20 +74,20 @@ export function BookingStep({
   const load = useCallback(async (start: string, keepSelection = false) => {
     setDays(null);
     if (!keepSelection) { setDate(null); setTime(null); }
-    if (preview) { setDays(demoDays(start)); return; }
+    if (preview) { setDays(demoDays(start, c)); return; }
     try {
       const q = new URLSearchParams({ flow_id: flowId, step_id: step.id, from: start, days: String(PAGE) });
       const res = await fetch(`/api/booking/slots?${q.toString()}`, { cache: "no-store" });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error ?? "erro");
-      if (json.demo) { setDays(demoDays(start)); return; }
-      setMeta({ procedure: json.procedure, duration: json.duration, maxAhead: json.max_days_ahead, noPros: json.no_professionals });
+      if (json.demo) { setDays(demoDays(start, c)); return; }
+      setMeta({ procedure: json.procedure, duration: json.duration, maxAhead: json.max_days_ahead, noPros: json.no_professionals, openDays: json.open_days ?? "" });
       setDays(json.days as Day[]);
     } catch {
       setError("Não foi possível carregar os horários. Tente de novo em instantes.");
       setDays([]);
     }
-  }, [flowId, step.id, preview]);
+  }, [flowId, step.id, preview, c]);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- busca inicial dos horários
   useEffect(() => { void load(from); }, [load, from]);
@@ -96,8 +97,13 @@ export function BookingStep({
     if (!days || date) return;
     const first = days.find((d) => !d.closed && d.slots.length > 0);
     // eslint-disable-next-line react-hooks/set-state-in-effect -- escolha automática ao carregar
-    if (first) setDate(first.date);
-  }, [days, date]);
+    if (first) { autoHops.current = 99; setDate(first.date); return; }
+    const next = addDays(from, PAGE);
+    if (days.length > 0 && !meta.noPros && autoHops.current < 8 && next <= addDays(brToday(new Date()), meta.maxAhead)) {
+      autoHops.current += 1;
+      setFrom(next);
+    }
+  }, [days, date, from, meta.noPros, meta.maxAhead]);
 
   const today = brToday(new Date());
   const lastDay = addDays(today, meta.maxAhead);
@@ -157,7 +163,7 @@ export function BookingStep({
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50">
           <CalendarCheck2 className="h-8 w-8 text-emerald-600" />
         </div>
-        <h2 className="text-2xl font-bold tracking-tight text-slate-900">{c.booking_success_title || "Horário reservado!"}</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-[color:var(--page-text,#0f172a)]">{c.booking_success_title || "Horário reservado!"}</h2>
         <p className="mt-2 text-slate-500">{c.booking_success_body || "A clínica vai confirmar com você pelo WhatsApp."}</p>
         <div className="mx-auto mt-5 max-w-sm rounded-2xl border border-slate-200 p-4 text-left text-sm">
           <p className="font-semibold text-slate-900 first-letter:uppercase">{prettyDate(done.date)} às {done.time}</p>
@@ -179,15 +185,16 @@ export function BookingStep({
 
   return (
     <div>
-      <h2 className="text-2xl font-bold tracking-tight text-slate-900">{c.title || "Escolha o melhor horário"}</h2>
+      <h2 className="text-2xl font-bold tracking-tight text-[color:var(--page-text,#0f172a)]">{c.title || "Escolha o melhor horário"}</h2>
       {c.subtitle && <p className="mt-1 text-slate-500">{c.subtitle}</p>}
       <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-        <Clock className="h-3.5 w-3.5" /> {meta.procedure} · {meta.duration} min
+        <Clock className="h-3.5 w-3.5 shrink-0" /> {meta.procedure} · {meta.duration} min
       </p>
+      {meta.openDays && <p className="mt-2 text-sm text-slate-500">Dias disponíveis: {meta.openDays}.</p>}
 
       {/* Dias */}
       <div className="mt-5 flex items-center gap-2">
-        <button type="button" aria-label="Dias anteriores" disabled={from <= today} onClick={() => setFrom(addDays(from, -PAGE) < today ? today : addDays(from, -PAGE))}
+        <button type="button" aria-label="Dias anteriores" disabled={from <= today} onClick={() => { autoHops.current = 99; setFrom(addDays(from, -PAGE) < today ? today : addDays(from, -PAGE)); }}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 disabled:opacity-30">
           <ChevronLeft className="h-4 w-4" />
         </button>
@@ -206,7 +213,7 @@ export function BookingStep({
             );
           })}
         </div>
-        <button type="button" aria-label="Próximos dias" disabled={addDays(from, PAGE) > lastDay} onClick={() => setFrom(addDays(from, PAGE))}
+        <button type="button" aria-label="Próximos dias" disabled={addDays(from, PAGE) > lastDay} onClick={() => { autoHops.current = 99; setFrom(addDays(from, PAGE)); }}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 disabled:opacity-30">
           <ChevronRight className="h-4 w-4" />
         </button>

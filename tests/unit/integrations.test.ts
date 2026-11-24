@@ -124,3 +124,17 @@ describe("4.1/4.3 configuração pública do funil", () => {
     expect(plain.robots).toBeUndefined();
   });
 });
+
+describe("tema do funil (aba Design)", () => {
+  it("vai para a página pública só com valores válidos", async () => {
+    const { toPublicConfig, normalizePublicSettings } = await import("@/lib/public-funnel-config");
+    const good = { primaryColor: "#946C28", fontFamily: "serif", buttonRadius: 99, progressBar: false, logoUrl: "/materiais/logo.webp" };
+    expect(toPublicConfig({ theme: good }).theme).toEqual({ ...good, buttonRadius: 28 });
+    const evil = { primaryColor: "red;background:url(https://x)", backgroundColor: "#fff", logoUrl: "javascript:alert(1)", fontFamily: "x", buttonRadius: "abc", extra: 1 };
+    expect(toPublicConfig({ theme: evil }).theme).toEqual({});
+    for (const t of [undefined, null, "x", []]) expect(toPublicConfig({ theme: t }).theme).toEqual({});
+    // na gravação: limpa e não guarda tema vazio
+    expect(normalizePublicSettings({ theme: { ...evil, primaryColor: "#111111" } }).settings.theme).toEqual({ primaryColor: "#111111" });
+    expect("theme" in normalizePublicSettings({ theme: {} }).settings).toBe(false);
+  });
+});

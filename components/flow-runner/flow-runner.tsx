@@ -510,7 +510,7 @@ function StepTitle({ title, subtitle, center }: { title?: string; subtitle?: str
   return (
     <div className={cn("mb-6", center && "text-center")}>
       {title && (
-        <h1 className="text-2xl font-bold leading-tight tracking-tight text-slate-900">{title}</h1>
+        <h1 className="text-2xl font-bold leading-tight tracking-tight text-[color:var(--page-text,#0f172a)]">{title}</h1>
       )}
       {subtitle && <p className="mt-2 text-slate-500">{subtitle}</p>}
     </div>

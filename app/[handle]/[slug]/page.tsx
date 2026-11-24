@@ -28,8 +28,8 @@ export default async function HandleFlowPage({
   if (!page || page.flow.steps.length === 0) notFound();
 
   return (
-    <div className="min-h-[100dvh] bg-white">
-      <FlowRunner flow={page.flow} config={page.config} />
+    <div className="min-h-[100dvh] bg-white" style={{ background: page.config.theme.backgroundColor }}>
+      <FlowRunner flow={page.flow} config={page.config} theme={page.config.theme} />
       <MarketingPixels config={page.config} orgId={page.flow.organization_id} />
     </div>
   );
