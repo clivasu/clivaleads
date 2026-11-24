@@ -80,6 +80,7 @@ export const BLOCK_CATALOG: BlockDef[] = [
   { type: "faq", label: "FAQ", group: "Prova" },
 
   { type: "booking", label: "Agendamento (horários livres)", group: "Conversão", isNew: true },
+  { type: "gift", label: "Material grátis (PDF)", group: "Conversão", isNew: true },
   { type: "spin_wheel", label: "Roleta (gamificação)", group: "Conversão", isNew: true },
   { type: "loading", label: "Análise (loading)", group: "Conversão" },
   { type: "timer", label: "Timer", group: "Conversão" },
@@ -102,6 +103,17 @@ export function defaultConfig(type: StepType): StepConfig {
         button_label: "Continuar",
         booking_success_title: "Horário reservado!",
         booking_success_body: "A clínica vai confirmar com você pelo WhatsApp.",
+      };
+    case "gift":
+      return {
+        title: "Seu material está liberado!",
+        body: "Baixe agora e aproveite.",
+        file_url: "",
+        file_label: "Baixar PDF",
+        invite_title: "Quer dar o próximo passo?",
+        invite_body: "Escolha um horário e converse com a nossa equipe.",
+        invite_label: "Quero agendar",
+        invite_note: "",
       };
     case "container":
       return { title: "", container_layout: "vertical", gap: 12, columns: 2, pad: 0 };

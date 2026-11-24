@@ -8,6 +8,7 @@ import { tierFromScore, TIER_LABEL } from "@/lib/scoring";
 import type { LeadStatus } from "@/lib/types";
 import { deleteLeadAction, updateLeadAction } from "@/lib/actions/leads";
 import { cn } from "@/lib/utils";
+import { normalizeWhatsapp } from "@/lib/whatsapp";
 
 export interface LeadRow {
   id: string;
@@ -31,9 +32,6 @@ const STATUS_LABEL: Record<LeadStatus, string> = {
 
 function fmt(d: string) {
   return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
-function digits(p?: string | null) {
-  return (p ?? "").replace(/\D/g, "");
 }
 
 export function LeadsTable({ leads }: { leads: LeadRow[] }) {
@@ -121,7 +119,7 @@ export function LeadsTable({ leads }: { leads: LeadRow[] }) {
                 <td className="px-5 py-3 text-center">
                   {l.phone ? (
                     <a
-                      href={`https://wa.me/${digits(l.phone)}`}
+                      href={`https://wa.me/${normalizeWhatsapp(l.phone)}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-600"

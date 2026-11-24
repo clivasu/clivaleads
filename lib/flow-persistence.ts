@@ -6,7 +6,7 @@ import type { FlowStep } from "@/lib/types";
 // de salvar e recarregar.
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const GOTO_KEYS = new Set(["goto", "score_gate_goto"]);
+const GOTO_KEYS = new Set(["goto", "score_gate_goto", "invite_goto"]);
 
 export type IdMap = Record<string, string>;
 
@@ -14,7 +14,7 @@ function newUuid(): string {
   return globalThis.crypto.randomUUID();
 }
 
-// Reescreve qualquer campo goto/score_gate_goto cujo valor esteja no mapa.
+// Reescreve qualquer campo goto/score_gate_goto/invite_goto cujo valor esteja no mapa.
 function remap(value: unknown, map: IdMap): unknown {
   if (Array.isArray(value)) return value.map((v) => remap(v, map));
   if (value && typeof value === "object") {

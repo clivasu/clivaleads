@@ -90,7 +90,7 @@ export function buildJourneys(steps: FlowStep[], leads: JourneyLead[]): LeadJour
 
 // Tempo médio estimado (s) por tipo — usado só para o card "mais demorou".
 const TIM: Partial<Record<string, number>> = {
-  text: 22, news: 26, video: 30, question: 9, multi_choice: 11, rating: 12, form: 25, loading: 3,
+  text: 22, news: 26, video: 30, question: 9, multi_choice: 11, rating: 12, form: 25, loading: 3, gift: 20,
   before_after: 14, carousel: 16, faq: 18, hero: 8, timer: 15, stats: 12, testimonial: 16,
 };
 

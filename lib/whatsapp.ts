@@ -6,7 +6,8 @@ export function normalizeWhatsapp(raw: string | null | undefined): string {
   if (!raw) return "";
   const digits = raw.replace(/\D/g, "");
   if (!digits) return "";
-  if (digits.startsWith("55")) return digits;
+  // 55 também é DDD (RS): só é código do país quando sobram DDD + número.
+  if (digits.startsWith("55") && digits.length >= 12) return digits;
   if (digits.length <= 11) return `55${digits}`;
   return digits;
 }

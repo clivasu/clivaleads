@@ -15,3 +15,14 @@
 - O agendamento fica ligado ao lead; o lead passa a "agendado" e entra no indicador "Agendamentos" da Analytics.
 - Status na Agenda: "aguardando" (padrão) ou "confirmado" (com confirmação automática).
 - Fuso de Brasília. Feriados nacionais incluem Carnaval, Sexta-feira Santa e Corpus Christi. Feriados municipais: use "Datas sem atendimento".
+
+## Material grátis (bloco `gift`)
+
+Entrega um PDF e convida para o próximo passo (por exemplo, o bloco Agendamento).
+
+- O lead é gravado quando a pessoa chega ao bloco, mesmo que ela não agende. Se a gravação falhar, a etapa seguinte tenta de novo com o mesmo `client_ref`.
+- Ao agendar, o lead vira "Agendado", o agendamento e a ficha do paciente apontam para o lead, e a página do lead mostra data e horário.
+- Campos extras do formulário (Instagram, cidade) são gravados como respostas do lead.
+- O arquivo é um link https ou um arquivo de `public/`. Não há upload de PDF no editor.
+
+Primeiro uso: `supabase/seed/funil_diagnostico_viviane.sql` (só na conta mamsbsb@icloud.com).
