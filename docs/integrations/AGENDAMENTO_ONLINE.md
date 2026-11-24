@@ -26,3 +26,11 @@ Entrega um PDF e convida para o próximo passo (por exemplo, o bloco Agendamento
 - O arquivo é um link https ou um arquivo de `public/`. Não há upload de PDF no editor.
 
 Primeiro uso: `supabase/seed/funil_diagnostico_viviane.sql` (só na conta mamsbsb@icloud.com).
+
+## Dias e horários do próprio bloco
+
+O bloco Agendamento usa o horário da clínica ou, em "Só deste bloco", dias da semana e períodos próprios (`booking_hours`, até 6 períodos por dia) e intervalo próprio (`booking_slot_minutes`). Esses dias valem mesmo fora do horário da clínica. Feriados, datas bloqueadas, antecedência e janela continuam os da clínica. O servidor confere o horário pelas mesmas regras ao confirmar.
+
+## Tema do funil
+
+A aba Design grava em `flows.settings.theme` só o que foi mudado. A página pública aplica valores validados por `normalizeTheme`.

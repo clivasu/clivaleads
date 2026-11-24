@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { isSupabaseConfigured } from "@/lib/env";
 import { bookingSlotsSchema } from "@/lib/security/validation";
 import { clientIp, rateLimit } from "@/lib/security/rate-limit";
-import { computeSlots } from "@/lib/booking/slots";
+import { computeSlots, openDaysLabel } from "@/lib/booking/slots";
 import { clampRange, loadBookingContext, loadBusy } from "@/lib/booking/server";
 
 // Horários livres para o bloco "Agendamento" (funil público, sem login).
@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
       procedure: ctx.procedure,
       duration: ctx.duration,
       max_days_ahead: ctx.settings.max_days_ahead,
+      open_days: openDaysLabel(ctx.settings.hours),
       no_professionals: ctx.professionals.length === 0,
       // só o horário: quem atende é escolhido no servidor ao confirmar
       days: days.map((d) => ({ date: d.date, weekday: d.weekday, closed: d.closed, slots: d.slots.map((s) => s.time) })),

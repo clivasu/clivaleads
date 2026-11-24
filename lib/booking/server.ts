@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/server";
 import type { StepConfig } from "@/lib/types";
-import { addDays, brToday, normalizeBookingSettings, type BookingSettings, type Busy } from "./slots";
+import { addDays, applyBlockHours, brToday, normalizeBookingSettings, type BookingSettings, type Busy } from "./slots";
 
 // Contexto do bloco "Agendamento" de um funil publicado. Usa service role
 // (o paciente não tem login), mas tudo é derivado do funil: o navegador só
@@ -53,7 +53,7 @@ export async function loadBookingContext(flowId: string, stepId: string): Promis
     db.from("schedule_professionals").select("id, name").eq("organization_id", orgId).eq("active", true).order("created_at"),
     db.from("schedule_procedures").select("name, duration_min").eq("organization_id", orgId),
   ]);
-  const settings = normalizeBookingSettings(settingsRow?.settings);
+  const settings = applyBlockHours(normalizeBookingSettings(settingsRow?.settings), config);
   const procedure = (config.booking_procedure ?? "").trim() || "Avaliação";
   const proc = (procs ?? []).find((p) => (p.name as string).toLowerCase() === procedure.toLowerCase());
   const duration = Math.min(720, Math.max(5, Number(config.booking_duration) || Number(proc?.duration_min) || 60));

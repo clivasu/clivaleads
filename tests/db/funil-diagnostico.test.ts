@@ -5,10 +5,12 @@ import { resolveGoto, lastMainIndex, nextLinear } from "@/lib/flow-logic";
 import { prepareStepsForSave } from "@/lib/flow-persistence";
 import { scoreAnswers, totalFrom } from "@/lib/security/scoring";
 import { tierFromScore } from "@/lib/scoring";
+import { toPublicConfig } from "@/lib/public-funnel-config";
 import type { FlowStep, QuestionOption } from "@/lib/types";
 
 const SEED = readFileSync("supabase/seed/funil_diagnostico_viviane.sql", "utf8");
 const REMOVE = readFileSync("supabase/seed/funil_diagnostico_viviane_remove.sql", "utf8");
+const PUBLISH = readFileSync("supabase/seed/funil_diagnostico_viviane_publicar.sql", "utf8");
 const AVISO = "A equipe da Drª avaliará as respostas e entrará em contato se você for selecionado(a).";
 
 describe("funil Checklist Consultório 20K", () => {
@@ -123,5 +125,37 @@ describe("funil Checklist Consultório 20K", () => {
       expect(await view(vivi.userId)).toEqual([{ procedure_name: "Sessão gratuita de diagnóstico de carreira", status: "scheduled" }]);
       expect(await view(other.userId)).toEqual([]);
     });
+  });
+
+  it("publicar: sobe só conta de cortesia, aplica o dourado e respeita o limite", async () => {
+    const db = await freshDb();
+    const vivi = await signUp(db, "mamsbsb@icloud.com");
+    const other = await signUp(db, "outra@clinica.com");
+    await expect(db.exec(PUBLISH)).rejects.toThrow(/não encontrado/);
+    await db.exec("rollback");
+    await db.exec(SEED);
+    for (let i = 0; i < 7; i++) await db.query(`insert into flows (organization_id, name, slug, status) values ($1, $2, $2, 'published')`, [vivi.orgId, `demo-${i}`]);
+    const bill = (org: string, plan: string, status: string) => db.query(`insert into org_billing (organization_id, plan, status) values ($1, $2, $3) on conflict (organization_id) do update set plan = $2, status = $3`, [org, plan, status]);
+    const flow = async () => (await db.query<{ status: string; settings: Record<string, unknown> }>(`select status, settings from flows where organization_id = $1 and slug = 'checklist-consultorio-20k'`, [vivi.orgId])).rows[0];
+    await bill(other.orgId, "pro", "comp");
+
+    // Conta que paga: plano intocado e nada publicado acima do limite.
+    await bill(vivi.orgId, "pro", "active");
+    await expect(db.exec(PUBLISH)).rejects.toThrow(/permite 5/);
+    await db.exec("rollback");
+    expect((await flow()).status).toBe("draft");
+
+    // Cortesia (situação real): sobe para Elite e publica.
+    await bill(vivi.orgId, "pro", "comp");
+    const r = (await db.exec(PUBLISH)).at(-1)!.rows as Record<string, unknown>[];
+    expect(r).toHaveLength(1);
+    expect(r[0]).toMatchObject({ status: "published", cor: "#946C28", plano: "elite (comp)", funis_publicados: 8 });
+    const f = await flow();
+    expect(f.settings.seoTitle).toBeTruthy(); // não perde as outras configurações
+    expect(toPublicConfig(f.settings).theme).toEqual({ primaryColor: "#946C28", backgroundColor: "#FFFFFF", textColor: "#1F1A14", logoUrl: "/materiais/logo-by-vika.webp" });
+    expect(existsSync("public/materiais/logo-by-vika.webp")).toBe(true);
+    expect((await db.query(`select plan from org_billing where organization_id = $1`, [other.orgId])).rows[0]).toEqual({ plan: "pro" });
+    // O público passa a ver o funil.
+    expect(await as(db, { role: "anon" }, async (q) => (await q(`select 1 from flows where slug = 'checklist-consultorio-20k'`)).rows.length)).toBe(1);
   });
 });

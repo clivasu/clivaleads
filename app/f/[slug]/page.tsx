@@ -43,8 +43,8 @@ export default async function LegacyFlowPage({
   // Demonstração: mesma configuração pública validada das páginas reais.
   const config = toPublicConfig((flow as { settings?: unknown }).settings);
   return (
-    <div className="min-h-[100dvh] bg-white">
-      <FlowRunner flow={flow} config={config} />
+    <div className="min-h-[100dvh] bg-white" style={{ background: config.theme.backgroundColor }}>
+      <FlowRunner flow={flow} config={config} theme={config.theme} />
       <MarketingPixels config={config} orgId={flow.organization_id} />
     </div>
   );
