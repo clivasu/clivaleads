@@ -8,7 +8,7 @@ import {
   AlertTriangle, Newspaper, ListChecks, CircleDot, Star, ClipboardList,
   Quote, BarChart3, Gauge, TrendingUp, PieChart, HelpCircle, Loader,
   Timer as TimerIcon, Sparkles, MousePointerClick, MessageCircle, Gift,
-  Volume2, SquareStack, LayoutGrid, LayoutTemplate,
+  Volume2, SquareStack, LayoutGrid, LayoutTemplate, FileDown,
   GripVertical, Trash2, Copy, Plus, ArrowLeft, ExternalLink, Check, ChevronDown,
   Layers, GitBranch, Palette, Users, Settings, HeartOff, Wand2, Route,
 } from "lucide-react";
@@ -22,6 +22,7 @@ import { GOTO_EXIT, GOTO_WHATSAPP, applySmartLogic, isNegativeAnswer } from "@/l
 import { DEFAULT_THEME, type FlowTheme, type FontChoice } from "@/lib/theme";
 import { saveFlow } from "@/lib/actions/flows";
 import { applyIdMap } from "@/lib/flow-persistence";
+import { safeFileUrl } from "@/lib/funnel-form";
 import { DEFAULT_SETTINGS, pickPersistedSettings, type FunnelSettings } from "@/lib/flow-settings";
 import { GTM_SUPPORTED, normalizePixelId, type PixelKey } from "@/lib/public-funnel-config";
 import { WebhookSettings } from "@/components/builder/webhook-settings";
@@ -45,7 +46,7 @@ const ICONS: Record<StepType, React.ElementType> = {
   faq: HelpCircle, loading: Loader, timer: TimerIcon, result: Sparkles,
   cta: MousePointerClick, whatsapp: MessageCircle, spin_wheel: Gift,
   buttons: SquareStack, audio: Volume2, container: LayoutGrid, hero: LayoutTemplate, exit: HeartOff,
-  booking: CalendarCheck2,
+  booking: CalendarCheck2, gift: FileDown,
 };
 const ACCEPTS_CHILDREN = (t: StepType) => t === "container" || t === "hero";
 // Rótulo canônico por type (ignora presets, que compartilham o mesmo type).
@@ -648,7 +649,7 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
           <input className={inputCls} value={c.subtitle ?? ""} onChange={(e) => onChange({ subtitle: e.target.value })} />
         </Field>
       )}
-      {["text", "alert", "cta", "timer", "whatsapp", "exit"].includes(t) && (
+      {["text", "alert", "cta", "timer", "whatsapp", "exit", "gift"].includes(t) && (
         <Field label="Texto">
           <textarea className={inputCls} rows={3} value={c.body ?? ""} onChange={(e) => onChange({ body: e.target.value })} />
         </Field>
@@ -904,6 +905,27 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
 
       {/* Agendamento */}
       {t === "booking" && <BookingInspector c={c} onChange={onChange} />}
+
+      {/* Material grátis */}
+      {t === "gift" && (
+        <div className="space-y-3">
+          <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+            O lead é gravado assim que a pessoa chega aqui, mesmo que ela não agende.
+          </p>
+          <Field label="Link do arquivo (PDF, Drive…)">
+            <input className={inputCls} value={c.file_url ?? ""} onChange={(e) => onChange({ file_url: e.target.value })} placeholder="https://..." />
+            {(c.file_url ?? "").trim() && !safeFileUrl(c.file_url) && <p className="mt-1 text-[11px] text-amber-700">Use um link começando com https://</p>}
+          </Field>
+          <Field label="Texto do botão de baixar"><input className={inputCls} value={c.file_label ?? ""} onChange={(e) => onChange({ file_label: e.target.value })} placeholder="Baixar agora" /></Field>
+          <Field label="Capa do material (URL)"><input className={inputCls} value={c.image_url ?? ""} onChange={(e) => onChange({ image_url: e.target.value })} placeholder="https://..." /></Field>
+          <div className="-mt-2 mb-3"><UploadButton label="Enviar capa" maxSizeMB={5} onUploaded={(url) => onChange({ image_url: url })} /></div>
+          <Field label="Convite: título (vazio = convite discreto)"><input className={inputCls} value={c.invite_title ?? ""} onChange={(e) => onChange({ invite_title: e.target.value })} /></Field>
+          <Field label="Convite: texto"><textarea className={inputCls} rows={2} value={c.invite_body ?? ""} onChange={(e) => onChange({ invite_body: e.target.value })} /></Field>
+          <Field label="Convite: botão (vazio = sem botão)"><input className={inputCls} value={c.invite_label ?? ""} onChange={(e) => onChange({ invite_label: e.target.value })} placeholder="Quero agendar" /></Field>
+          <Field label="O botão leva para"><GotoSelect value={c.invite_goto} onChange={(v) => onChange({ invite_goto: v })} /></Field>
+          <Field label="Aviso abaixo do convite"><textarea className={inputCls} rows={2} value={c.invite_note ?? ""} onChange={(e) => onChange({ invite_note: e.target.value })} /></Field>
+        </div>
+      )}
 
       {/* Roleta */}
       {t === "spin_wheel" && (
@@ -1326,7 +1348,7 @@ function BookingInspector({ c, onChange }: { c: FlowStep["config"]; onChange: (p
 }
 
 function defaultAllowed(t: StepType) {
-  const withTitle = ["start", "text", "image", "video", "carousel", "before_after", "question", "multi_choice", "rating", "stats", "level", "chart_growth", "chart_gauge", "faq", "form", "news", "cta", "whatsapp", "timer", "spin_wheel", "buttons", "audio", "container", "hero", "exit", "booking"];
+  const withTitle = ["start", "text", "image", "video", "carousel", "before_after", "question", "multi_choice", "rating", "stats", "level", "chart_growth", "chart_gauge", "faq", "form", "news", "cta", "whatsapp", "timer", "spin_wheel", "buttons", "audio", "container", "hero", "exit", "booking", "gift"];
   return withTitle.includes(t) ? { title: true } : {};
 }
 

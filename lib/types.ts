@@ -41,6 +41,7 @@ export type StepType =
   | "exit" // final alternativo: sem interesse / fora do perfil (só por desvio)
   | "chart_gauge" // gráfico circular animado (%)
   | "booking" // agendamento online: paciente escolhe dia/horário livre da agenda
+  | "gift" // material grátis: entrega o PDF, grava o lead e convida para o próximo passo
   | "cta" // chamada para ação
   | "result" // resultado personalizado por score
   | "whatsapp"; // envio final para o WhatsApp
@@ -161,6 +162,14 @@ export interface StepConfig {
   booking_ask_contact?: boolean;  // pedir nome/WhatsApp no bloco se ainda não houver
   booking_success_title?: string;
   booking_success_body?: string;
+  // gift (material grátis)
+  file_url?: string;          // PDF/link entregue (https ou arquivo do site)
+  file_label?: string;        // texto do botão de baixar
+  invite_title?: string;      // convite abaixo do material (vazio = convite discreto)
+  invite_body?: string;
+  invite_label?: string;      // texto do botão do convite (vazio = sem botão)
+  invite_goto?: string;       // etapa do botão (vazio = próxima)
+  invite_note?: string;       // aviso abaixo do convite
   key?: string;
   title?: string;
   subtitle?: string;

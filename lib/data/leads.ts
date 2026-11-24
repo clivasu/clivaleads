@@ -123,6 +123,33 @@ export async function deleteLead(id: string): Promise<boolean> {
   return !error && (data?.length ?? 0) > 0;
 }
 
+// Agendamento ligado ao lead (o mais recente que não foi cancelado).
+export interface LeadAppointment { id: string; date: string; time: string; procedure: string; professional: string | null; status: string }
+export async function getLeadAppointment(leadId: string): Promise<LeadAppointment | null> {
+  if (!isSupabaseConfigured) return null;
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("schedule_appointments")
+    .select("id, starts_at, procedure_name, status, professional_id, organization_id")
+    .eq("lead_session_id", leadId)
+    .neq("status", "cancelled")
+    .order("starts_at", { ascending: false })
+    .limit(1);
+  const a = data?.[0];
+  if (!a) return null; // sem agendamento, ou banco sem a 0018
+  const { data: pro } = await supabase.from("schedule_professionals").select("name").eq("id", a.professional_id).maybeSingle();
+  const at = new Date(a.starts_at as string);
+  const tz = { timeZone: "America/Sao_Paulo" } as const;
+  return {
+    id: a.id as string,
+    date: at.toLocaleDateString("en-CA", tz),
+    time: at.toLocaleTimeString("pt-BR", { ...tz, hour: "2-digit", minute: "2-digit" }),
+    procedure: a.procedure_name as string,
+    professional: (pro?.name as string) ?? null,
+    status: a.status as string,
+  };
+}
+
 export async function getLead(id: string): Promise<LeadWithAnswers | null> {
   if (!isSupabaseConfigured) {
     return DEMO_LEADS.find((l) => l.id === id) ?? null;

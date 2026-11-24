@@ -94,5 +94,11 @@ export function clampRange(from: string, days: number, settings: BookingSettings
 // appointment_booked) sem rebaixar quem a clínica já marcou como convertido.
 export async function linkLead(db: Admin, orgId: string, leadId: string, appointmentId: string) {
   await db.from("schedule_appointments").update({ lead_session_id: leadId }).eq("id", appointmentId).eq("organization_id", orgId).is("lead_session_id", null);
+  // Ficha do paciente aponta para o lead (respostas do funil na própria ficha).
+  // Não depende do telefone estar escrito igual nos dois lugares.
+  const { data: appt } = await db.from("schedule_appointments").select("patient_id").eq("id", appointmentId).eq("organization_id", orgId).maybeSingle();
+  if (appt?.patient_id) {
+    await db.from("schedule_patients").update({ lead_session_id: leadId }).eq("id", appt.patient_id).eq("organization_id", orgId).is("lead_session_id", null);
+  }
   await db.from("lead_sessions").update({ status: "scheduled" }).eq("id", leadId).eq("organization_id", orgId).in("status", ["new", "qualified", "whatsapp", "lost"]);
 }

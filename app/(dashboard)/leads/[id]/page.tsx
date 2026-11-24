@@ -1,22 +1,33 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, MessageCircle, Mail, Phone, User } from "lucide-react";
-import { getLead } from "@/lib/data/leads";
+import { ArrowLeft, CalendarCheck2, MessageCircle, Mail, Phone, User } from "lucide-react";
+import { getLead, getLeadAppointment } from "@/lib/data/leads";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { tierFromScore, TIER_LABEL } from "@/lib/scoring";
+import { instagramUrl } from "@/lib/funnel-form";
+import { STATUS_META, type Status } from "@/lib/demo-schedule";
+import { normalizeWhatsapp } from "@/lib/whatsapp";
 
 export const dynamic = "force-dynamic";
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex justify-between border-b py-3 text-sm last:border-0">
+    <div className="flex justify-between gap-4 border-b py-3 text-sm last:border-0">
       <span className="text-slate-400">{label}</span>
       <span className="text-right font-medium text-slate-800">{value ?? "—"}</span>
     </div>
   );
 }
 const digits = (p?: string | null) => (p ?? "").replace(/\D/g, "");
+
+// Instagram vira link para o perfil.
+function AnswerValue({ title, value }: { title: string; value: string }) {
+  const url = /instagram/i.test(title) ? instagramUrl(value) : null;
+  return url
+    ? <a href={url} target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:underline">{value}</a>
+    : <>{value}</>;
+}
 
 const TIER_HINT: Record<string, string> = {
   hot: "Lead quente — alta intenção. Priorize o contato agora.",
@@ -30,7 +41,7 @@ export default async function LeadDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const lead = await getLead(id);
+  const [lead, appointment] = await Promise.all([getLead(id), getLeadAppointment(id)]);
   if (!lead) notFound();
   const tier = tierFromScore(lead.score);
 
@@ -58,7 +69,7 @@ export default async function LeadDetailPage({
       {/* Ações de contato */}
       <div className="mb-4 flex flex-wrap gap-2">
         {lead.phone && (
-          <a href={`https://wa.me/${digits(lead.phone)}`} target="_blank" rel="noopener noreferrer"
+          <a href={`https://wa.me/${normalizeWhatsapp(lead.phone)}`} target="_blank" rel="noopener noreferrer"
             className="flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-600">
             <MessageCircle className="h-4 w-4" /> Chamar no WhatsApp
           </a>
@@ -75,6 +86,19 @@ export default async function LeadDetailPage({
         )}
       </div>
 
+      {appointment && (
+        <Link href={`/schedule?data=${appointment.date}`} className="mb-4 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 hover:bg-emerald-100">
+          <CalendarCheck2 className="h-5 w-5 shrink-0 text-emerald-600" />
+          <span className="min-w-0 text-sm">
+            <span className="block font-semibold text-emerald-900">
+              {appointment.date.split("-").reverse().join("/")} às {appointment.time} · {STATUS_META[appointment.status as Status]?.label ?? appointment.status}
+            </span>
+            <span className="block text-emerald-800">{appointment.procedure}{appointment.professional ? ` · ${appointment.professional}` : ""}</span>
+          </span>
+          <span className="ml-auto shrink-0 text-sm font-medium text-emerald-700">Abrir Agenda</span>
+        </Link>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2">
         <Card>
           <CardContent className="p-5">
@@ -82,7 +106,7 @@ export default async function LeadDetailPage({
             <p className="mb-3 text-xs text-slate-500">{TIER_HINT[tier]}</p>
             {lead.answers.length > 0 ? (
               lead.answers.map((a, i) => (
-                <Row key={i} label={a.question_title} value={a.answer_label} />
+                <Row key={i} label={a.question_title} value={<AnswerValue title={a.question_title} value={a.answer_label} />} />
               ))
             ) : (
               <p className="py-3 text-sm text-slate-400">Sem respostas registradas.</p>

@@ -45,14 +45,15 @@ function googleCalendarUrl(b: BookingDone, duration: number, clinic: string) {
 }
 
 export function BookingStep({
-  step, flowId, clinicName, preview, contact, getLead, onDone,
+  step, flowId, clinicName, preview, contact, getLead, finishOnConfirm = false, onDone,
 }: {
   step: FlowStep;
   flowId: string;
   clinicName: string;
   preview: boolean;
   contact: ContactInfo;
-  getLead: () => { id: string; token: string } | null; // lead já gravado (liga ao agendamento)
+  getLead: () => Promise<{ id: string; token: string } | null>; // lead já gravado (liga ao agendamento)
+  finishOnConfirm?: boolean; // última etapa: conclui ao confirmar, sem botão "Continuar"
   onDone: (b: BookingDone) => void;
 }) {
   const c = step.config;
@@ -67,7 +68,7 @@ export function BookingStep({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<BookingDone | null>(null);
   const ref = useRef<string>(newRef());
-  const askContact = (c.booking_ask_contact ?? true) && !(contact.name && contact.phone);
+  const askContact = (c.booking_ask_contact ?? true) && !(contact.name && (contact.phone ?? "").replace(/\D/g, "").length >= 10);
 
   const load = useCallback(async (start: string, keepSelection = false) => {
     setDays(null);
@@ -110,23 +111,29 @@ export function BookingStep({
   const phoneDigits = phone.replace(/\D/g, "");
   const canConfirm = Boolean(date && time && name.trim().length >= 2 && phoneDigits.length >= 10 && !busy);
 
+  const finish = (b: BookingDone) => {
+    setDone(b);
+    if (finishOnConfirm) onDone(b);
+  };
+
   async function confirm() {
     if (!date || !time) return;
     setError(null);
     if (preview) {
-      setDone({ id: "preview", token: null, date, time, procedure: meta.procedure, professional: "Profissional da clínica", name, phone: phoneDigits });
+      finish({ id: "preview", token: null, date, time, procedure: meta.procedure, professional: "Profissional da clínica", name, phone: phoneDigits });
       return;
     }
     setBusy(true);
     try {
+      const lead = await getLead();
       const res = await fetch("/api/booking", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ flow_id: flowId, step_id: step.id, date, time, booking_ref: ref.current, name: name.trim(), phone: phoneDigits, lead: getLead() ?? undefined }),
+        body: JSON.stringify({ flow_id: flowId, step_id: step.id, date, time, booking_ref: ref.current, name: name.trim(), phone: phoneDigits, lead: lead ?? undefined }),
       });
       const json = await res.json().catch(() => ({}));
       if (res.ok && json.ok) {
-        setDone({ id: json.id, token: json.token ?? null, date, time, procedure: json.procedure ?? meta.procedure, professional: json.professional ?? "Profissional da clínica", name: name.trim(), phone: phoneDigits });
+        finish({ id: json.id, token: json.token ?? null, date, time, procedure: json.procedure ?? meta.procedure, professional: json.professional ?? "Profissional da clínica", name: name.trim(), phone: phoneDigits });
         return;
       }
       if (json.error === "slot_taken") {
@@ -161,11 +168,11 @@ export function BookingStep({
           className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 underline-offset-2 hover:underline">
           <CalendarPlus className="h-4 w-4" /> Adicionar ao Google Agenda
         </a>
-        <div className="cta-dock mt-6">
+        {!finishOnConfirm && <div className="cta-dock mt-6">
           <button onClick={() => onDone(done)} className="brand-btn flex w-full items-center justify-center gap-2 rounded-xl py-4 text-base font-semibold shadow-lg">
             {c.button_label || "Continuar"} <ChevronRight className="h-4 w-4" />
           </button>
-        </div>
+        </div>}
       </div>
     );
   }

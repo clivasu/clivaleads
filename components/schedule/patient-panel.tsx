@@ -5,6 +5,7 @@ import { X, Phone, MessageCircle, Calendar, Clock, Pencil, Check, Ban, FileText,
 import type { Appt, Doctor, Patient, Status } from "@/lib/demo-schedule";
 import { STATUS_META, procColor, fmtHour } from "@/lib/demo-schedule";
 import { cn } from "@/lib/utils";
+import { normalizeWhatsapp } from "@/lib/whatsapp";
 
 const STATUS_ORDER: Status[] = ["registered", "confirmed", "in_progress", "done", "cancelled"];
 
@@ -21,7 +22,7 @@ export function PatientPanel({
 }) {
   const colorOf = procColorOf ?? procColor;
   const color = colorOf(appt.procedure);
-  const waHref = `https://wa.me/${patient.phone}?text=${encodeURIComponent(`Olá ${patient.name.split(" ")[0]}! Tudo bem?`)}`;
+  const waHref = `https://wa.me/${normalizeWhatsapp(patient.phone)}?text=${encodeURIComponent(`Olá ${patient.name.split(" ")[0]}! Tudo bem?`)}`;
 
   return (
     <>

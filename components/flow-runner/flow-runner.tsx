@@ -21,6 +21,9 @@ import {
   Pause,
   Volume2,
   Heart,
+  Download,
+  CalendarCheck2,
+  FileText,
 } from "lucide-react";
 import type {
   PublicFlow,
@@ -29,6 +32,7 @@ import type {
   ButtonItem,
   FlowStep,
   ContactInfo,
+  FormField,
 } from "@/lib/types";
 import { NewsStep, ChartGrowthStep, ChartGaugeStep } from "@/components/flow-runner/advanced-blocks";
 import { SpinWheelBlock } from "@/components/flow-runner/spin-wheel";
@@ -42,6 +46,7 @@ import { EXIT_DEFAULTS, GOTO_EXIT, lastMainIndex, nextLinear, resolveGoto } from
 import type { PublicFunnelConfig } from "@/lib/public-funnel-config";
 import { CookieSettingsLink } from "@/components/flow-runner/marketing-pixels";
 import { BookingStep } from "@/components/flow-runner/booking-step";
+import { extraAnswers, fieldError, mergeAnswers, safeFileUrl } from "@/lib/funnel-form";
 
 export function FlowRunner({
   flow,
@@ -59,6 +64,8 @@ export function FlowRunner({
   const [contact, setContact] = useState<ContactInfo>({});
   const startedRef = useRef(false);
   const completedRef = useRef(false);
+  const completionTrackedRef = useRef(false); // o evento "concluiu" conta uma vez, mesmo com reenvio
+  const savingRef = useRef<Promise<void> | null>(null); // gravação do lead em andamento
   const sessionIdRef = useRef<string | null>(null);
   const sessionTokenRef = useRef<string | null>(null); // prova de posse para o PATCH
   const bookingRef = useRef<{ id: string; token: string } | null>(null); // agendamento feito no bloco "Agendamento"
@@ -73,7 +80,8 @@ export function FlowRunner({
   // Final "sem interesse" chamado sem existir um bloco desses: mostra o padrão.
   const [forcedExit, setForcedExit] = useState(false);
   const onExit = forcedExit || step?.type === "exit";
-  const progress = onExit ? 100 : Math.min(100, Math.round(((index + 1) / mainTotal) * 100));
+  const onGift = step?.type === "gift";
+  const progress = onExit || onGift ? 100 : Math.min(100, Math.round(((index + 1) / mainTotal) * 100));
   const brand = theme?.primaryColor || flow.organization.primary_color || "#0F172A";
   const showProgress = theme?.progressBar ?? true;
   const logo = theme?.logoUrl ?? flow.organization.logo_url;
@@ -160,7 +168,10 @@ export function FlowRunner({
       return;
     }
     completedRef.current = true;
-    track(disqualified ? "flow_exited" : "flow_completed", ids);
+    if (!completionTrackedRef.current) {
+      completionTrackedRef.current = true;
+      track(disqualified ? "flow_exited" : "flow_completed", ids);
+    }
     const sent = new Set(pendingConvRef.current);
     const body = JSON.stringify({
       flow_id: flow.id,
@@ -176,7 +187,7 @@ export function FlowRunner({
       browser: detectBrowser(),
       entry_page: typeof window !== "undefined" ? window.location.pathname : undefined,
     });
-    (async () => {
+    savingRef.current = (async () => {
       try {
         const res = await fetch("/api/sessions", {
           method: "POST",
@@ -187,9 +198,15 @@ export function FlowRunner({
         const json = await res.json().catch(() => ({}));
         sessionIdRef.current = json?.id ?? null;
         sessionTokenRef.current = json?.token ?? null;
+        // Falha passageira: a próxima etapa que grava o lead tenta de novo
+        // (client_ref impede duplicar).
+        if (!res.ok && (res.status >= 500 || res.status === 429)) completedRef.current = false;
         // Cliques que aconteceram enquanto o lead era gravado: aplica agora.
         for (const c of pendingConvRef.current) if (!sent.has(c)) markConverted(c);
-      } catch { /* nunca quebrar a experiência do lead */ }
+      } catch {
+        // Sem conexão: idem. Nunca quebra a experiência do lead.
+        completedRef.current = false;
+      }
     })();
   };
 
@@ -227,7 +244,8 @@ export function FlowRunner({
   };
   const advance = (dest?: string | number) => go(dest);
 
-  // Registra a sessão ao chegar no ÚLTIMO bloco (qualquer tipo) ou no WhatsApp.
+  // Registra a sessão ao chegar no ÚLTIMO bloco (qualquer tipo), no WhatsApp ou
+  // no material grátis (quem baixa o PDF e sai também vira lead).
   // O formulário é a exceção: ele registra no envio, com o contato preenchido.
   useEffect(() => {
     if (onExit) {
@@ -235,7 +253,7 @@ export function FlowRunner({
       return;
     }
     const isLast = index >= mainLast;
-    if (step?.type === "whatsapp" || (isLast && step?.type !== "form")) {
+    if (step?.type === "whatsapp" || step?.type === "gift" || (isLast && step?.type !== "form")) {
       persistSession(answers, contact);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -305,7 +323,12 @@ export function FlowRunner({
           clinicName={flow.organization.name}
           preview={preview}
           contact={contact}
-          getLead={() => (sessionIdRef.current && sessionTokenRef.current && sessionIdRef.current !== "demo-session" ? { id: sessionIdRef.current, token: sessionTokenRef.current } : null)}
+          getLead={async () => {
+            // Lead ainda sendo gravado (conexão lenta): espera um pouco para ligar os dois.
+            if (savingRef.current && !sessionIdRef.current) await Promise.race([savingRef.current, new Promise((r) => setTimeout(r, 4000))]);
+            return sessionIdRef.current && sessionTokenRef.current && sessionIdRef.current !== "demo-session" ? { id: sessionIdRef.current, token: sessionTokenRef.current } : null;
+          }}
+          finishOnConfirm={index >= mainLast && !config?.redirectUrl}
           onDone={(b) => {
             if (b.token) bookingRef.current = { id: b.id, token: b.token };
             const merged = { ...contact, name: contact.name || b.name, phone: contact.phone || b.phone };
@@ -351,14 +374,17 @@ export function FlowRunner({
           }} />
         );
       }
-      case "form": return <FormStep step={blk.config.consent || !config?.consent.text ? blk : { ...blk, config: { ...blk.config, consent: config.consent.text } }} onSubmit={(cc) => {
+      case "form": return <FormStep step={blk.config.consent || !config?.consent.text ? blk : { ...blk, config: { ...blk.config, consent: config.consent.text } }} onSubmit={(cc, extras) => {
         const merged = { ...contact, ...cc };
         setContact(merged);
+        const all = extras.length ? mergeAnswers(answers, extras) : answers;
+        if (extras.length) setAnswers(all);
         // Formulário como etapa final: registra o lead com o contato preenchido.
-        if (index >= mainLast) persistSession(answers, merged, "final_cta");
+        if (index >= mainLast) persistSession(all, merged, "final_cta");
         else advance();
       }} />;
       case "whatsapp": return <WhatsappStep step={blk} message={message} href={waUrl} onClick={onWhatsappClick} />;
+      case "gift": return <GiftStep step={blk} canInvite={Boolean(blk.config.invite_goto) || index < mainLast} onInvite={() => advance(blk.config.invite_goto || undefined)} />;
       case "exit": return <ExitStep step={blk} />;
       default: return null;
     }
@@ -421,7 +447,7 @@ export function FlowRunner({
             </span>
           )}
           <span className="text-xs text-slate-400">
-            {onExit ? mainTotal : Math.min(index + 1, mainTotal)}/{mainTotal}
+            {onGift ? null : <>{onExit ? mainTotal : Math.min(index + 1, mainTotal)}/{mainTotal}</>}
           </span>
         </div>
         {showProgress && (
@@ -1341,21 +1367,20 @@ function FaqStep({ step }: { step: FlowStep }) {
   );
 }
 
-function FormStep({ step, onSubmit }: { step: FlowStep; onSubmit: (c: ContactInfo) => void }) {
+function FormStep({ step, onSubmit }: { step: FlowStep; onSubmit: (c: ContactInfo, extras: LeadAnswer[]) => void }) {
   const c = step.config;
-  const fields = c.fields ?? [
+  const fields: FormField[] = c.fields ?? [
     { name: "name", label: "Nome", type: "text", required: true, placeholder: "Seu nome" },
     { name: "phone", label: "WhatsApp", type: "tel", required: true, placeholder: "(00) 00000-0000" },
   ];
   const [vals, setVals] = useState<Record<string, string>>({});
-  const [touched, setTouched] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
-  const valid = fields.every((f) => !f.required || (vals[f.name] && vals[f.name].trim().length > 1));
+  const valid = fields.every((f) => !fieldError(f, vals[f.name]));
 
   const submit = () => {
-    setTouched(true);
-    if (!valid) return;
-    onSubmit({ name: vals.name, phone: vals.phone, email: vals.email });
+    if (!valid) { setTouched(Object.fromEntries(fields.map((f) => [f.name, true]))); return; }
+    onSubmit({ name: vals.name?.trim(), phone: vals.phone?.trim(), email: vals.email?.trim() }, extraAnswers(fields, vals));
   };
 
   return (
@@ -1364,16 +1389,20 @@ function FormStep({ step, onSubmit }: { step: FlowStep; onSubmit: (c: ContactInf
       <div className="flex flex-col gap-3">
         {fields.map((f) => (
           <div key={f.name}>
-            <label className="mb-1 block text-sm font-medium text-slate-600">{f.label}</label>
+            <label htmlFor={`${step.id}-${f.name}`} className="mb-1 block text-sm font-medium text-slate-600">{f.label}</label>
             <input
+              id={`${step.id}-${f.name}`}
               type={f.type}
               placeholder={f.placeholder}
+              autoComplete={f.name === "name" ? "name" : f.type === "tel" ? "tel" : f.type === "email" ? "email" : undefined}
+              autoCapitalize={f.name === "instagram" ? "none" : undefined}
               value={vals[f.name] ?? ""}
+              onBlur={() => { if (vals[f.name]) setTouched((p) => ({ ...p, [f.name]: true })); }}
               onChange={(e) => setVals((p) => ({ ...p, [f.name]: e.target.value }))}
               className="h-12 w-full rounded-xl border border-slate-200 px-4 text-base focus:border-[color:var(--brand)] focus:outline-none"
             />
-            {touched && f.required && !vals[f.name] && (
-              <p className="mt-1 text-xs text-rose-500">Campo obrigatório</p>
+            {touched[f.name] && fieldError(f, vals[f.name]) && (
+              <p className="mt-1 text-xs text-rose-500">{fieldError(f, vals[f.name])}</p>
             )}
           </div>
         ))}
@@ -1388,6 +1417,61 @@ function FormStep({ step, onSubmit }: { step: FlowStep; onSubmit: (c: ContactInf
 
 // Final alternativo: encerra com carinho quem não tem interesse ou não é o
 // perfil, sem empurrar para o WhatsApp. O lead é registrado como "perdido".
+// Material grátis: o PDF prometido e, logo abaixo, o convite (ex.: agendar).
+// Sem título de convite, o botão vira um link discreto.
+function GiftStep({ step, canInvite, onInvite }: { step: FlowStep; canInvite: boolean; onInvite: () => void }) {
+  const c = step.config;
+  const file = safeFileUrl(c.file_url);
+  const strong = Boolean(c.invite_title);
+  const showInvite = canInvite && Boolean(c.invite_label);
+  return (
+    <div>
+      <div className="text-center">
+        <span className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-[color:var(--brand)]/10 px-3 py-1 text-sm font-semibold text-[color:var(--brand)]">
+          <CheckCircle2 className="h-4 w-4" /> Material liberado
+        </span>
+        <StepTitle title={c.title} subtitle={c.body} center />
+      </div>
+      <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        {c.image_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={c.image_url} alt="" className="h-28 w-20 shrink-0 rounded-lg border border-slate-100 object-cover object-top shadow" />
+        ) : (
+          <span className="flex h-28 w-20 shrink-0 items-center justify-center rounded-lg bg-[color:var(--brand)]/10 text-[color:var(--brand)]"><FileText className="h-8 w-8" /></span>
+        )}
+        <div className="min-w-0 flex-1">
+          {file ? (
+            <a href={file} target="_blank" rel="noopener noreferrer"
+              className={cn("flex w-full items-center justify-center gap-2 rounded-xl px-3 py-3.5 text-center text-base font-semibold transition-transform active:scale-[0.99]",
+                strong && showInvite ? "border-2 border-[color:var(--brand)] bg-white text-[color:var(--brand)]" : "brand-btn shadow-lg")}>
+              <Download className="h-5 w-5 shrink-0" /> {c.file_label || "Baixar agora"}
+            </a>
+          ) : (
+            <p className="text-sm text-slate-500">O material será enviado pela equipe.</p>
+          )}
+        </div>
+      </div>
+      {(showInvite || c.invite_note) && (strong ? (
+        <div className="mt-5 rounded-2xl bg-slate-50 p-5">
+          <h2 className="text-lg font-bold leading-snug text-slate-900">{c.invite_title}</h2>
+          {c.invite_body && <p className="mt-1.5 text-slate-600">{c.invite_body}</p>}
+          {showInvite && (
+            <button type="button" onClick={onInvite} className="brand-btn mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-4 text-base font-semibold shadow-lg transition-transform active:scale-[0.99]">
+              <CalendarCheck2 className="h-5 w-5" /> {c.invite_label}
+            </button>
+          )}
+          {c.invite_note && <p className="mt-3 flex items-start gap-2 text-sm text-slate-500"><Info className="mt-0.5 h-4 w-4 shrink-0" /> {c.invite_note}</p>}
+        </div>
+      ) : (
+        <div className="mt-5 text-center">
+          {showInvite && <button type="button" onClick={onInvite} className="py-2 text-sm font-medium text-slate-600 underline underline-offset-4">{c.invite_label}</button>}
+          {c.invite_note && <p className="mt-2 text-sm text-slate-500">{c.invite_note}</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ExitStep({ step }: { step?: FlowStep }) {
   const c = { ...EXIT_DEFAULTS, ...(step?.config ?? {}) };
   return (
