@@ -41,3 +41,7 @@ A aba Design grava em `flows.settings.theme` só o que foi mudado. A página pú
 - Bloco mágico "Nome": `open_answer` com `save_as: "name"`. Depois dele, `{nome}` (primeiro nome) e `{nome_completo}` funcionam em títulos, textos, opções e botões.
 - Variáveis: pergunta de escolha única, múltipla, nota ou resposta escrita com "Nome da variável" (`config.key`) pode ser citada depois como `{variavel}`.
 - As respostas são gravadas com o título original (com `{nome}`), para a pontuação do servidor continuar batendo. O painel mostra a pergunta com o nome do lead. Sem resposta, a variável some do texto sem deixar vírgula solta.
+
+## Datas do mês
+
+Terceiro modo do bloco (`booking_mode: "dates"`): `booking_dates` lista datas (AAAA-MM-DD) com os períodos de cada uma. Só essas datas abrem, mesmo em feriado; datas bloqueadas e antecedência continuam as da clínica, e a agenda fica aberta até a última data escolhida (até 180 dias). `booking_view` escolhe como quem agenda vê: calendário do mês (`month`, padrão nesse modo) ou faixa da semana (`week`). Sem `booking_mode`, bloco com `booking_hours` continua em "Semana fixa".

@@ -121,7 +121,8 @@ describe("regras das APIs públicas", () => {
     const dias = (days?: string) => bookingSlotsSchema.safeParse({ flow_id: V4, step_id: "s", from: "2026-01-01", days });
     expect(dias().data?.days).toBe(7);
     expect(dias("14").data?.days).toBe(14);
-    expect(dias("15").success).toBe(false);
+    expect(dias("42").data?.days).toBe(42); // mês inteiro na visão mensal
+    expect(dias("43").success).toBe(false);
     expect(dias("abc").success).toBe(false);
   });
 

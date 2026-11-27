@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarCheck2, CalendarPlus, ChevronLeft, ChevronRight, Clock, Loader2, UserRound } from "lucide-react";
 import type { ContactInfo, FlowStep } from "@/lib/types";
-import { addDays, applyBlockHours, brToday, computeSlots, DEFAULT_BOOKING_SETTINGS, openDaysLabel } from "@/lib/booking/slots";
+import { addDays, applyBlockHours, blockMode, brToday, computeSlots, DEFAULT_BOOKING_SETTINGS, openDaysLabel } from "@/lib/booking/slots";
 
 // Bloco "Agendamento": o paciente escolhe um horário livre da Agenda da
 // clínica. Os horários vêm do servidor (regras + agenda real); no editor e no
@@ -18,16 +18,23 @@ interface Day { date: string; weekday: number; closed: string | null; slots: str
 const WD = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const WD_LONG = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const MONTHS_LONG = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 const PAGE = 7;
+
+// Visão do mês: busca do dia `from` até o fim do mês; navega de mês em mês.
+const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
+const nextMonth = (d: string) => { const [y, m] = d.split("-").map(Number); return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`; };
+const prevMonth = (d: string) => { const [y, m] = d.split("-").map(Number); return m === 1 ? `${y - 1}-12-01` : `${y}-${String(m - 1).padStart(2, "0")}-01`; };
+const spanFrom = (from: string, month: boolean) => (month ? Math.round((Date.parse(`${nextMonth(from)}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86400000) : PAGE);
 
 const newRef = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (Number(c) ^ (Math.random() * 16) >> (Number(c) / 4)).toString(16));
 
-function demoDays(from: string, c: FlowStep["config"]): Day[] {
-  return computeSlots({ settings: applyBlockHours(DEFAULT_BOOKING_SETTINGS, c), from, to: addDays(from, PAGE - 1), duration: Number(c.booking_duration) || 60, professionals: ["demo"], busy: [], now: new Date() })
-    .map((d) => ({ date: d.date, weekday: d.weekday, closed: d.closed, slots: d.slots.filter((_, i) => c.booking_hours || i % 3 !== 1).map((s) => s.time) }));
+function demoDays(from: string, c: FlowStep["config"], span = PAGE): Day[] {
+  return computeSlots({ settings: applyBlockHours(DEFAULT_BOOKING_SETTINGS, c), from, to: addDays(from, span - 1), duration: Number(c.booking_duration) || 60, professionals: ["demo"], busy: [], now: new Date() })
+    .map((d) => ({ date: d.date, weekday: d.weekday, closed: d.closed, slots: d.slots.filter((_, i) => blockMode(c) !== "clinic" || i % 3 !== 1).map((s) => s.time) }));
 }
 
 function prettyDate(date: string) {
@@ -57,9 +64,11 @@ export function BookingStep({
   onDone: (b: BookingDone) => void;
 }) {
   const c = step.config;
+  // Datas escolhidas uma a uma pedem o calendário do mês; o resto, a faixa da semana.
+  const monthView = (c.booking_view ?? (blockMode(c) === "dates" ? "month" : "week")) === "month";
   const [from, setFrom] = useState(() => brToday(new Date()));
   const [days, setDays] = useState<Day[] | null>(null);
-  const [meta, setMeta] = useState({ procedure: c.booking_procedure || "Avaliação", duration: Number(c.booking_duration) || 60, maxAhead: 30, noPros: false, openDays: openDaysLabel(applyBlockHours(DEFAULT_BOOKING_SETTINGS, c).hours) });
+  const [meta, setMeta] = useState({ procedure: c.booking_procedure || "Avaliação", duration: Number(c.booking_duration) || 60, maxAhead: applyBlockHours(DEFAULT_BOOKING_SETTINGS, c).max_days_ahead, noPros: false, openDays: blockMode(c) === "dates" ? "" : openDaysLabel(applyBlockHours(DEFAULT_BOOKING_SETTINGS, c).hours) });
   const autoHops = useRef(0); // pula sozinho semanas sem horário (até 8), só na abertura
   const [date, setDate] = useState<string | null>(null);
   const [time, setTime] = useState<string | null>(null);
@@ -74,20 +83,20 @@ export function BookingStep({
   const load = useCallback(async (start: string, keepSelection = false) => {
     setDays(null);
     if (!keepSelection) { setDate(null); setTime(null); }
-    if (preview) { setDays(demoDays(start, c)); return; }
+    if (preview) { setDays(demoDays(start, c, spanFrom(start, monthView))); return; }
     try {
-      const q = new URLSearchParams({ flow_id: flowId, step_id: step.id, from: start, days: String(PAGE) });
+      const q = new URLSearchParams({ flow_id: flowId, step_id: step.id, from: start, days: String(spanFrom(start, monthView)) });
       const res = await fetch(`/api/booking/slots?${q.toString()}`, { cache: "no-store" });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error ?? "erro");
-      if (json.demo) { setDays(demoDays(start, c)); return; }
+      if (json.demo) { setDays(demoDays(start, c, spanFrom(start, monthView))); return; }
       setMeta({ procedure: json.procedure, duration: json.duration, maxAhead: json.max_days_ahead, noPros: json.no_professionals, openDays: json.open_days ?? "" });
       setDays(json.days as Day[]);
     } catch {
       setError("Não foi possível carregar os horários. Tente de novo em instantes.");
       setDays([]);
     }
-  }, [flowId, step.id, preview, c]);
+  }, [flowId, step.id, preview, c, monthView]);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- busca inicial dos horários
   useEffect(() => { void load(from); }, [load, from]);
@@ -98,12 +107,12 @@ export function BookingStep({
     const first = days.find((d) => !d.closed && d.slots.length > 0);
     // eslint-disable-next-line react-hooks/set-state-in-effect -- escolha automática ao carregar
     if (first) { autoHops.current = 99; setDate(first.date); return; }
-    const next = addDays(from, PAGE);
+    const next = monthView ? nextMonth(from) : addDays(from, PAGE);
     if (days.length > 0 && !meta.noPros && autoHops.current < 8 && next <= addDays(brToday(new Date()), meta.maxAhead)) {
       autoHops.current += 1;
       setFrom(next);
     }
-  }, [days, date, from, meta.noPros, meta.maxAhead]);
+  }, [days, date, from, meta.noPros, meta.maxAhead, monthView]);
 
   const today = brToday(new Date());
   const lastDay = addDays(today, meta.maxAhead);
@@ -192,7 +201,38 @@ export function BookingStep({
       </p>
       {meta.openDays && <p className="mt-2 text-sm text-slate-500">Dias disponíveis: {meta.openDays}.</p>}
 
-      {/* Dias */}
+      {/* Dias: calendário do mês */}
+      {monthView && (
+        <div className="mt-5 rounded-2xl border border-slate-200 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <button type="button" aria-label="Mês anterior" disabled={from <= today} onClick={() => { autoHops.current = 99; const p = prevMonth(from); setFrom(p < today ? today : p); }}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 disabled:opacity-30"><ChevronLeft className="h-4 w-4" /></button>
+            <p className="text-sm font-semibold capitalize text-slate-800">{MONTHS_LONG[Number(from.slice(5, 7)) - 1]} {from.slice(0, 4)}</p>
+            <button type="button" aria-label="Próximo mês" disabled={nextMonth(from) > lastDay} onClick={() => { autoHops.current = 99; setFrom(nextMonth(from)); }}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button>
+          </div>
+          <div className="grid grid-cols-7 gap-1 text-center">
+            {WD.map((w) => <span key={w} className="pb-1 text-[11px] font-medium text-slate-400">{w}</span>)}
+            {Array.from({ length: new Date(`${monthStart(from)}T12:00:00Z`).getUTCDay() }, (_, i) => <span key={`b${i}`} />)}
+            {Array.from({ length: spanFrom(monthStart(from), true) }, (_, i) => addDays(monthStart(from), i)).map((ds) => {
+              const d = days?.find((x) => x.date === ds);
+              const off = !d || Boolean(d.closed) || d.slots.length === 0;
+              const sel = ds === date;
+              return (
+                <button key={ds} type="button" disabled={off} aria-pressed={sel} aria-label={prettyDate(ds)} title={d?.closed ?? undefined}
+                  onClick={() => { setDate(ds); setTime(null); }}
+                  className={`mx-auto flex h-10 w-10 items-center justify-center rounded-full text-sm transition-colors ${sel ? "bg-[color:var(--brand)] font-bold text-white" : off ? "text-slate-300" : "bg-[color-mix(in_srgb,var(--brand)_14%,white)] font-semibold text-[color:var(--brand)] hover:bg-[color-mix(in_srgb,var(--brand)_24%,white)]"}`}>
+                  {Number(ds.slice(8, 10))}
+                </button>
+              );
+            })}
+          </div>
+          {days && !days.some((d) => !d.closed && d.slots.length > 0) && <p className="mt-2 text-center text-xs text-slate-500">Sem datas livres neste mês.</p>}
+        </div>
+      )}
+
+      {/* Dias: faixa da semana */}
+      {!monthView && <>
       <div className="mt-5 flex items-center gap-2">
         <button type="button" aria-label="Dias anteriores" disabled={from <= today} onClick={() => { autoHops.current = 99; setFrom(addDays(from, -PAGE) < today ? today : addDays(from, -PAGE)); }}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 disabled:opacity-30">
@@ -219,6 +259,7 @@ export function BookingStep({
         </button>
       </div>
       <p className="mt-1 text-center text-[11px] capitalize text-slate-400">{MONTHS[Number(from.slice(5, 7)) - 1]} {from.slice(0, 4)}</p>
+      </>}
 
       {/* Horários */}
       <div className="mt-4 min-h-[140px]">
@@ -227,7 +268,7 @@ export function BookingStep({
         ) : meta.noPros ? (
           <p className="py-8 text-center text-sm text-slate-500">A clínica ainda não abriu horários para agendamento online.</p>
         ) : !day ? (
-          <p className="py-8 text-center text-sm text-slate-500">Sem horários livres nestes dias. Veja os próximos dias na seta ao lado.</p>
+          <p className="py-8 text-center text-sm text-slate-500">{monthView ? "Escolha uma data destacada no calendário." : "Sem horários livres nestes dias. Veja os próximos dias na seta ao lado."}</p>
         ) : (
           groups.map(([label, times]) => (
             <div key={label} className="mb-3">

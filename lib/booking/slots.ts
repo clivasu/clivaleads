@@ -1,5 +1,5 @@
 import { holidayName } from "./holidays";
-import type { BookingBlockDay, StepConfig } from "@/lib/types";
+import type { BookingBlockDate, BookingBlockDay, StepConfig } from "@/lib/types";
 
 // Agendamento online: regras da clínica e cálculo de horários livres.
 // Tudo no fuso de Brasília (UTC-3, sem horário de verão desde 2019).
@@ -14,6 +14,7 @@ export interface BookingSettings {
   skip_holidays: boolean;
   blocked_dates: string[];    // AAAA-MM-DD
   auto_confirm: boolean;      // entra como "confirmado" (senão "aguardando")
+  date_hours?: Record<string, { start: string; end: string }[]>; // só estas datas abrem (bloco em "Datas do mês")
 }
 
 export const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
@@ -96,6 +97,8 @@ export function closedReason(s: BookingSettings, date: string, today: string): s
   if (date < today) return "Data passada";
   if (date > addDays(today, s.max_days_ahead)) return "Agenda ainda não aberta";
   if (s.blocked_dates.includes(date)) return "Fechado";
+  // Datas escolhidas uma a uma: valem mesmo em feriado; o resto fica fechado.
+  if (s.date_hours) return s.date_hours[date] ? null : "Fechado";
   if (s.skip_holidays) { const h = holidayName(date); if (h) return `Feriado: ${h}`; }
   if (!s.hours[wd]?.open) return "Fechado";
   return null;
@@ -127,14 +130,44 @@ export function normalizeBlockHours(raw: unknown): BookingBlockDay[] | undefined
 
 // Regras da clínica com os dias/horários do bloco por cima. Feriados, datas
 // bloqueadas, antecedência e janela continuam sendo os da clínica.
-export function applyBlockHours(s: BookingSettings, c: Pick<StepConfig, "booking_hours" | "booking_slot_minutes">): BookingSettings {
-  const block = normalizeBlockHours(c.booking_hours);
+export const BLOCK_MAX_DATES = 180;
+
+// Datas específicas: válidas, sem repetir, em ordem e com períodos limpos.
+export function normalizeBlockDates(raw: unknown): BookingBlockDate[] {
+  if (!Array.isArray(raw)) return [];
+  const byDate = new Map<string, { start: string; end: string }[]>();
+  for (const d of raw) {
+    const date = (d as BookingBlockDate | null)?.date;
+    if (typeof date !== "string" || !YMD.test(date) || byDate.has(date)) continue;
+    const ranges = normalizeBlockHours([{ open: true, ranges: (d as BookingBlockDate).ranges }, ...Array(6).fill({ open: false, ranges: [] })])![0].ranges;
+    if (ranges.length) byDate.set(date, ranges);
+  }
+  return [...byDate.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).slice(0, BLOCK_MAX_DATES).map(([date, ranges]) => ({ date, ranges }));
+}
+
+export function blockMode(c: Pick<StepConfig, "booking_mode" | "booking_hours">): "clinic" | "week" | "dates" {
+  if (c.booking_mode === "dates" || c.booking_mode === "week" || c.booking_mode === "clinic") return c.booking_mode;
+  return normalizeBlockHours(c.booking_hours) ? "week" : "clinic";
+}
+
+const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86400000);
+
+export function applyBlockHours(s: BookingSettings, c: Pick<StepConfig, "booking_mode" | "booking_hours" | "booking_dates" | "booking_slot_minutes">, now = new Date()): BookingSettings {
   const step = Number(c.booking_slot_minutes);
-  return {
-    ...s,
-    ...(SLOT_STEPS.includes(step) ? { slot_minutes: step } : {}),
-    ...(block ? { hours: block.map((d, i) => ({ ...s.hours[i], open: d.open, ranges: d.ranges, break_start: null, break_end: null })) } : {}),
-  };
+  const base = { ...s, ...(SLOT_STEPS.includes(step) ? { slot_minutes: step } : {}) };
+  const mode = blockMode(c);
+  if (mode === "dates") {
+    const dates = normalizeBlockDates(c.booking_dates);
+    const last = dates.at(-1)?.date;
+    return {
+      ...base,
+      date_hours: Object.fromEntries(dates.map((d) => [d.date, d.ranges])),
+      // a agenda fica aberta até a última data escolhida (até 180 dias)
+      max_days_ahead: last ? Math.min(180, Math.max(s.max_days_ahead, daysBetween(brToday(now), last))) : s.max_days_ahead,
+    };
+  }
+  const block = mode === "week" ? normalizeBlockHours(c.booking_hours) : undefined;
+  return block ? { ...base, hours: block.map((d, i) => ({ ...s.hours[i], open: d.open, ranges: d.ranges, break_start: null, break_end: null })) } : base;
 }
 
 // Horários de início possíveis num dia (minutos desde 00:00).
@@ -180,7 +213,7 @@ export function computeSlots(p: {
     const closed = s.enabled ? closedReason(s, date, today) : "Agendamento online desligado";
     const day: DaySlots = { date, weekday: wd, closed, slots: [] };
     if (!closed && p.professionals.length > 0) {
-      const h = s.hours[wd];
+      const h: DayHours = s.date_hours ? { open: true, start: "00:00", end: "00:00", ranges: s.date_hours[date] } : s.hours[wd];
       for (const m of startMinutes(h, duration, s.slot_minutes)) {
         const start = localToUtc(date, toHHMM(m));
         if (start.getTime() < earliest) continue;

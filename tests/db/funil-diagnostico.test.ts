@@ -158,4 +158,23 @@ describe("funil Checklist Consultório 20K", () => {
     // O público passa a ver o funil.
     expect(await as(db, { role: "anon" }, async (q) => (await q(`select 1 from flows where slug = 'checklist-consultorio-20k'`)).rows.length)).toBe(1);
   });
+
+  it("datas de dezembro: só o bloco de agendamento da Viviane muda", async () => {
+    const db = await freshDb();
+    const vivi = await signUp(db, "mamsbsb@icloud.com");
+    const other = await signUp(db, "outra@clinica.com");
+    const AGENDA = readFileSync("supabase/seed/agenda_viviane_dezembro.sql", "utf8");
+    await expect(db.exec(AGENDA)).rejects.toThrow(/não encontrado/);
+    await db.exec("rollback");
+    await db.exec(SEED);
+    // outra conta com funil de mesmo endereço não é tocada
+    const f2 = (await db.query<{ id: string }>(`insert into flows (organization_id, name, slug) values ($1, 'X', 'checklist-consultorio-20k') returning id`, [other.orgId])).rows[0].id;
+    await db.query(`insert into flow_steps (flow_id, position, type, config) values ($1, 0, 'booking', '{"title":"t"}')`, [f2]);
+    let r!: Record<string, unknown>;
+    for (let i = 0; i < 2; i++) r = (await db.exec(AGENDA)).at(-1)!.rows[0] as Record<string, unknown>;
+    expect(r).toEqual({ modo: "dates", datas: 11, primeira: "2026-11-30", ultima: "2026-12-12", intervalo_min: "60" });
+    const cfg = (await db.query<{ config: Record<string, unknown> }>(`select s.config from flow_steps s join flows f on f.id = s.flow_id where f.organization_id = $1 and s.type = 'booking'`, [vivi.orgId])).rows[0].config;
+    expect(cfg.booking_procedure).toBe("Sessão gratuita de diagnóstico de carreira"); // o resto do bloco fica
+    expect((await db.query<{ config: unknown }>(`select config from flow_steps where flow_id = $1`, [f2])).rows[0].config).toEqual({ title: "t" });
+  });
 });

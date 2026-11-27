@@ -92,7 +92,7 @@ export const bookingSlotsSchema = z.object({
   flow_id: uuid,
   step_id: z.string().min(1).max(64),
   from: ymd,
-  days: z.coerce.number().int().min(1).max(14).default(7),
+  days: z.coerce.number().int().min(1).max(42).default(7), // mês inteiro na visão mensal
 });
 export const bookingCreateSchema = z.object({
   flow_id: uuid,
