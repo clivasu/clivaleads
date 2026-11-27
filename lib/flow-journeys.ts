@@ -47,7 +47,7 @@ function firstName(name?: string | null): string {
 function questionSteps(steps: FlowStep[]): { i: number; title: string }[] {
   return steps
     .map((s, i) => ({ i, title: (s.config?.title ?? "").trim().toLowerCase() }))
-    .filter((s) => (steps[s.i].type === "question" || steps[s.i].type === "multi_choice") && s.title.length > 0);
+    .filter((s) => ["question", "multi_choice", "open_answer", "rating"].includes(steps[s.i].type) && s.title.length > 0);
 }
 
 // Reconstrói a jornada de cada lead a partir das respostas capturadas.

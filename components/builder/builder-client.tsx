@@ -8,12 +8,13 @@ import {
   AlertTriangle, Newspaper, ListChecks, CircleDot, Star, ClipboardList,
   Quote, BarChart3, Gauge, TrendingUp, PieChart, HelpCircle, Loader,
   Timer as TimerIcon, Sparkles, MousePointerClick, MessageCircle, Gift,
-  Volume2, SquareStack, LayoutGrid, LayoutTemplate, FileDown,
+  Volume2, SquareStack, LayoutGrid, LayoutTemplate, FileDown, PenLine,
   GripVertical, Trash2, Copy, Plus, ArrowLeft, ExternalLink, Check, ChevronDown,
   Layers, GitBranch, Palette, Users, Settings, HeartOff, Wand2, Route,
 } from "lucide-react";
 import type { FlowStep, PublicFlow, StepType, QuestionOption, ButtonItem, FormField, RatingRule } from "@/lib/types";
-import { BLOCK_CATALOG, defaultConfig, type BlockDef } from "@/lib/block-catalog";
+import { BLOCK_CATALOG, blockLabel, defaultConfig, type BlockDef } from "@/lib/block-catalog";
+import { definedVars, varKey, VAR_TYPES } from "@/lib/personalize";
 import { FlowRunner } from "@/components/flow-runner/flow-runner";
 import { FlowCanvas } from "@/components/builder/flow-canvas";
 import type { JourneyLead } from "@/lib/flow-journeys";
@@ -47,13 +48,9 @@ const ICONS: Record<StepType, React.ElementType> = {
   faq: HelpCircle, loading: Loader, timer: TimerIcon, result: Sparkles,
   cta: MousePointerClick, whatsapp: MessageCircle, spin_wheel: Gift,
   buttons: SquareStack, audio: Volume2, container: LayoutGrid, hero: LayoutTemplate, exit: HeartOff,
-  booking: CalendarCheck2, gift: FileDown,
+  booking: CalendarCheck2, gift: FileDown, open_answer: PenLine,
 };
 const ACCEPTS_CHILDREN = (t: StepType) => t === "container" || t === "hero";
-// Rótulo canônico por type (ignora presets, que compartilham o mesmo type).
-const LABELS = Object.fromEntries(
-  BLOCK_CATALOG.filter((b) => !b.id).map((b) => [b.type, b.label]),
-) as Record<StepType, string>;
 
 function uid() {
   return "s-" + Math.random().toString(36).slice(2, 9);
@@ -652,7 +649,7 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
   return (
     <div>
       <div className="mb-3 rounded-lg bg-slate-100 px-3 py-2 text-xs font-medium text-slate-500">
-        {LABELS[t]}
+        {blockLabel(step)}
       </div>
 
       {"title" in defaultAllowed(t) && (
@@ -660,7 +657,9 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
           <input className={inputCls} value={c.title ?? ""} onChange={(e) => onChange({ title: e.target.value })} />
         </Field>
       )}
-      {["start", "question", "multi_choice", "rating", "stats", "level", "chart_growth", "chart_gauge", "form", "news", "spin_wheel", "container", "hero", "booking"].includes(t) && (
+      {"title" in defaultAllowed(t) && <VarChips onPick={(tok) => onChange({ title: `${(c.title ?? "").trimEnd()} ${tok}`.trim() })} />}
+
+      {["start", "question", "multi_choice", "rating", "stats", "level", "chart_growth", "chart_gauge", "form", "news", "spin_wheel", "container", "hero", "booking", "open_answer"].includes(t) && (
         <Field label="Subtítulo">
           <input className={inputCls} value={c.subtitle ?? ""} onChange={(e) => onChange({ subtitle: e.target.value })} />
         </Field>
@@ -670,9 +669,54 @@ function Inspector({ step, onChange }: { step: FlowStep; onChange: (p: Partial<F
           <textarea className={inputCls} rows={3} value={c.body ?? ""} onChange={(e) => onChange({ body: e.target.value })} />
         </Field>
       )}
-      {["start", "cta", "whatsapp", "news", "form", "exit"].includes(t) && (
+      {["start", "cta", "whatsapp", "news", "form", "exit", "open_answer"].includes(t) && (
         <Field label="Texto do botão">
           <input className={inputCls} value={c.button_label ?? ""} onChange={(e) => onChange({ button_label: e.target.value })} />
+        </Field>
+      )}
+
+      {/* Resposta escrita (curta, longa ou o bloco mágico do nome) */}
+      {t === "open_answer" && (
+        <div className="mb-3 space-y-3">
+          <div className="grid grid-cols-2 gap-1.5">
+            {([["short", "Curta (1 linha)"], ["long", "Longa (texto)"]] as const).map(([v, label]) => (
+              <button key={v} type="button" onClick={() => onChange({ answer_kind: v, answer_max: v === "long" ? 1000 : 120 })}
+                className={cn("rounded-lg border py-1.5 text-xs font-medium", (c.answer_kind ?? "short") === v ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-600")}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <Field label="Texto de exemplo no campo">
+            <input className={inputCls} value={c.placeholder ?? ""} onChange={(e) => onChange({ placeholder: e.target.value })} placeholder="Escreva aqui…" />
+          </Field>
+          <Field label="Guardar a resposta como">
+            <select className={inputCls} value={c.save_as ?? ""} onChange={(e) => onChange({ save_as: e.target.value as "" | "name" | "phone" | "email", ...(e.target.value ? { answer_kind: "short" as const } : {}) })}>
+              <option value="">Resposta (fica no lead para você ler)</option>
+              <option value="name">✨ Nome da pessoa (bloco mágico)</option>
+              <option value="phone">WhatsApp do lead</option>
+              <option value="email">E-mail do lead</option>
+            </select>
+          </Field>
+          {c.save_as === "name" && (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-900">
+              Depois deste bloco, escreva <b>{"{nome}"}</b> em qualquer título, texto ou opção e o funil conversa com a pessoa pelo nome. Ex.: “{"{nome}"}, qual é a sua maior dificuldade?”
+            </p>
+          )}
+          <ToggleRow label="Resposta obrigatória" desc="Desligado: aparece o botão “Pular”." on={c.answer_required ?? true} onChange={(v) => onChange({ answer_required: v })} />
+          <Field label={`Limite de caracteres: ${Math.min(2000, Math.max(20, Number(c.answer_max) || ((c.answer_kind ?? "short") === "long" ? 1000 : 120)))}`}>
+            <input type="range" min={20} max={2000} step={20} value={Math.min(2000, Math.max(20, Number(c.answer_max) || ((c.answer_kind ?? "short") === "long" ? 1000 : 120)))}
+              onChange={(e) => onChange({ answer_max: Number(e.target.value) })} className="w-full accent-emerald-500" />
+          </Field>
+        </div>
+      )}
+
+      {/* Variável: a resposta deste bloco aparece nos blocos seguintes */}
+      {VAR_TYPES.has(t) && c.save_as !== "name" && (
+        <Field label="Nome da variável (opcional)">
+          <input className={inputCls} value={c.key ?? ""} onChange={(e) => onChange({ key: varKey(e.target.value) || undefined })} placeholder="ex.: dificuldade" />
+          <span className="mt-1 block text-[11px] leading-relaxed text-slate-400">
+            {varKey(c.key) ? <>Use <b className="text-slate-600">{`{${varKey(c.key)}}`}</b> nos blocos seguintes para repetir o que a pessoa {t === "multi_choice" ? "marcou" : t === "open_answer" ? "escreveu" : "escolheu"}.</> : "Dê um nome para repetir esta resposta nos blocos seguintes."}
+          </span>
         </Field>
       )}
 
@@ -1364,8 +1408,27 @@ function BookingInspector({ c, onChange }: { c: FlowStep["config"]; onChange: (p
   );
 }
 
+// Atalhos de personalização: {nome} e as variáveis das perguntas anteriores.
+function VarChips({ onPick }: { onPick: (token: string) => void }) {
+  const { steps, currentId } = useContext(LogicCtx);
+  const idx = steps.findIndex((s) => s.id === currentId);
+  const before = idx >= 0 ? steps.slice(0, idx) : steps;
+  const vars = definedVars(before).filter((v) => v !== "nome_completo");
+  return (
+    <div className="-mt-1.5 mb-3 flex flex-wrap items-center gap-1">
+      <span className="text-[11px] text-slate-400">Personalizar:</span>
+      {vars.map((v) => (
+        <button key={v} type="button" onClick={() => onPick(`{${v}}`)} title="Inserir no título"
+          className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800 hover:bg-amber-100">
+          {`{${v}}`}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function defaultAllowed(t: StepType) {
-  const withTitle = ["start", "text", "image", "video", "carousel", "before_after", "question", "multi_choice", "rating", "stats", "level", "chart_growth", "chart_gauge", "faq", "form", "news", "cta", "whatsapp", "timer", "spin_wheel", "buttons", "audio", "container", "hero", "exit", "booking", "gift"];
+  const withTitle = ["start", "text", "image", "video", "carousel", "before_after", "question", "multi_choice", "rating", "stats", "level", "chart_growth", "chart_gauge", "faq", "form", "news", "cta", "whatsapp", "timer", "spin_wheel", "buttons", "audio", "container", "hero", "exit", "booking", "gift", "open_answer"];
   return withTitle.includes(t) ? { title: true } : {};
 }
 
@@ -1397,7 +1460,7 @@ function GotoSelect({ value, legacyNext, onChange }: { value?: string; legacyNex
       <optgroup label="Pular para a etapa">
         {steps.map((st, i) => (st.id === currentId ? null : (
           <option key={st.id} value={st.id}>
-            {i + 1}. {LABELS[st.type]}{st.config.title ? ` — ${st.config.title.slice(0, 26)}` : ""}
+            {i + 1}. {blockLabel(st)}{st.config.title ? ` — ${st.config.title.slice(0, 26)}` : ""}
           </option>
         )))}
       </optgroup>
@@ -1623,7 +1686,7 @@ function TreeRows(p: TreeProps) {
               )}
               <Icon className="h-4 w-4 shrink-0" />
               <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
-                {LABELS[s.type]}
+                {blockLabel(s)}
                 {isContainer && s.children?.length ? ` (${s.children.length})` : ""}
               </span>
               <button onClick={(e) => { e.stopPropagation(); p.onDuplicate(s.id); }} className="hidden text-slate-400 hover:text-slate-700 group-hover:block"><Copy className="h-3.5 w-3.5" /></button>

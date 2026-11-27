@@ -41,6 +41,7 @@ export type StepType =
   | "exit" // final alternativo: sem interesse / fora do perfil (só por desvio)
   | "chart_gauge" // gráfico circular animado (%)
   | "booking" // agendamento online: paciente escolhe dia/horário livre da agenda
+  | "open_answer" // resposta escrita (curta ou longa); "Nome" é o bloco mágico
   | "gift" // material grátis: entrega o PDF, grava o lead e convida para o próximo passo
   | "cta" // chamada para ação
   | "result" // resultado personalizado por score
@@ -167,6 +168,12 @@ export interface StepConfig {
   booking_ask_contact?: boolean;  // pedir nome/WhatsApp no bloco se ainda não houver
   booking_success_title?: string;
   booking_success_body?: string;
+  // open_answer (resposta escrita)
+  answer_kind?: "short" | "long";
+  answer_required?: boolean;
+  answer_max?: number;              // limite de caracteres
+  save_as?: "" | "name" | "phone" | "email"; // grava também no contato do lead
+  placeholder?: string;
   // gift (material grátis)
   file_url?: string;          // PDF/link entregue (https ou arquivo do site)
   file_label?: string;        // texto do botão de baixar
@@ -175,7 +182,7 @@ export interface StepConfig {
   invite_label?: string;      // texto do botão do convite (vazio = sem botão)
   invite_goto?: string;       // etapa do botão (vazio = próxima)
   invite_note?: string;       // aviso abaixo do convite
-  key?: string;
+  key?: string; // nome da variável: {key} mostra a resposta nos blocos seguintes
   title?: string;
   subtitle?: string;
   body?: string;

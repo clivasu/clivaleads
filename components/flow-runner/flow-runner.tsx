@@ -47,6 +47,7 @@ import type { PublicFunnelConfig } from "@/lib/public-funnel-config";
 import { CookieSettingsLink } from "@/components/flow-runner/marketing-pixels";
 import { BookingStep } from "@/components/flow-runner/booking-step";
 import { extraAnswers, fieldError, mergeAnswers, safeFileUrl } from "@/lib/funnel-form";
+import { buildVars, definedVars, personalizeStep } from "@/lib/personalize";
 
 export function FlowRunner({
   flow,
@@ -276,13 +277,38 @@ export function FlowRunner({
     );
   };
 
+  // Personalização: {nome} e variáveis viram as respostas. O bloco original
+  // (sem troca) é o que grava as respostas, para a pontuação continuar batendo.
+  const known = useMemo(() => new Set(definedVars(steps)), [steps]);
+  const vars = useMemo(() => buildVars(steps, answers, contact.name), [steps, answers, contact.name]);
+  // Mesmo objeto enquanto as respostas não mudam: não reinicia efeitos dos blocos.
+  const views = useMemo(() => {
+    const m = new Map<FlowStep, FlowStep>();
+    const walk = (list: FlowStep[]) => { for (const s of list) { m.set(s, personalizeStep(s, vars, known, preview)); if (s.children) walk(s.children); } };
+    walk(steps);
+    return m;
+  }, [steps, vars, known, preview]);
+  const view = (raw: FlowStep): FlowStep => views.get(raw) ?? raw;
+  const rawTitle = (raw: FlowStep) => raw.config.title || "";
+
   // Renderiza um bloco (recursivo — o container renderiza seus filhos).
-  const renderBlock = (blk: FlowStep): React.ReactNode => {
+  const renderBlock = (raw: FlowStep): React.ReactNode => {
+    const blk = view(raw);
     switch (blk.type) {
       case "start": return <StartStep step={blk} onStart={() => advance()} />;
-      case "question": return <QuestionStep step={blk} brand={brand} onSelect={(opt) => pickOption(blk, opt)} />;
-      case "multi_choice": return <MultiChoiceStep step={blk} onSubmit={pushAnswer} />;
-      case "rating": return <RatingStep step={blk} onSubmit={pushAnswer} />;
+      case "question": return <QuestionStep step={blk} brand={brand} onSelect={(opt) => pickOption(raw, opt)} />;
+      case "multi_choice": return <MultiChoiceStep step={blk} onSubmit={(a, d) => pushAnswer({ ...a, question_title: rawTitle(raw) }, d)} />;
+      case "rating": return <RatingStep step={blk} onSubmit={(a, d) => pushAnswer({ ...a, question_title: rawTitle(raw) }, d)} />;
+      case "open_answer": return <OpenAnswerStep step={blk} initial={blk.config.save_as ? contact[blk.config.save_as as keyof ContactInfo] : undefined} onSubmit={(text) => {
+        const c = raw.config;
+        const merged = c.save_as ? { ...contact, [c.save_as]: text } : contact;
+        if (c.save_as) setContact(merged);
+        // Nome, telefone e e-mail vão para o contato do lead; o resto vira resposta.
+        const all = text && !c.save_as ? mergeAnswers(answers, [{ question_title: rawTitle(raw), answer_value: text, answer_label: text, score: 0 }]) : answers;
+        setAnswers(all);
+        if (index >= mainLast) persistSession(all, merged, "final_cta");
+        else go(undefined, totalScore(all));
+      }} />;
       case "text": return <TextStep step={blk} />;
       case "cta": return <TextStep step={blk} />;
       case "image": return <ImageStep step={blk} />;
@@ -307,7 +333,7 @@ export function FlowRunner({
         return (
           <ButtonsStep step={blk} onPick={(b) => {
             if (b.href) { try { window.open(b.href, "_blank", "noopener"); } catch { /* noop */ } }
-            const ans: LeadAnswer = { question_title: blk.config.title || "", answer_value: b.label, answer_label: b.label, score: 0 };
+            const ans: LeadAnswer = { question_title: rawTitle(raw), answer_value: b.label, answer_label: b.label, score: 0 };
             // Bloco de botões como etapa final: registra o clique no botão.
             const dest = b.goto || b.next;
             const opensWhatsapp = /wa\.me|whatsapp\.com/i.test(b.href ?? "");
@@ -335,7 +361,7 @@ export function FlowRunner({
             setContact(merged);
             const [y, m, d] = b.date.split("-");
             const ans: LeadAnswer = {
-              question_title: blk.config.title || "Agendamento",
+              question_title: raw.config.title || "Agendamento",
               answer_value: `${b.date} ${b.time}`,
               answer_label: `${d}/${m}/${y} às ${b.time} — ${b.procedure}`,
               score: 0,
@@ -350,7 +376,7 @@ export function FlowRunner({
         const isLast = index >= mainLast;
         return (
           <SpinWheelBlock step={blk} onCapture={(cc) => setContact((prev) => ({ ...prev, ...cc }))} onFinish={(prize) => {
-            const a: LeadAnswer = { question_title: blk.config.title || "Roleta", answer_value: "wheel", answer_label: prize, score: 0, phrase: `Girei a roleta e ganhei: ${prize}` };
+            const a: LeadAnswer = { question_title: raw.config.title || "Roleta", answer_value: "wheel", answer_label: prize, score: 0, phrase: `Girei a roleta e ganhei: ${prize}` };
             if (isLast) {
               // Roleta como etapa final: o CTA leva ao destino configurado.
               const all = [...answers, a];
@@ -636,6 +662,49 @@ function ExternalLinkBadge() {
     <span className="absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-white/90 shadow">
       <ArrowUpRight className="h-3.5 w-3.5 text-slate-500" />
     </span>
+  );
+}
+
+// Resposta escrita: curta (uma linha) ou longa (texto livre). Com "save_as",
+// vira o nome/telefone/e-mail do lead ("Nome" = bloco mágico).
+function OpenAnswerStep({ step, initial, onSubmit }: { step: FlowStep; initial?: string; onSubmit: (text: string) => void }) {
+  const c = step.config;
+  const long = c.answer_kind === "long";
+  const max = Math.min(2000, Math.max(20, Number(c.answer_max) || (long ? 1000 : 120)));
+  const required = c.answer_required ?? true;
+  const [val, setVal] = useState(initial ?? "");
+  const [touched, setTouched] = useState(false);
+  const field = { name: c.save_as || "answer", label: "", type: c.save_as === "phone" ? "tel" : c.save_as === "email" ? "email" : "text", required } as FormField;
+  const err = fieldError(field, val) ?? (c.save_as === "name" && val.trim() && val.trim().length < 2 ? "Escreva seu nome" : null);
+  const submit = () => { setTouched(true); if (!err) onSubmit(val.trim().slice(0, max)); };
+  const common = {
+    id: `${step.id}-answer`, value: val, maxLength: max, placeholder: c.placeholder || (long ? "Escreva aqui…" : "Sua resposta"),
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setVal(e.target.value),
+    onBlur: () => { if (val) setTouched(true); },
+    "aria-invalid": Boolean(touched && err),
+    className: "w-full rounded-xl border-2 border-slate-200 bg-white px-4 text-base text-slate-900 focus:border-[color:var(--brand)] focus:outline-none",
+  };
+  return (
+    <div>
+      <label htmlFor={common.id} className="block"><StepTitle title={c.title} subtitle={c.subtitle} /></label>
+      {long ? (
+        <textarea {...common} rows={6} className={cn(common.className, "resize-y py-3 leading-relaxed")} />
+      ) : (
+        <input {...common} type={field.type} className={cn(common.className, "h-14")}
+          autoComplete={c.save_as === "name" ? "given-name" : c.save_as === "phone" ? "tel" : c.save_as === "email" ? "email" : "off"}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }} />
+      )}
+      <div className="mt-1.5 flex justify-between gap-3 text-xs">
+        <span className="text-rose-500">{touched && err ? err : ""}</span>
+        {long && <span className="shrink-0 text-slate-400">{val.length}/{max}</span>}
+      </div>
+      <PrimaryButton onClick={submit} disabled={required && !val.trim()}>
+        {c.button_label || "Continuar"} <ArrowRight className="h-4 w-4" />
+      </PrimaryButton>
+      {!required && !val.trim() && (
+        <button type="button" onClick={() => onSubmit("")} className="mt-1 w-full py-2 text-center text-sm text-slate-500 underline-offset-4 hover:underline">Pular</button>
+      )}
+    </div>
   );
 }
 

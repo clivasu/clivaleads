@@ -13,8 +13,8 @@ const text = (max: number) => z.string().trim().max(max);
 
 export const answerSchema = z.object({
   question_title: text(300),
-  answer_value: text(500),
-  answer_label: text(500),
+  answer_value: text(2000), // resposta longa escrita pela pessoa
+  answer_label: text(2000),
   question_key: text(100).optional().nullable(),
   phrase: text(500).optional().nullable(),
   score: z.number().optional(), // ignorado: o servidor recalcula

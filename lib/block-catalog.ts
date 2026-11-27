@@ -71,6 +71,15 @@ export const BLOCK_CATALOG: BlockDef[] = [
   { type: "multi_choice", label: "Escolha múltipla", group: "Perguntas" },
   { type: "rating", label: "Avaliação / Escala", group: "Perguntas" },
   { type: "form", label: "Captura de contato", group: "Perguntas" },
+  { type: "open_answer", id: "open_name", label: "✨ Nome (bloco mágico)", group: "Perguntas", isNew: true, preset: {
+    title: "Antes de começar, como posso te chamar?", subtitle: "Vou usar seu nome nas próximas perguntas.",
+    answer_kind: "short", save_as: "name", placeholder: "Seu primeiro nome", answer_required: true, answer_max: 60,
+  } },
+  { type: "open_answer", label: "Resposta curta", group: "Perguntas", isNew: true },
+  { type: "open_answer", id: "open_long", label: "Resposta longa", group: "Perguntas", isNew: true, preset: {
+    title: "{nome}, qual é a sua maior dificuldade hoje?", subtitle: "Escreva com suas palavras. Só a nossa equipe lê.",
+    answer_kind: "long", placeholder: "Escreva aqui…", answer_required: true, answer_max: 1000,
+  } },
 
   { type: "testimonial", label: "Depoimento", group: "Prova" },
   { type: "stats", label: "Prova social", group: "Prova" },
@@ -90,6 +99,15 @@ export const BLOCK_CATALOG: BlockDef[] = [
   { type: "exit", label: "Final: sem interesse", group: "Conversão", isNew: true },
 ];
 
+// Nome do bloco na lista de etapas e no fluxo (o mesmo tipo tem variações).
+export function blockLabel(step: { type: StepType; config: StepConfig }): string {
+  if (step.type === "open_answer") {
+    if (step.config.save_as === "name") return "✨ Nome (bloco mágico)";
+    return step.config.answer_kind === "long" ? "Resposta longa" : "Resposta curta";
+  }
+  return BLOCK_CATALOG.find((b) => b.type === step.type && !b.id)?.label ?? step.type;
+}
+
 // Config inicial de cada bloco ao ser adicionado (para o preview não ficar vazio).
 export function defaultConfig(type: StepType): StepConfig {
   switch (type) {
@@ -104,6 +122,8 @@ export function defaultConfig(type: StepType): StepConfig {
         booking_success_title: "Horário reservado!",
         booking_success_body: "A clínica vai confirmar com você pelo WhatsApp.",
       };
+    case "open_answer":
+      return { title: "{nome}, qual é o seu objetivo?", answer_kind: "short", placeholder: "Sua resposta", answer_required: true, answer_max: 120, save_as: "" };
     case "gift":
       return {
         title: "Seu material está liberado!",
