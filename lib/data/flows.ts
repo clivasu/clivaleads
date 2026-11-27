@@ -61,6 +61,19 @@ export async function getFlowById(id: string): Promise<PublicFlow | null> {
   return { ...(flow as PublicFlow), steps: hydrateSteps(flow.steps as unknown[]) };
 }
 
+// Banco sem a 0020: as funções públicas ainda não existem (usa o caminho antigo).
+const rpcMissing = (code?: string) => code === "PGRST202" || code === "42883";
+
+// Funil publicado pelo endereço exato (0020: o público não lista funis).
+async function publicFunnelRpc(handle: string, slug: string): Promise<{ flow: PublicFlow; settings: unknown } | null | "missing"> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("public_funnel", { p_handle: handle, p_slug: slug });
+  if (error) return rpcMissing(error.code) ? "missing" : null;
+  if (!data) return null;
+  const d = data as { flow: Flow; settings: unknown; organization: PublicFlow["organization"]; steps: unknown[] };
+  return { flow: { ...d.flow, organization: d.organization, steps: hydrateSteps(d.steps ?? []) }, settings: d.settings };
+}
+
 // Busca um funil PUBLICADO por identificador da conta + slug do funil.
 // URL nova: /<handle>/<slug>  (ex.: /marco/estetica)
 export async function getPublicFlowByHandle(
@@ -70,6 +83,8 @@ export async function getPublicFlowByHandle(
   if (!isSupabaseConfigured) {
     return getDemoFlowBySlug(slug);
   }
+  const viaRpc = await publicFunnelRpc(handle, slug);
+  if (viaRpc !== "missing") return viaRpc?.flow ?? null;
   const supabase = await createClient();
   const { data: org } = await supabase
     .from("organizations")
@@ -95,6 +110,10 @@ export async function getPublicFlowByHandle(
 // (pixels, SEO, consentimento). O JSON bruto de settings nunca vai ao navegador.
 // cache(): generateMetadata e a página fazem uma única consulta por requisição.
 export const getPublicFunnelPage = cache(async (handle: string, slug: string): Promise<{ flow: PublicFlow; config: PublicFunnelConfig } | null> => {
+  if (isSupabaseConfigured) {
+    const viaRpc = await publicFunnelRpc(handle, slug);
+    if (viaRpc !== "missing") return viaRpc ? { flow: viaRpc.flow, config: toPublicConfig(viaRpc.settings) } : null;
+  }
   const flow = await getPublicFlowByHandle(handle, slug);
   if (!flow) return null;
   if (!isSupabaseConfigured) return { flow, config: toPublicConfig((flow as { settings?: unknown }).settings) };
@@ -102,27 +121,6 @@ export const getPublicFunnelPage = cache(async (handle: string, slug: string): P
   const { data } = await supabase.from("flows").select("settings").eq("id", flow.id).eq("status", "published").maybeSingle();
   return { flow, config: toPublicConfig(data?.settings) };
 });
-
-// Lista os funis publicados de uma conta (para a página /<handle>).
-export async function getPublicOrgFunnels(
-  handle: string,
-): Promise<{ org: PublicFlow["organization"]; flows: Flow[] } | null> {
-  if (!isSupabaseConfigured) return null;
-  const supabase = await createClient();
-  const { data: org } = await supabase
-    .from("organizations")
-    .select(PUBLIC_ORG_COLS)
-    .eq("slug", handle)
-    .single();
-  if (!org) return null;
-  const { data: flows } = await supabase
-    .from("flows")
-    .select(PUBLIC_FLOW_COLS)
-    .eq("organization_id", org.id)
-    .eq("status", "published")
-    .order("updated_at", { ascending: false });
-  return { org: org as PublicFlow["organization"], flows: (flows as Flow[]) ?? [] };
-}
 
 // Busca um funil PUBLICADO por slug, com org e steps ordenados.
 // Sem Supabase conectado, cai para os dados de demonstração (seed em memória).
@@ -201,6 +199,9 @@ export async function getFlowPrivateSettings(flowId: string): Promise<FlowPrivat
 export async function resolveLegacySlug(slug: string): Promise<string | null> {
   if (!isSupabaseConfigured) return null;
   const supabase = await createClient();
+  const rpc = await supabase.rpc("public_legacy_path", { p_slug: slug });
+  if (!rpc.error) return (rpc.data as string | null) ?? null;
+  if (!rpcMissing(rpc.error.code)) return null;
   const { data } = await supabase
     .from("flows")
     .select("slug, created_at, organization:organizations(slug)")

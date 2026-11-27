@@ -162,3 +162,17 @@ Branch: `fix/security-integrity-cliva`, com merge na `main` (PR #1, `bdffdaf`) e
 | Entrega | Itens | Situação |
 |---|---|---|
 | E | medições de performance, fontes, headers de segurança, observabilidade | pendente |
+
+## Auditoria de acesso público (27/11/2026)
+
+Verificado com todas as migrations aplicadas (PGlite) e nas rotas do app.
+
+Já protegido: leads, respostas, eventos, pacientes e fichas, agenda, notificações, cobrança, configurações privadas dos funis, webhooks e perfis só são lidos por membros da clínica (RLS). APIs públicas derivam a clínica do funil publicado, validam a entrada, têm limite de requisições e o lead só é alterado com token assinado. Ações do servidor que usam a service role conferem permissão antes (admin geral, owner/admin do funil). Cron exige `CRON_SECRET`; webhook da Stripe confere a assinatura.
+
+Corrigido (0020 + deploy):
+- `cliva.me/<identificador>` listava todos os funis publicados da conta. Agora mostra só o Link na Bio publicado; sem bio, 404.
+- Com a chave pública (anon), dava para listar pela API todas as clínicas com algo publicado (nome, WhatsApp, Instagram), todos os funis publicados com as etapas e todas as bios. Agora o público só abre pelo endereço exato (`public_funnel`, `public_bio`, `public_legacy_path`).
+- Storage: qualquer pessoa listava os arquivos de todas as clínicas. Agora cada clínica lista só os seus; os links públicos continuam funcionando.
+- Painel e login não podem ser abertos dentro de outro site (X-Frame-Options/frame-ancestors). Cabeçalhos nosniff, Referrer-Policy, HSTS e Permissions-Policy em todo o site.
+
+Pendente (não é código): revogar os tokens expostos no chat, rate limit no firewall da Vercel (o limite atual é por instância), conferir no painel do Supabase a confirmação de e-mail e a proteção contra senhas vazadas.
