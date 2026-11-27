@@ -32,6 +32,10 @@ export async function getBioClicks(bioId: string): Promise<{ total: number; byLa
 export async function getPublicBioByHandle(handle: string): Promise<{ id: string; config: BioConfig } | null> {
   if (!isSupabaseConfigured) return null;
   const supabase = await createClient();
+  // 0020: o público só abre a bio pelo identificador exato (não lista bios).
+  const rpc = await supabase.rpc("public_bio", { p_handle: handle });
+  if (!rpc.error) return (rpc.data as { id: string; config: BioConfig } | null) ?? null;
+  if (rpc.error.code !== "PGRST202" && rpc.error.code !== "42883") return null;
   const { data: org } = await supabase.from("organizations").select("id").eq("slug", handle).single();
   if (!org) return null;
   const { data: bio } = await supabase

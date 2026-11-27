@@ -156,6 +156,7 @@ describe("funil Checklist Consultório 20K", () => {
     expect(existsSync("public/materiais/logo-by-vika.webp")).toBe(true);
     expect((await db.query(`select plan from org_billing where organization_id = $1`, [other.orgId])).rows[0]).toEqual({ plan: "pro" });
     // O público passa a ver o funil.
-    expect(await as(db, { role: "anon" }, async (q) => (await q(`select 1 from flows where slug = 'checklist-consultorio-20k'`)).rows.length)).toBe(1);
+    const slug = (await db.query<{ slug: string }>(`select slug from organizations where id = $1`, [vivi.orgId])).rows[0].slug;
+    expect(await as(db, { role: "anon" }, async (q) => (await q<{ r: unknown }>(`select public_funnel($1, 'checklist-consultorio-20k') r`, [slug])).rows[0].r)).not.toBeNull();
   });
 });
