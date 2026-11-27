@@ -2,13 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Sparkles, Minus, Maximize2, Play, Pause, BarChart3, X, Users } from "lucide-react";
-import type { FlowStep, StepType } from "@/lib/types";
-import { BLOCK_CATALOG } from "@/lib/block-catalog";
+import type { FlowStep } from "@/lib/types";
+import { blockLabel } from "@/lib/block-catalog";
 import { computeFlowMetrics, type JourneyLead, buildJourneys } from "@/lib/flow-journeys";
 import { GOTO_EXIT, resolveGoto } from "@/lib/flow-logic";
 import { cn } from "@/lib/utils";
 
-const LABELS = Object.fromEntries(BLOCK_CATALOG.map((b) => [b.type, b.label])) as Record<StepType, string>;
 
 const NODE_W = 210;
 const GAP_X = 74;
@@ -326,7 +325,7 @@ export function FlowCanvas({
               <StatRow label="Leads" value={String(metrics.total)} sub="iniciaram" />
               <StatRow label="Concluíram" value={String(metrics.completed)} sub="chegaram ao fim" accent="emerald" />
               {metrics.worstExit && (
-                <StatRow label="Maior saída" value={`${LABELS[steps[metrics.worstExit.i]?.type]}`} sub={`${metrics.worstExit.exit} leads (${metrics.worstExit.dropPct}%)`} accent="rose" />
+                <StatRow label="Maior saída" value={steps[metrics.worstExit.i] ? blockLabel(steps[metrics.worstExit.i]) : ""} sub={`${metrics.worstExit.exit} leads (${metrics.worstExit.dropPct}%)`} accent="rose" />
               )}
             </>
           )}
@@ -397,7 +396,7 @@ export function FlowCanvas({
                   <span className="absolute -top-2.5 left-3 rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white shadow">Maior saída</span>
                 )}
                 <div className="flex items-center justify-between border-b px-3 py-2">
-                  <span className="truncate text-sm font-semibold text-slate-800">{n.i + 1}. {LABELS[n.step.type]}</span>
+                  <span className="truncate text-sm font-semibold text-slate-800">{n.i + 1}. {blockLabel(n.step)}</span>
                   <span className="text-slate-300">→</span>
                 </div>
                 <div className="relative p-2">

@@ -34,3 +34,10 @@ O bloco Agendamento usa o horário da clínica ou, em "Só deste bloco", dias da
 ## Tema do funil
 
 A aba Design grava em `flows.settings.theme` só o que foi mudado. A página pública aplica valores validados por `normalizeTheme`.
+
+## Respostas escritas e personalização
+
+- Bloco `open_answer`: resposta curta (uma linha) ou longa (texto livre, até 2000 caracteres). A resposta fica no lead para leitura. Com `save_as` (`name`, `phone`, `email`) ela vai para o contato do lead.
+- Bloco mágico "Nome": `open_answer` com `save_as: "name"`. Depois dele, `{nome}` (primeiro nome) e `{nome_completo}` funcionam em títulos, textos, opções e botões.
+- Variáveis: pergunta de escolha única, múltipla, nota ou resposta escrita com "Nome da variável" (`config.key`) pode ser citada depois como `{variavel}`.
+- As respostas são gravadas com o título original (com `{nome}`), para a pontuação do servidor continuar batendo. O painel mostra a pergunta com o nome do lead. Sem resposta, a variável some do texto sem deixar vírgula solta.

@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { tierFromScore, TIER_LABEL } from "@/lib/scoring";
 import { instagramUrl } from "@/lib/funnel-form";
+import { answerTitle } from "@/lib/personalize";
 import { STATUS_META, type Status } from "@/lib/demo-schedule";
 import { normalizeWhatsapp } from "@/lib/whatsapp";
 
@@ -105,8 +106,14 @@ export default async function LeadDetailPage({
             <h2 className="mb-1 text-sm font-semibold text-slate-900">Diagnóstico</h2>
             <p className="mb-3 text-xs text-slate-500">{TIER_HINT[tier]}</p>
             {lead.answers.length > 0 ? (
-              lead.answers.map((a, i) => (
-                <Row key={i} label={a.question_title} value={<AnswerValue title={a.question_title} value={a.answer_label} />} />
+              lead.answers.map((a, i) => (a.answer_label.length > 60 || a.answer_label.includes("\n")) ? (
+                // Resposta escrita longa: pergunta em cima, texto inteiro embaixo.
+                <div key={i} className="border-b py-3 text-sm last:border-0">
+                  <p className="text-slate-400">{answerTitle(a.question_title, lead.name)}</p>
+                  <p className="mt-1 whitespace-pre-wrap break-words font-medium leading-relaxed text-slate-800">{a.answer_label}</p>
+                </div>
+              ) : (
+                <Row key={i} label={answerTitle(a.question_title, lead.name)} value={<AnswerValue title={a.question_title} value={a.answer_label} />} />
               ))
             ) : (
               <p className="py-3 text-sm text-slate-400">Sem respostas registradas.</p>

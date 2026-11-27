@@ -8,6 +8,7 @@ import {
   Save, ShieldCheck, Stethoscope, Wallet,
 } from "lucide-react";
 import { ANAMNESIS, ageFrom, formatCpf, formatPhone, healthAlerts, onlyDigits, type Anamnesis } from "@/lib/patients";
+import { answerTitle } from "@/lib/personalize";
 import { savePatient } from "@/lib/actions/patients";
 import type { PatientChartData, PatientRecord } from "@/lib/data/patients";
 import { cn } from "@/lib/utils";
@@ -297,7 +298,7 @@ export function PatientChart({ data, isNew = false }: { data: PatientChartData; 
               {data.lead.answers.length > 0 && (
                 <ul className="divide-y rounded-xl border">
                   {data.lead.answers.map((a, i) => (
-                    <li key={i} className="px-3 py-2"><span className="block text-xs text-slate-400">{a.question_title}</span><span className="text-slate-800">{a.answer_label}</span></li>
+                    <li key={i} className="px-3 py-2"><span className="block text-xs text-slate-400">{answerTitle(a.question_title, data.record.name)}</span><span className="whitespace-pre-wrap break-words text-slate-800">{a.answer_label}</span></li>
                   ))}
                 </ul>
               )}
