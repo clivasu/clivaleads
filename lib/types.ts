@@ -156,6 +156,8 @@ export interface ContactInfo {
 
 // Um dia da semana (0 = domingo) com os períodos oferecidos neste bloco.
 export interface BookingBlockDay { open: boolean; ranges: { start: string; end: string }[] }
+// Uma data específica (AAAA-MM-DD) com os períodos oferecidos nela.
+export interface BookingBlockDate { date: string; ranges: { start: string; end: string }[] }
 
 // Shape of flow_steps.config (JSONB) por tipo de bloco. Permissivo de propósito.
 export interface StepConfig {
@@ -163,7 +165,10 @@ export interface StepConfig {
   booking_procedure?: string;     // nome do procedimento (igual ao da Agenda)
   booking_duration?: number;      // minutos; vazio = duração do procedimento na Agenda
   booking_professional?: string;  // "any" ou id do profissional
+  booking_mode?: "clinic" | "week" | "dates"; // de onde vêm os horários (sem valor: semana se houver booking_hours)
   booking_hours?: BookingBlockDay[]; // dias/horários só deste bloco (vazio = os da clínica)
+  booking_dates?: BookingBlockDate[]; // datas específicas (modo "dates")
+  booking_view?: "week" | "month";   // como quem agenda vê as datas
   booking_slot_minutes?: number;     // espaço entre horários só deste bloco
   booking_ask_contact?: boolean;  // pedir nome/WhatsApp no bloco se ainda não houver
   booking_success_title?: string;
